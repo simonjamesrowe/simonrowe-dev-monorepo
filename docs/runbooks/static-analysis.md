@@ -1,12 +1,22 @@
 # Runbook: Static analysis (SonarQube Cloud)
 
-Static analysis for the whole monorepo runs on every pull request and reports into
-one SonarQube Cloud project, `simonjamesrowe_simonrowe-dev-monorepo`.
+Static analysis for the whole monorepo runs on **every push to `main`** and reports into
+one SonarQube Cloud project, `simonjamesrowe_simonrowe-dev-monorepo`. Pull requests are
+not analysed. What the analysis finds reaches Linear instead: the software factory's
+`staticanalysis` module reads `main`'s analysis every night and files new-code findings
+as tickets, which a person can hand to the ticket agent with `factory:agent`, exactly as
+for a CVE. See [Findings reach Linear](#findings-reach-linear-the-staticanalysis-module).
 
-**The gate is advisory.** It arrives as its own GitHub check and is deliberately
-left non-required, and `sonar.qualitygate.wait` is deliberately unset, so the
-`sonar` job cannot fail CI on gate status. Making it blocking is a follow-up
-decision to be taken once a baseline exists — see [Follow-up work](#follow-up-work).
+**Why not on pull requests any more (2026-10-23).** The pull-request analysis was never a
+required check and its gate was advisory, but it ran after all three build jobs and took
+either ~2 minutes or ~16 (a full re-analysis, about half the time across 40 runs). That
+held the `CI` workflow open, and the ticket agent waits on the whole workflow, so every
+agent attempt and every `pr-review-loop` session waited for a check nobody was required
+to read. The constitution's Principle III was amended (4.0.0) to match.
+
+**The gate is advisory.** `sonar.qualitygate.wait` is deliberately unset, so the `sonar`
+job cannot fail CI on gate status. A failing quality-gate condition on `main` is filed as
+a ticket by the nightly scan instead.
 
 **History worth knowing.** The `org.sonarqube` plugin and the `sonar {}` block have
 been in `build.gradle.kts` since the first infrastructure commit (#2), and the
@@ -19,23 +29,22 @@ back to step level, this is what happens.
 ## What runs where
 
 Five jobs in `.github/workflows/ci.yml`, on `pull_request` against `main` and on every push
-to `main`:
+to `main`. The `sonar` job runs on the push only:
 
 ```
 changes ─┬─ backend            (Checkstyle, tests, JaCoCo + 0.78 floor, CycloneDX)
          ├─ frontend           (ESLint, Vitest + coverage, build)
          ├─ software-factory   (Checkstyle + tests, JaCoCo report, container build; shell tests)
-         └─ sonar              needs all of them · continue-on-error · advisory
+         └─ sonar              needs all of them · push to main only · continue-on-error
 ```
 
 On a pull request, `changes` runs only the jobs the change needs
 ([build-and-startup.md](build-and-startup.md)); a push to `main` runs everything. The `sonar`
-job **runs no tests**. It checks out with `fetch-depth: 0`, downloads the coverage of every
-module whose job ran, asserts exactly those are present, compiles with
-`./gradlew classes testClasses`, then analyses. Coverage is only ever as fresh as the artifacts.
-On a pull request that skipped a module, that module has no coverage report, which is fine: a
-pull request analysis grades new code, and an untouched module has none. It is skipped outright
-for a documentation-only change.
+job **runs no tests**. It checks out with `fetch-depth: 0`, downloads every module's coverage,
+asserts it is present, compiles with `./gradlew classes testClasses`, then analyses. Coverage is
+only ever as fresh as the artifacts. **It is skipped when any build job on `main` failed**,
+because a failed job uploads no coverage, so a red `main` is also an unanalysed one. The nightly
+scan notices: see [failure mode 7](#7-main-has-stopped-being-analysed).
 
 | Module | Language | Coverage produced by | Artifact | Floor |
 | --- | --- | --- | --- | --- |
@@ -101,22 +110,73 @@ Two independent mechanisms keep the `sonar` job harmless:
 
 ## How to read the gate
 
-1. On the pull request, find the **SonarQube Cloud** check. It is non-required, so
-   a red one does not block the merge.
-2. Follow it to the pull request's analysis page. Read **New Code**, not Overall —
-   the Overall figures include whatever debt the first analysis of `main`
-   surfaced, which is separate work.
-3. New-code findings are in scope for the pull request. Pre-existing findings are
-   not.
-4. **Fix a finding, or decline it with a stated reason in the pull request.** Do
-   not mark it "won't fix" in the SonarQube UI — that hides the decision from the
-   diff and from review, and the constitution prohibits manual overrides of
-   quality gates.
+There is nothing to read on a pull request any more. On `main`:
 
-The `pr-review-loop` skill automates this loop, including the two API reads
-(`api/issues/search?pullRequest=…&resolved=false` and
-`api/qualitygates/project_status`). The project is public, so those reads should
-succeed anonymously.
+1. Read the nightly tickets labelled `factory:staticanalysis` in Linear. Each one is a
+   single rule in a single module (or one failing quality-gate condition), with every
+   location and a link to the issue in SonarCloud.
+2. **Fix it, or decline it.** To fix, add `factory:agent` and the ticket agent opens a
+   pull request; or fix it by hand. To decline, **cancel the ticket** with the reason in a
+   comment: the Linear sink reads a cancelled fingerprint as "never tell me again", so it
+   is not re-filed. Record a lasting decline in [Standing declines](#standing-declines)
+   as well. Do not mark it "won't fix" in the SonarQube UI — that hides the decision from
+   the diff and from review.
+3. For a look at the whole picture, SonarCloud's **New Code** view of `main`, not
+   Overall.
+
+The project is public, so `api/issues/search`, `api/qualitygates/project_status`,
+`api/project_analyses/search` and `api/rules/search` all answer anonymously, which is
+why the module needs no SonarCloud credential.
+
+## Findings reach Linear: the `staticanalysis` module
+
+`com.simonrowe.factory.staticanalysis`, on the `static-analysis` Temporal queue, polled by
+`software-factory` only. A daily schedule, `static-analysis-daily`, fires at 03:00 UTC and is
+created **active**; the console's Software Factory page has **Dry run Sonar scan** and
+**Read Sonar now**. Switched on by `FACTORY_STATICANALYSIS_ENABLED` (default `true` in
+`docker-compose.prod.yml`). Each run:
+
+1. **Judges the analysis before reading it.** SonarCloud goes on answering for its last
+   analysis of `main` whatever has happened since, so a stale read looks exactly like a
+   current one. The module compares the latest analysis's revision with `main`'s head on
+   GitHub. Head analysed, or head younger than `analysis-grace` (6h; an analysis lands
+   ~20 minutes after a merge) is **fresh**. Anything else is **stale**, and the run files
+   one ticket saying so (key parts `source-health`, `STALE`) and does nothing else. GitHub
+   being unreachable does not stop a run: freshness is then unconfirmed and the run detail
+   says so.
+2. **Reads open new-code issues on `main`** and the quality gate's failing conditions.
+3. **Groups them by module and rule.** Code smells below `minimum-severity` (`MAJOR`) are
+   dropped; bugs and vulnerabilities are filed at any severity. One group is one ticket:
+   not a ticket per issue (forty "unused import" tickets after one careless merge), and not
+   one consolidated report like the CVE scan (the ticket agent works one ticket per pull
+   request, and "fix every finding" is not a change it can land). Key parts are
+   `rule`, module, rule key, or `quality-gate`, metric key: never the rule's name, so a
+   rename on SonarCloud's side does not fork tickets.
+4. **Files at most `max-per-run` (5) groups**, quality-gate failures first, then groups
+   with a bug or vulnerability, then by severity and size, in `REFRESH` mode: a persisting
+   finding has its description rewritten each night with no comment. The rest are named
+   to the absence sweep so their tickets are not closed while they wait.
+5. **Closes what has gone.** After filing, the absence sweep closes this producer's
+   tickets that went unreported for `resolve-after` (12h, not log watch's 7 days: a
+   finding missing from a fresh, complete analysis is gone, not quiet). Never on a stale
+   analysis, never on a truncated read. A stale-analysis ticket closes itself the same way
+   once `main` is analysed again.
+
+Ticket bodies tell the agent that `NOSONAR`, `@SuppressWarnings`, `eslint-disable` or a new
+exclusion is not a fix; the ticket agent's `SilencingDetector` labels any pull request that
+adds one `no-auto-merge` anyway, and `build.gradle.kts` (where exclusions live) is a
+human-merge path.
+
+**Operator actions.**
+
+- **Create the Linear label `factory:staticanalysis` before the first run.** The sink
+  does not create producer labels: without it every ticket is filed unlabelled (with a
+  WARN in the log), and the label is how a person tells these tickets apart in Triage.
+  `software-factory` caches labels for its lifetime, so a label created after it started
+  needs a restart to be seen.
+- First run: press **Dry run Sonar scan** and read the run detail before letting the
+  schedule file for real (the schedule is active, so do it the day this ships).
+- `FACTORY_STATICANALYSIS_SONAR_TOKEN` exists only for a private project. Leave it unset.
 
 ### New code on `main` is *30 days*, and that setting is not in this repository
 
@@ -157,7 +217,17 @@ permissions problem and is not one.
 
 Confirm it took effect from the *next* analysis rather than from the write: the
 `periods` block of `api/qualitygates/project_status` should report
-`"mode":"days","parameter":"30"`. Because this lives in the SaaS project and not
+`"mode":"days","parameter":"30"`.
+
+**Checked on 2026-10-23, it had not.** `api/settings/values` returns
+`sonar.leak.period = 30`, but the `main` gate's `periods` block still reports
+`"mode":"previous_version"` from 2026-08-26, so "new code" on `main` is everything since
+then. That matters more now: the nightly `staticanalysis` scan files `main`'s new-code
+issues, and with the period never resetting it will eventually file pre-existing debt.
+Harmless while `main` has almost nothing open (one issue on that date), but set the new
+code definition in the UI (project → Administration → New Code) and confirm it here.
+
+Because this lives in the SaaS project and not
 in the repository, **it does not survive re-creating the project** — it is on the
 [operator checklist](#operator-checklist--steps-only-a-human-can-do) below.
 
@@ -176,8 +246,8 @@ ahead of this checklist is safe and changes no CI behaviour.
       account — **the code follows the account, not the reverse.**
 
 - [ ] **3. Install the SonarQube Cloud GitHub App** on the repository.
-      Pull request decoration does not work without it. Analysis will still
-      succeed, silently, with no PR comment — see failure mode 3.
+      Pull requests are no longer analysed, so it decorates nothing today; it is
+      kept for the day they are again — see failure mode 3.
 
 - [ ] **4. Set the analysis method to CI-based and turn Automatic Analysis OFF.**
       Left on, it competes with the Gradle scanner and yields results with no
@@ -200,10 +270,10 @@ ahead of this checklist is safe and changes no CI behaviour.
       break anything visibly; it makes the `main` gate score the whole codebase as
       new code.
 
-- [ ] **7. Verify on the next pull request**: the `sonar` job runs the analysis
-      step instead of skipping it; the SonarQube check appears; coverage is
-      non-zero for all three modules; and the backend coverage percentage agrees
-      with the JaCoCo figure (see failure mode 5).
+- [ ] **7. Verify on the next push to `main`**: the `sonar` job runs the analysis
+      step instead of skipping it; coverage is non-zero for all three modules; the
+      backend coverage percentage agrees with the JaCoCo figure (see failure mode 5);
+      and the next `staticanalysis` run reports the analysis as fresh.
 
 ## Maintenance obligation: keep the two exclusion lists in step
 
@@ -272,13 +342,13 @@ and **coverage is 0% or absent** for every module.
 scanner. Automatic Analysis never sees the JaCoCo or LCOV reports.
 
 **Remedy**: project → Administration → Analysis Method → set **CI-based**, turn
-Automatic Analysis **off**. Re-run the pull request.
+Automatic Analysis **off**. Re-run the `main` CI run.
 
 ### 2. Shallow clone
 
 **Symptom**: the analysis succeeds but New Code attribution is wrong — findings
-attributed to the wrong author or the wrong commit, or a pull request showing new
-issues in files it never touched.
+attributed to the wrong author or the wrong commit, or new-code issues in files no
+recent commit touched.
 
 **Cause**: the `sonar` job checked out without `fetch-depth: 0`. Sonar derives new
 code from SCM blame; with no blame data it guesses, and does not warn.
@@ -288,8 +358,9 @@ The other jobs do not need it and are left at the default so they stay fast.
 
 ### 3. SonarQube Cloud GitHub App not installed
 
-**Symptom**: the analysis succeeds — you can see the result in the SonarQube UI —
-but nothing appears on the pull request. No check, no comment, no decoration.
+**Symptom** (only if pull-request analysis is ever switched back on): the analysis
+succeeds — you can see the result in the SonarQube UI — but nothing appears on the
+pull request. No check, no comment, no decoration.
 
 **Cause**: pull request decoration is delivered by the GitHub App, not by the
 scanner.
@@ -337,6 +408,18 @@ skipped, and prints `ok` / `MISS` per input. Read its log first. Note that
 uploaded from, so each download's `path:` has to reconstruct the location the
 `sonar` properties expect.
 
+### 7. `main` has stopped being analysed
+
+**Symptom**: a Linear ticket titled *Static analysis: SonarCloud has stopped analysing main*,
+or the `staticanalysis` run detail saying `STALE`.
+
+**Cause**, most likely first: a build job failed on `main`, so the `sonar` job was skipped
+(read the CI run for the commit the ticket names); `SONAR_TOKEN` expired, so the analysis
+step was skipped while the job stayed green; or any of failure modes 1 to 4.
+
+**Fix**: get `main` green, or fix the token or project setting. The next push analyses
+`main` and the next nightly scan closes the ticket.
+
 ## Verifying locally, without an account
 
 Everything below runs offline with no credential.
@@ -363,7 +446,7 @@ failure. `-Dsonar.scanner.dumpToFile` does not help; the scanner contacts the
 server before honouring it.
 
 What cannot be verified without the account: the real analysis, server-side
-interpretation of the properties, Sonar/JaCoCo agreement, and PR decoration.
+interpretation of the properties, and Sonar/JaCoCo agreement.
 
 ## Follow-up work
 
@@ -372,10 +455,9 @@ Each of these was deliberately deferred, with the reason recorded:
 - **Triage the pre-existing debt** the first analysis of `main` surfaces. Its
   volume is unknown until it runs, so it is separate work with its own plan — not
   a tail appended to an unrelated pull request.
-- **Make the quality gate blocking.** Needs a baseline first. Introducing a
-  blocking gate before knowing the debt volume risks blocking every pull request
-  on pre-existing issues, and a gate switched off once carries less authority than
-  one introduced deliberately.
+- ~~**Make the quality gate blocking.**~~ Superseded on 2026-10-23: pull requests are
+  no longer analysed, and a failing condition on `main` is filed as a ticket by the
+  nightly scan instead.
 - **Set a `software-factory` coverage floor.** The measurement now exists: 80.4%
   instruction, 78.5% line. A floor at the backend's 0.78 is immediately
   satisfiable.
@@ -420,8 +502,11 @@ if the reasoning stops holding.
 
 ## Related
 
-- [software-factory.md](software-factory.md) — the automated reviewer, the second
-  of the three pull request signals
+- [software-factory.md](software-factory.md) — the automated reviewer, and the
+  `staticanalysis` module that files this analysis's findings
+- [linear.md](linear.md) — the sink the findings are filed through, including
+  cancel-to-suppress and the absence sweep
 - [dependency-track.md](dependency-track.md) — dependency vulnerability scanning
-- `pr-review-loop` skill — owns the open-PR → three-signals → triage → push loop
+- `pr-review-loop` skill — owns the open-PR → signals → triage → push loop. SonarQube is no
+  longer one of its pull-request signals
 - `code-review-triage` skill — when the reviewer posts nothing

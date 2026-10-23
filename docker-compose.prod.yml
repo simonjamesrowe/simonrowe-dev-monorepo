@@ -393,6 +393,12 @@ services:
       # ticket disease 046 exists to cure.
       FACTORY_LOGWATCH_RESOLVE_WHEN_CLEAR: ${FACTORY_LOGWATCH_RESOLVE_WHEN_CLEAR:-true}
       FACTORY_LOGWATCH_RESOLVE_AFTER: ${FACTORY_LOGWATCH_RESOLVE_AFTER:-7d}
+      # Static analysis: reads SonarCloud's nightly view of main and files new-code findings in
+      # Linear, since pull requests are no longer analysed. ON by default, like the vulnerability
+      # scan: it only reads and files, and needs no credential (the SonarCloud project is public).
+      # Deliberately NOT set on `deployer`; a second poller on another build is how logwatch
+      # wedged. See docs/runbooks/static-analysis.md.
+      FACTORY_STATICANALYSIS_ENABLED: ${FACTORY_STATICANALYSIS_ENABLED:-true}
       # Deliberately NOT set on `deployer`, which runs this same image: that container holds
       # /var/run/docker.sock and must hold as few other credentials as possible. Enforced by
       # DeployerGrafanaCredentialTest, which fails the build if any variable whose name contains

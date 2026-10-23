@@ -5,6 +5,7 @@ import com.simonrowe.factory.deploy.config.DeployProperties;
 import com.simonrowe.factory.feedback.config.FeedbackProperties;
 import com.simonrowe.factory.linear.config.LinearProperties;
 import com.simonrowe.factory.logwatch.config.LogWatchProperties;
+import com.simonrowe.factory.staticanalysis.config.StaticAnalysisProperties;
 import com.simonrowe.factory.ticketagent.config.TicketAgentProperties;
 import com.simonrowe.factory.platformbackup.config.PlatformBackupProperties;
 import java.nio.file.Files;
@@ -42,12 +43,14 @@ public class ModulePrerequisites {
   public static final String LINEAR = "linear";
   public static final String PLATFORM_BACKUP = "platformbackup";
   public static final String LOGWATCH = "logwatch";
+  public static final String STATIC_ANALYSIS = "staticanalysis";
   public static final String TICKET_AGENT = "ticketagent";
 
   /** Display order, and the only place module keys are enumerated. */
   public static final List<String> KEYS =
       List.of(
-          CODE_REVIEW, FEEDBACK, CVEFIX, DEPLOY, LINEAR, PLATFORM_BACKUP, LOGWATCH, TICKET_AGENT);
+          CODE_REVIEW, FEEDBACK, CVEFIX, DEPLOY, LINEAR, PLATFORM_BACKUP, LOGWATCH,
+          STATIC_ANALYSIS, TICKET_AGENT);
 
   /**
    * Human-readable names for the two host scripts, used only inside a diagnostic sentence. Kept
@@ -65,6 +68,7 @@ public class ModulePrerequisites {
   private final LinearProperties linearProperties;
   private final PlatformBackupProperties platformBackupProperties;
   private final LogWatchProperties logWatchProperties;
+  private final StaticAnalysisProperties staticAnalysisProperties;
   private final TicketAgentProperties ticketAgentProperties;
 
   public ModulePrerequisites(
@@ -74,6 +78,7 @@ public class ModulePrerequisites {
       final LinearProperties linearProperties,
       final PlatformBackupProperties platformBackupProperties,
       final LogWatchProperties logWatchProperties,
+      final StaticAnalysisProperties staticAnalysisProperties,
       final TicketAgentProperties ticketAgentProperties) {
     this.feedbackProperties = feedbackProperties;
     this.cvefixProperties = cvefixProperties;
@@ -81,6 +86,7 @@ public class ModulePrerequisites {
     this.linearProperties = linearProperties;
     this.platformBackupProperties = platformBackupProperties;
     this.logWatchProperties = logWatchProperties;
+    this.staticAnalysisProperties = staticAnalysisProperties;
     this.ticketAgentProperties = ticketAgentProperties;
   }
 
@@ -103,6 +109,7 @@ public class ModulePrerequisites {
       case LINEAR -> linearProperties.enabled();
       case PLATFORM_BACKUP -> platformBackupProperties.enabled();
       case LOGWATCH -> logWatchProperties.enabled();
+      case STATIC_ANALYSIS -> staticAnalysisProperties.enabled();
       case TICKET_AGENT -> ticketAgentProperties.enabled();
       default -> false;
     };
@@ -131,6 +138,7 @@ public class ModulePrerequisites {
       case CVEFIX -> cvefixPrerequisites();
       case LINEAR -> linearPrerequisites();
       case LOGWATCH -> logWatchPrerequisites();
+      case STATIC_ANALYSIS -> staticAnalysisPrerequisites();
       case TICKET_AGENT -> ticketAgentPrerequisites();
       case PLATFORM_BACKUP -> script(platformBackupProperties.script(), BACKUP_SCRIPT);
       case DEPLOY -> deployPrerequisites();
@@ -192,6 +200,16 @@ public class ModulePrerequisites {
       missing.add("Linear filing is disabled, so findings have nowhere to go");
     }
     return List.copyOf(missing);
+  }
+
+  /**
+   * SonarCloud needs no credential (the project is public), so the only prerequisite is somewhere
+   * to file.
+   */
+  private List<String> staticAnalysisPrerequisites() {
+    return linearProperties.enabled()
+        ? List.of()
+        : List.of("Linear filing is disabled, so findings have nowhere to go");
   }
 
   /**

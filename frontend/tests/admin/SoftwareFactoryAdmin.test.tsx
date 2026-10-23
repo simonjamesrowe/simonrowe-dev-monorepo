@@ -20,6 +20,7 @@ vi.mock('../../src/services/softwareFactoryApi', async (importOriginal) => ({
   startVulnerabilityScan: vi.fn(),
   startPlatformBackup: vi.fn(),
   startLogWatchScan: vi.fn(),
+  startStaticAnalysisScan: vi.fn(),
   startDeploy: vi.fn(),
 }))
 
@@ -50,6 +51,7 @@ import {
   setTicketIntake,
   startCodeReview,
   startLogWatchScan,
+  startStaticAnalysisScan,
   startTicketAgent,
   stopTicketAgent,
   startPlatformBackup,
@@ -69,6 +71,7 @@ const mockStartReview = vi.mocked(startCodeReview)
 const mockStartScan = vi.mocked(startVulnerabilityScan)
 const mockStartBackup = vi.mocked(startPlatformBackup)
 const mockStartLogScan = vi.mocked(startLogWatchScan)
+const mockStartSonarScan = vi.mocked(startStaticAnalysisScan)
 const mockStartTicket = vi.mocked(startTicketAgent)
 const mockStopTicket = vi.mocked(stopTicketAgent)
 const mockSetIntake = vi.mocked(setTicketIntake)
@@ -124,6 +127,7 @@ function status(overrides: Partial<SoftwareFactoryStatus> = {}): SoftwareFactory
       module('linear'),
       module('platformbackup'),
       module('logwatch'),
+      module('staticanalysis'),
       module('ticketagent', { schedule: intakeSchedule(true) }),
     ],
     ...overrides,
@@ -141,6 +145,7 @@ const NODE_LABELS: Record<string, string> = {
   production: 'Production',
   logwatch: 'Log watch',
   cvefix: 'Vulnerability scan',
+  staticanalysis: 'Static analysis',
   feedback: 'Review feedback',
   'agent-setup': 'Agent setup',
   platformbackup: 'Platform backup',
@@ -528,6 +533,58 @@ describe('SoftwareFactoryAdmin', () => {
     expect(within(drawer).getByRole('button', { name: 'Scan logs now' })).toBeInTheDocument()
     expect(within(drawer).queryByRole('button', { name: 'Dry run' })).not.toBeInTheDocument()
     expect(within(drawer).queryByRole('button', { name: /^Scan now$/ })).not.toBeInTheDocument()
+  })
+
+  it('starts a dry static-analysis scan without filing anything', async () => {
+    mockStartSonarScan.mockResolvedValue({
+      workflowId: 'static-analysis-manual-1', runId: 'run-11', detail: 'Dry-run Sonar scan accepted',
+    })
+    renderConsoleWithFlow()
+    const drawer = await openDrawer(/Static analysis/)
+
+    await userEvent.click(within(drawer).getByRole('button', { name: 'Dry run Sonar scan' }))
+
+    expect(mockStartSonarScan).toHaveBeenCalledWith(getAccessToken, true)
+  })
+
+  it('starts a real static-analysis scan on a single click, like log watch', async () => {
+    mockStartSonarScan.mockResolvedValue({
+      workflowId: 'static-analysis-manual-2', runId: 'run-12', detail: 'Sonar scan accepted',
+    })
+    renderConsoleWithFlow()
+    const drawer = await openDrawer(/Static analysis/)
+
+    await userEvent.click(within(drawer).getByRole('button', { name: /Read Sonar now/ }))
+
+    expect(mockStartSonarScan).toHaveBeenCalledWith(getAccessToken, false)
+  })
+
+  it('disables both static-analysis controls when the module is not ready', async () => {
+    mockFetchStatus.mockResolvedValue(status({
+      modules: [
+        module('codereview'), module('feedback'), module('cvefix'), module('deploy'),
+        module('linear'), module('platformbackup'), module('logwatch'),
+        module('staticanalysis', { ready: false, missingPrerequisites: ['SONAR_TOKEN is not set'] }),
+      ],
+    }))
+    renderConsoleWithFlow()
+    const drawer = await openDrawer(/Static analysis/)
+
+    expect(within(drawer).getByRole('button', { name: 'Dry run Sonar scan' })).toBeDisabled()
+    expect(within(drawer).getByRole('button', { name: /Read Sonar now/ })).toBeDisabled()
+    expect(mockStartSonarScan).not.toHaveBeenCalled()
+  })
+
+  it('labels the static-analysis buttons distinctly from every other module', async () => {
+    // Same reason as the log-scan labels: the accessible name is all a screen reader gets.
+    renderConsoleWithFlow()
+    const drawer = await openDrawer(/Static analysis/)
+
+    expect(within(drawer).getByRole('button', { name: 'Dry run Sonar scan' })).toBeInTheDocument()
+    expect(within(drawer).getByRole('button', { name: 'Read Sonar now' })).toBeInTheDocument()
+    for (const taken of ['Dry run', 'Dry run scan', 'Scan now', 'Scan logs now', 'Dry run ticket']) {
+      expect(within(drawer).queryByRole('button', { name: taken })).not.toBeInTheDocument()
+    }
   })
 
   it('offers no redeploy while this bundle reports no commit', async () => {

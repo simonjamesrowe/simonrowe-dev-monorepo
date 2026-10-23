@@ -10,6 +10,7 @@ import {
   RefreshCw,
   ScanSearch,
   ScrollText,
+  SearchCode,
   ShieldAlert,
   Square,
   XCircle,
@@ -33,6 +34,7 @@ import {
   startFeedback,
   startLogWatchScan,
   startPlatformBackup,
+  startStaticAnalysisScan,
   startTicketAgent,
   startVulnerabilityScan,
   stopTicketAgent,
@@ -466,6 +468,29 @@ export function SoftwareFactoryAdmin() {
                 onClick={() => void start('logwatch', () => startLogWatchScan(getAccessToken, false))}
                 type="button"
               ><ScrollText size={16} /> Scan logs now</button>
+            </div>
+          </ActionPanel>
+        )
+      case 'staticanalysis':
+        return (
+          // Named for SonarCloud for the same reason the log-watch labels are specific: every
+          // accessible name must stay unique across the whole console.
+          <ActionPanel title="Static analysis" description="Read SonarCloud's latest analysis of main and file new-code findings in Linear. A dry run reports what it would file and creates nothing.">
+            <div className="factory-console__button-row">
+              <button
+                className="admin-btn"
+                disabled={!modules.get('staticanalysis')?.ready || pending !== null}
+                onClick={() => void start('staticanalysis-dry',
+                  () => startStaticAnalysisScan(getAccessToken, true))}
+                type="button"
+              >Dry run Sonar scan</button>
+              <button
+                className="admin-btn admin-btn--primary"
+                disabled={!modules.get('staticanalysis')?.ready || pending !== null}
+                onClick={() => void start('staticanalysis',
+                  () => startStaticAnalysisScan(getAccessToken, false))}
+                type="button"
+              ><SearchCode size={16} /> Read Sonar now</button>
             </div>
           </ActionPanel>
         )

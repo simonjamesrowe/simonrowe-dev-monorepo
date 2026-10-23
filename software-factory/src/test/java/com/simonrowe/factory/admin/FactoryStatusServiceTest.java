@@ -11,6 +11,7 @@ import com.simonrowe.factory.deploy.config.DeployProperties;
 import com.simonrowe.factory.feedback.config.FeedbackProperties;
 import com.simonrowe.factory.linear.config.LinearProperties;
 import com.simonrowe.factory.logwatch.config.LogWatchProperties;
+import com.simonrowe.factory.staticanalysis.config.StaticAnalysisProperties;
 import com.simonrowe.factory.testsupport.TicketAgentTestProperties;
 import com.simonrowe.factory.platformbackup.config.PlatformBackupProperties;
 import io.grpc.Status;
@@ -291,6 +292,8 @@ class FactoryStatusServiceTest {
         new LinearProperties(true, LINEAR_KEY, null, TEAM_KEY, null, false, null, null),
         new PlatformBackupProperties(false, null, null, null),
         new LogWatchProperties(false, 0, 0, null, 0, 0, null, null, null, null, null),
+        new StaticAnalysisProperties(
+            false, null, null, null, null, null, null, null, null, 0, null, null, null, null, null),
         TicketAgentTestProperties.of(false));
   }
 

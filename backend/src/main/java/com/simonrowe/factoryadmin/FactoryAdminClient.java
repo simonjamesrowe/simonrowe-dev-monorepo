@@ -222,6 +222,12 @@ public class FactoryAdminClient {
     return new FactoryRunAccepted(wire.workflowId(), wire.runId(), wire.detail());
   }
 
+  public FactoryRunAccepted startStaticAnalysisScan(final boolean dryRun) {
+    RunAcceptedWire wire =
+        post("/api/static-analysis-scans", Map.of(DRY_RUN, dryRun), RunAcceptedWire.class);
+    return new FactoryRunAccepted(wire.workflowId(), wire.runId(), wire.detail());
+  }
+
   public FactoryRunAccepted startTicketRun(final String ticket, final boolean dryRun) {
     RunAcceptedWire wire =
         post("/api/ticket-agent/runs", Map.of("ticket", ticket, DRY_RUN, dryRun),

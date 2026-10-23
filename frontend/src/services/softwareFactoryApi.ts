@@ -24,6 +24,7 @@ export interface FactoryModuleStatus {
     | 'linear'
     | 'platformbackup'
     | 'logwatch'
+    | 'staticanalysis'
     | 'ticketagent'
   displayName: string
   /** null when the container that owns this module could not be asked for its flag. */
@@ -143,6 +144,18 @@ export const startPlatformBackup = (getAccessToken: GetAccessToken, dryRun: bool
  */
 export const startLogWatchScan = (getAccessToken: GetAccessToken, dryRun: boolean) =>
   request<FactoryRunAccepted>(getAccessToken, '/log-scans', {
+    method: 'POST',
+    body: JSON.stringify({ dryRun }),
+  })
+
+/**
+ * Reads SonarCloud's latest analysis of main on demand and files its new-code findings in Linear.
+ *
+ * A dry run reads the same analysis and reports what it would file without creating anything, so
+ * run progress is the only place its outcome appears.
+ */
+export const startStaticAnalysisScan = (getAccessToken: GetAccessToken, dryRun: boolean) =>
+  request<FactoryRunAccepted>(getAccessToken, '/static-analysis-scans', {
     method: 'POST',
     body: JSON.stringify({ dryRun }),
   })

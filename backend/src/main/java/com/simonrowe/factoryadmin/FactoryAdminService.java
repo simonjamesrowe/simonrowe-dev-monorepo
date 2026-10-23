@@ -33,6 +33,7 @@ public class FactoryAdminService {
   private static final String LINEAR = "linear";
   private static final String PLATFORM_BACKUP = "platformbackup";
   private static final String LOGWATCH = "logwatch";
+  private static final String STATIC_ANALYSIS = "staticanalysis";
   private static final String TICKET_AGENT = "ticketagent";
 
   /**
@@ -41,7 +42,8 @@ public class FactoryAdminService {
    */
   private static final List<String> ORDER =
       List.of(
-          CODE_REVIEW, FEEDBACK, CVEFIX, DEPLOY, LINEAR, PLATFORM_BACKUP, LOGWATCH, TICKET_AGENT);
+          CODE_REVIEW, FEEDBACK, CVEFIX, DEPLOY, LINEAR, PLATFORM_BACKUP, LOGWATCH,
+          STATIC_ANALYSIS, TICKET_AGENT);
 
   /** Modules the deployer, not the factory, is the authority on. */
   private static final List<String> DEPLOYER_OWNED = List.of(DEPLOY, PLATFORM_BACKUP);
@@ -149,6 +151,7 @@ public class FactoryAdminService {
       case LINEAR -> "Issue tracking";
       case PLATFORM_BACKUP -> "Platform backup";
       case LOGWATCH -> "Log watch";
+      case STATIC_ANALYSIS -> "Static analysis";
       default -> key;
     };
     return new FactoryInstanceStatus.ModuleStatus(
@@ -345,6 +348,21 @@ public class FactoryAdminService {
   public FactoryRunAccepted startLogWatchScan(final boolean dryRun) {
     requireReady(LOGWATCH);
     return proxy(() -> client.startLogWatchScan(dryRun));
+  }
+
+  /**
+   * Reads SonarCloud's latest analysis of {@code main} on demand.
+   *
+   * <p>Same terms as {@link #startLogWatchScan(boolean)}: a dry run reads and reports what it would
+   * file, and creates nothing in Linear, so the console's run progress is the only place its
+   * outcome appears.
+   *
+   * @param dryRun whether to report what would be filed without creating anything in Linear
+   * @return the accepted scan
+   */
+  public FactoryRunAccepted startStaticAnalysisScan(final boolean dryRun) {
+    requireReady(STATIC_ANALYSIS);
+    return proxy(() -> client.startStaticAnalysisScan(dryRun));
   }
 
   /**
