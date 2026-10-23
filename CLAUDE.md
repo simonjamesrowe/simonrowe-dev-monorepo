@@ -265,9 +265,14 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   applies: since `62d26cc` nginx resolves upstreams per request, so a `502` here means the
   upstream really is not running. `monitor-prod.sh` now detects `created`/`exited` containers
   and reconciles the stack, and no longer bounces nginx for DNS reasons.)
-- **Pinggy tunnel:** one `PINGGY_TOKEN` = one active tunnel. If another host still holds it you get
+- **Pinggy tunnel:** one `PINGGY_TOKEN` = one active tunnel. If another session still holds it you get
   `A tunnel with the same token is already active`; reclaim it by setting `PINGGY_TOKEN=<token>+force`
   (the `+force` suffix terminates the stale session). The token maps to the `*.simonrowe.dev` custom domain.
+  On 2026-10-22 a connection reset left pinggy refused by its own stale session for 24 hours while the
+  whole stack stayed healthy, and restarts could not fix it. The Pi's `.env` now keeps `+force` permanently,
+  so never run the stack elsewhere with the prod token. The watchdog logs `CRIT` instead of restarting on
+  this signature, and the off-Pi heartbeat names it in a `prod-down` GitHub issue assigned to `simonrowe`
+  (it used to rely on GitHub's failed-run email, which never arrived). See `docs/runbooks/prod-monitoring.md`.
 - **Running prod on macOS/OrbStack for testing:** the backend bind-mounts the docker CLI via
   `DOCKER_BINARY_PATH`/`DOCKER_PLUGINS_PATH`, whose compose defaults (`/usr/bin/docker`,
   `/usr/libexec/docker/cli-plugins`) don't exist on macOS — set them in `.env` to

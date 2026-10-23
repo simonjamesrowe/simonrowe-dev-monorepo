@@ -1088,6 +1088,11 @@ services:
     # FACTORY_DEPLOY_RECREATABLE, so that would hold back the deploy and need a hand recreate
     # of the tunnel every hostname runs through (docs/runbooks/deploy.md, "Recovering a wedged
     # checkout"), for no change in behaviour. Drop it the next time pinggy is recreated anyway.
+    # The Pi's .env keeps PINGGY_TOKEN=<token>+force. One token allows one live tunnel,
+    # and without +force a reconnect after a reset can be refused for good ("same token
+    # is already active": the whole site was dark for 24h on 2026-10-22). +force ends
+    # the other session instead. So never run this stack elsewhere with the prod token.
+    # docs/runbooks/prod-monitoring.md, "pinggy token conflict".
     command:
       - x:xff
       - --token

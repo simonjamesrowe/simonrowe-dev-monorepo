@@ -343,6 +343,30 @@ svc_restart() {
 # and no knowledge of the volume's host path. If nginx is not answering, the exec
 # fails and we fall through and remediate - which is right, because nginx being
 # down is a real emergency and is not something a deploy causes.
+# ---------------------------------------------------------------------------
+# pinggy token conflict
+# ---------------------------------------------------------------------------
+# One PINGGY_TOKEN allows one live tunnel. On 2026-10-22 at 08:22 UTC pinggy's
+# connection was reset, its reconnect was refused with "A tunnel with the same
+# token is already active" (and soon "This token is temporarily blocked"), and it
+# looped on that refusal every ~2s for 24 hours while every other container was
+# healthy and the stack kept shipping logs. This script detected the outage every
+# minute and restarted pinggy, which reconnects with the same token and gets the
+# same refusal. The fix is `+force` on the token, which tells pinggy to end the
+# other session (docs/runbooks/prod-monitoring.md, "pinggy token conflict").
+#
+# Read-only, so it runs under DRY_RUN too, like deploy_in_progress. The log is
+# captured before grep sees it: `docker logs | grep -q` under pipefail can fail
+# with SIGPIPE when grep exits early, which would read as "no conflict". A missing
+# container or docker error matches neither phrase, which is also "no conflict".
+PINGGY_CONFLICT_SINCE=${PINGGY_CONFLICT_SINCE:-5m}
+pinggy_token_conflict() {
+  local recent
+  recent=$(docker logs --since "$PINGGY_CONFLICT_SINCE" --tail 500 \
+    "${COMPOSE_PROJECT}-pinggy-1" 2>&1) || true
+  grep -aqF -e 'with the same token' -e 'token is temporarily blocked' <<<"$recent"
+}
+
 deploy_in_progress() {
   docker exec "${COMPOSE_PROJECT}-nginx-1" \
     test -f /var/run/deploy-state/maintenance.on 2>/dev/null
@@ -535,6 +559,17 @@ if [[ "$site_up" == false ]]; then
 
   if (( failure_count < FAILURE_THRESHOLD )); then
     exit 0
+  fi
+
+  # A token conflict is the one ingress fault that nothing below can fix (see
+  # pinggy_token_conflict). Say so, and leave the stack alone: restarting pinggy
+  # re-dials a token pinggy is refusing, which keeps it blocked, and reconciling
+  # re-runs every one-shot init container for no gain - on 2026-10-22 that kept
+  # the Pi's load average near 12 for a day.
+  if pinggy_token_conflict; then
+    log "CRIT" "pinggy: the tunnel token is held by another session ('same token is already active' or 'token is temporarily blocked' in its log). Restarts cannot fix this. Stop any other host using PINGGY_TOKEN, make sure .env has PINGGY_TOKEN=<token>+force, then: docker compose -f docker-compose.prod.yml up -d --no-deps pinggy"
+    set_failure_count 0
+    exit 1
   fi
 
   recent_restarts=$(count_recent_restarts)

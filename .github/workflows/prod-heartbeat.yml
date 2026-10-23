@@ -4,8 +4,12 @@
 # It runs HERE rather than on the Pi because every alarm on the Pi needs the Pi's
 # own outbound network, so a Wi-Fi outage or a container DNS failure silences all
 # of them at once - which is how the 2026-09-24 DNS outage went unreported for
-# ~34 hours. A failed scheduled run is emailed by GitHub to whoever last changed
-# the `cron` line below, so the notification needs no extra service or secret.
+# ~34 hours.
+#
+# A failure opens a GitHub issue assigned to ALERT_ASSIGNEE, and a pass closes it
+# (scripts/prod-heartbeat-alert.sh). Relying on GitHub's own email about a failed
+# scheduled run did not work: on 2026-10-22 every run failed for 24 hours and no
+# email arrived. Assigning an issue always notifies, with no extra secret.
 name: Production heartbeat
 
 on:
@@ -15,6 +19,8 @@ on:
 
 permissions:
   contents: read
+  # Open and close the outage issue, and create its label.
+  issues: write
 
 # Never overlap: a failing run retries hostnames for ~5 minutes, and two runs
 # alarming about the same outage add nothing.
@@ -30,10 +36,28 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Check production from outside
+        id: heartbeat
+        # `shell: bash` runs with pipefail, so the tee cannot turn a failure into a pass.
+        shell: bash
         env:
           # Read access to Grafana Cloud Loki. The same values alloy uses, from the
           # shared env file; see the runbook for rotating them.
           GRAFANA_CLOUD_LOKI_ENDPOINT: ${{ secrets.GRAFANA_CLOUD_LOKI_ENDPOINT }}
           GRAFANA_CLOUD_LOKI_USER: ${{ secrets.GRAFANA_CLOUD_LOKI_USER }}
           GRAFANA_CLOUD_API_KEY: ${{ secrets.GRAFANA_CLOUD_API_KEY }}
-        run: ./scripts/prod-heartbeat.sh
+        run: ./scripts/prod-heartbeat.sh 2>&1 | tee "$RUNNER_TEMP/heartbeat.txt"
+
+      - name: Open an outage issue
+        if: failure() && steps.heartbeat.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ALERT_ASSIGNEE: simonrowe
+        run: ./scripts/prod-heartbeat-alert.sh open "$RUNNER_TEMP/heartbeat.txt"
+
+      - name: Close the outage issue
+        if: success()
+        # A failure to close must not turn a passing heartbeat red.
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/prod-heartbeat-alert.sh close
