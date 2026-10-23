@@ -49,6 +49,12 @@ public record ContentSource(
     LUMA,
     LINK_ROUNDUP,
     /**
+     * Matt Pocock's posts on AI Hero. {@code feedUrl} is the site's RSS feed, which lists far
+     * more than posts; {@code AiHeroScraper} keeps only those whose markdown twin declares a
+     * post. Site-specific, like {@code LUMA}.
+     */
+    AI_HERO,
+    /**
      * Stories read out of an email newsletter in the Gmail mailbox, rather than from a site.
      * {@code feedUrl} holds the sender's address and {@code name} must equal the sender's
      * display name, since one address can send several newsletters. Handled by

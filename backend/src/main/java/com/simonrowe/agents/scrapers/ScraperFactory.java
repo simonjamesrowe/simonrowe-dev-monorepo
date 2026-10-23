@@ -11,15 +11,18 @@ public class ScraperFactory {
   private final SitemapHtmlScraper sitemapHtmlScraper;
   private final LumaApiScraper lumaApiScraper;
   private final LinkRoundupScraper linkRoundupScraper;
+  private final AiHeroScraper aiHeroScraper;
 
   public ScraperFactory(RssScraper rssScraper,
       SitemapHtmlScraper sitemapHtmlScraper,
       LumaApiScraper lumaApiScraper,
-      LinkRoundupScraper linkRoundupScraper) {
+      LinkRoundupScraper linkRoundupScraper,
+      AiHeroScraper aiHeroScraper) {
     this.rssScraper = rssScraper;
     this.sitemapHtmlScraper = sitemapHtmlScraper;
     this.lumaApiScraper = lumaApiScraper;
     this.linkRoundupScraper = linkRoundupScraper;
+    this.aiHeroScraper = aiHeroScraper;
   }
 
   public List<ScrapedContent> scrape(ContentSource source) {
@@ -31,6 +34,7 @@ public class ScraperFactory {
       case HTML_LISTING -> sitemapHtmlScraper.scrapeListingPage(source.baseUrl());
       case LUMA -> lumaApiScraper.scrape(source.feedUrl());
       case LINK_ROUNDUP -> linkRoundupScraper.scrape(source.baseUrl());
+      case AI_HERO -> aiHeroScraper.scrape(source.feedUrl());
       // Read from Gmail and filtered for relevance before anything is saved, so it cannot be
       // a list of items for the agent to classify. ContentAggregationAgent routes it to
       // NewsletterIngestService before it reaches here.

@@ -31,6 +31,9 @@ class ScraperFactoryTest {
   @Mock
   private LinkRoundupScraper linkRoundupScraper;
 
+  @Mock
+  private AiHeroScraper aiHeroScraper;
+
   @InjectMocks
   private ScraperFactory scraperFactory;
 
@@ -142,13 +145,30 @@ class ScraperFactoryTest {
   }
 
   @Test
+  void scrape_delegatesToAiHeroScraperWithTheFeedUrl() {
+    ContentSource source = contentSource(
+        "https://www.aihero.dev/rss.xml", "https://www.aihero.dev", null, SourceType.BLOG,
+        ScrapeStrategy.AI_HERO);
+    List<ScrapedContent> expected = List.of(
+        new ScrapedContent("Tracer Bullets", "https://www.aihero.dev/tracer-bullets",
+            "Body", Instant.now(), "Matt Pocock", null, false));
+    when(aiHeroScraper.scrape("https://www.aihero.dev/rss.xml")).thenReturn(expected);
+
+    List<ScrapedContent> result = scraperFactory.scrape(source);
+
+    assertThat(result).isSameAs(expected);
+    verifyNoInteractions(rssScraper, sitemapHtmlScraper, lumaApiScraper, linkRoundupScraper);
+  }
+
+  @Test
   void scrape_neverScrapesAnEmailNewsletter() {
     ContentSource source = contentSource(
         "dan@tldrnewsletter.com", "https://tldr.tech", null, SourceType.NEWS,
         ScrapeStrategy.EMAIL_NEWSLETTER);
 
     assertThat(scraperFactory.scrape(source)).isEmpty();
-    verifyNoInteractions(rssScraper, sitemapHtmlScraper, lumaApiScraper, linkRoundupScraper);
+    verifyNoInteractions(
+        rssScraper, sitemapHtmlScraper, lumaApiScraper, linkRoundupScraper, aiHeroScraper);
   }
 
   private ContentSource contentSource(
