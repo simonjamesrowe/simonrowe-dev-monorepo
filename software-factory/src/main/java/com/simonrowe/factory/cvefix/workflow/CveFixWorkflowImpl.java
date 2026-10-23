@@ -7,6 +7,7 @@ import com.simonrowe.factory.cvefix.domain.CveFixProgress;
 import com.simonrowe.factory.cvefix.domain.CveFixRequest;
 import com.simonrowe.factory.cvefix.domain.CveFixResult;
 import com.simonrowe.factory.cvefix.domain.CveFixStatus;
+import com.simonrowe.factory.cvefix.domain.RepairPlan;
 import com.simonrowe.factory.cvefix.persistence.CveFixRunRecord;
 import com.simonrowe.factory.linear.config.LinearTaskQueues;
 import com.simonrowe.factory.linear.domain.FiledIssue;
@@ -16,6 +17,7 @@ import com.simonrowe.factory.linear.domain.IssueFiling;
 import com.simonrowe.factory.linear.workflow.LinearActivities;
 import io.temporal.activity.ActivityOptions;
 import io.temporal.common.RetryOptions;
+import io.temporal.failure.ActivityFailure;
 import io.temporal.failure.ApplicationFailure;
 import io.temporal.spring.boot.WorkflowImpl;
 import io.temporal.workflow.Workflow;
@@ -50,6 +52,15 @@ public class CveFixWorkflowImpl implements CveFixWorkflow {
               .setTaskQueue(LinearTaskQueues.LINEAR)
               .setStartToCloseTimeout(Duration.ofSeconds(90))
               .setScheduleToCloseTimeout(Duration.ofMinutes(2))
+              .setRetryOptions(NETWORK_RETRIES)
+              .build());
+
+  /** OSV is asked once per backend component, so this gets longer than the other reads. */
+  private final CveFixActivities planning =
+      Workflow.newActivityStub(
+          CveFixActivities.class,
+          ActivityOptions.newBuilder()
+              .setStartToCloseTimeout(Duration.ofMinutes(10))
               .setRetryOptions(NETWORK_RETRIES)
               .build());
 
@@ -126,11 +137,20 @@ public class CveFixWorkflowImpl implements CveFixWorkflow {
                   runId,
                   workflowId,
                   FilingMode.ROLLING)));
+      String detail =
+          "Filed or updated one consolidated report for " + findingsSeen + " finding(s)";
+      // Versioned, and asked only when the request wants repairs, so a run scheduled by an older
+      // build (whose request has no such flag) replays the report-only command sequence.
+      if (request.autoRepairEnabled()
+          && Workflow.getVersion("repair-tickets", Workflow.DEFAULT_VERSION, 1) == 1) {
+        current = new CveFixProgress(CveFixPhase.FILING,
+            "Filing repair tickets for the ticket agent", componentsSeen);
+        detail += fileRepairs(request, components, runId, workflowId, outcomes);
+      }
       current = new CveFixProgress(CveFixPhase.COMPLETED,
           "Linear filing complete", componentsSeen);
       return finish(workflowId, runId, startedAt, CveFixStatus.COMPLETED,
-          findingsSeen, componentsSeen, outcomes,
-          "Filed or updated one consolidated report for " + findingsSeen + " finding(s)");
+          findingsSeen, componentsSeen, outcomes, detail);
     } catch (RuntimeException exception) {
       String detail = safeMessage(exception);
       current = new CveFixProgress(CveFixPhase.FAILED, detail, componentsSeen);
@@ -143,6 +163,49 @@ public class CveFixWorkflowImpl implements CveFixWorkflow {
       }
       throw exception;
     }
+  }
+
+  /**
+   * Files one repair ticket per component the agent can fix alone, labelled for it.
+   *
+   * <p>Planning failing does not fail the scan: the report is already filed, and every component
+   * is still in it for a person. Each ticket is keyed on the component at its current version and
+   * filed under {@link FilingMode#REFRESH}, so a nightly re-scan rewrites an open ticket without a
+   * comment, and the agent label goes on a brand-new ticket only, never on a regression.
+   *
+   * @return a clause for the run's detail
+   */
+  private String fileRepairs(
+      final CveFixRequest request,
+      final List<ComponentFindings> components,
+      final String runId,
+      final String workflowId,
+      final List<FiledIssue> outcomes) {
+    List<RepairPlan> plans;
+    try {
+      plans = planning.planRepairs(components);
+    } catch (ActivityFailure failure) {
+      Workflow.getLogger(CveFixWorkflowImpl.class)
+          .warn("Could not plan repair tickets", failure);
+      return "; repair planning failed, so no repair tickets were filed";
+    }
+    for (RepairPlan plan : plans) {
+      outcomes.add(
+          linear.fileIssue(
+              new IssueFiling(
+                  "cvefix",
+                  CveRepairTicket.keyParts(plan),
+                  CveRepairTicket.title(plan),
+                  CveRepairTicket.body(plan),
+                  "scan %s: %s %s still needs %s"
+                      .formatted(runId, plan.coordinate(), plan.currentVersion(),
+                          plan.targetVersion()),
+                  runId,
+                  workflowId,
+                  FilingMode.REFRESH,
+                  List.of(request.agentLabel()))));
+    }
+    return "; %d repair ticket(s) for the ticket agent".formatted(plans.size());
   }
 
   @Override

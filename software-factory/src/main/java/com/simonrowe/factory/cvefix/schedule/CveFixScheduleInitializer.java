@@ -2,6 +2,7 @@ package com.simonrowe.factory.cvefix.schedule;
 
 import com.simonrowe.factory.cvefix.config.CveFixProperties;
 import com.simonrowe.factory.cvefix.config.CveFixTaskQueues;
+import com.simonrowe.factory.cvefix.config.CveRepairProperties;
 import com.simonrowe.factory.cvefix.domain.CveFixRequest;
 import com.simonrowe.factory.cvefix.workflow.CveFixWorkflow;
 import com.simonrowe.factory.linear.config.LinearProperties;
@@ -72,6 +73,7 @@ public class CveFixScheduleInitializer implements ApplicationRunner {
   private final ScheduleClient scheduleClient;
   private final CveFixProperties properties;
   private final LinearProperties linearProperties;
+  private final CveRepairProperties repairProperties;
 
   /**
    * Creates the initializer.
@@ -85,10 +87,12 @@ public class CveFixScheduleInitializer implements ApplicationRunner {
   public CveFixScheduleInitializer(
       final ScheduleClient scheduleClient,
       final CveFixProperties properties,
-      final LinearProperties linearProperties) {
+      final LinearProperties linearProperties,
+      final CveRepairProperties repairProperties) {
     this.scheduleClient = scheduleClient;
     this.properties = properties;
     this.linearProperties = linearProperties;
+    this.repairProperties = repairProperties;
   }
 
   /**
@@ -144,7 +148,9 @@ public class CveFixScheduleInitializer implements ApplicationRunner {
                         properties.ci().pollInterval(),
                         properties.ci().repairBudget(),
                         properties.ci().maxWait(),
-                        linearProperties.enabled()))
+                        linearProperties.enabled(),
+                        repairProperties.enabled(),
+                        repairProperties.agentLabel()))
                 .build())
         .setSpec(
             ScheduleSpec.newBuilder().setIntervals(List.of(new ScheduleIntervalSpec(INTERVAL)))

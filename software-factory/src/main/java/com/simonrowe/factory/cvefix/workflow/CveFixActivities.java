@@ -1,6 +1,7 @@
 package com.simonrowe.factory.cvefix.workflow;
 
 import com.simonrowe.factory.cvefix.domain.ComponentFindings;
+import com.simonrowe.factory.cvefix.domain.RepairPlan;
 import com.simonrowe.factory.cvefix.persistence.CveFixRunRecord;
 import io.temporal.activity.ActivityInterface;
 import io.temporal.activity.ActivityMethod;
@@ -30,4 +31,16 @@ public interface CveFixActivities {
    */
   @ActivityMethod
   boolean previousScanFoundFindings(String workflowId);
+
+  /**
+   * The components the ticket agent can repair on its own, with the version OSV says fixes them.
+   *
+   * <p>A component OSV cannot be asked about is skipped and logged rather than failing the lot:
+   * it stays in the consolidated report for a person, which is where it was before.
+   *
+   * @param components this scan's findings
+   * @return one plan per repairable component, in the order given
+   */
+  @ActivityMethod
+  List<RepairPlan> planRepairs(List<ComponentFindings> components);
 }

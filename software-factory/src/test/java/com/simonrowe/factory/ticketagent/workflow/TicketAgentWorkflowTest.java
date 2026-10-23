@@ -78,9 +78,23 @@ class TicketAgentWorkflowTest {
     assertThat(result.outcome()).isEqualTo(TicketAgentOutcome.MERGED);
     assertThat(result.attempts()).isEqualTo(1);
     assertThat(fake.calls)
-        .containsSubsequence("claim", "attempt:1", "openPullRequest", "markSilencing:false",
+        .containsSubsequence("claim", "attempt:1", "openPullRequest", "markMergePolicy:false:false",
             "readChecks:sha1", "moveToReview", "complete");
     assertThat(fake.calls).noneMatch(call -> call.startsWith("handBack"));
+  }
+
+  @Test
+  void vulnerabilityRepairTicketTellsTheMergePolicy() {
+    Fake fake = new Fake(ticket("factory:agent", "factory:cvefix"));
+    fake.attempts.add(pushed("sha1"));
+    fake.checks.put("sha1", green("sha1"));
+    fake.pullRequestStates.add(new PullRequestState(true, false, true));
+    fake.pullRequestStates.add(new PullRequestState(false, true, true));
+
+    TicketAgentResult result = run(fake, false);
+
+    assertThat(result.outcome()).isEqualTo(TicketAgentOutcome.MERGED);
+    assertThat(fake.calls).contains("markMergePolicy:false:true");
   }
 
   @Test
@@ -158,7 +172,7 @@ class TicketAgentWorkflowTest {
 
     TicketAgentResult result = run(fake, false);
 
-    assertThat(fake.calls).contains("markSilencing:true");
+    assertThat(fake.calls).contains("markMergePolicy:true:false");
     // Not armed, and still unmerged when the merge wait ran out: left in review for a person.
     assertThat(result.outcome()).isEqualTo(TicketAgentOutcome.IN_REVIEW);
   }
@@ -389,6 +403,12 @@ class TicketAgentWorkflowTest {
     @Override
     public void markSilencing(final int pullNumber, final boolean silencing) {
       calls.add("markSilencing:" + silencing);
+    }
+
+    @Override
+    public void markMergePolicy(
+        final int pullNumber, final boolean silencing, final boolean vulnerabilityRepair) {
+      calls.add("markMergePolicy:" + silencing + ":" + vulnerabilityRepair);
     }
 
     @Override

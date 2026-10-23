@@ -336,14 +336,20 @@ services:
       # file tools only and opens a pull request; CI's workflow_run webhook drives up to three
       # repair attempts. On here so the console can dry-run and hand over tickets, but its
       # five-minute intake schedule is created PAUSED, so nothing is picked up on its own until
-      # an operator resumes it from the console. Owner-triggered work only (a person adds the
-      # label), which is what the Claude subscription's terms allow. Deliberately NOT on
+      # an operator resumes it from the console. Owner work only: a person adds the label, or the
+      # owner's own vulnerability scan does (never anything a visitor triggers), which is what the
+      # Claude subscription's terms allow. Deliberately NOT on
       # `deployer`: TicketAgentComposeTest fails the build if any FACTORY_TICKET_AGENT_* appears
       # there. See docs/runbooks/ticket-agent.md.
       FACTORY_TICKET_AGENT_ENABLED: ${FACTORY_TICKET_AGENT_ENABLED:-true}
-      # Issue-only scanning is on by default. It files one consolidated repository report in
-      # Linear and never edits dependencies, pushes a branch, opens a PR or polls CI.
+      # Scanning is on by default. It files one consolidated repository report in Linear and,
+      # with auto-repair on, one repair ticket per backend component with a same-major fix,
+      # labelled `factory:agent`. The scan itself never edits dependencies, pushes a branch or
+      # opens a PR: the ticket agent does, and a version-only change merges itself once CI and
+      # the review pass. An owner-scheduled job on the owner's own repository, like the nightly
+      # log scan. See docs/runbooks/cvefix.md ("Repair tickets").
       FACTORY_CVEFIX_ENABLED: ${FACTORY_CVEFIX_ENABLED:-true}
+      FACTORY_CVEFIX_AUTO_REPAIR_ENABLED: ${FACTORY_CVEFIX_AUTO_REPAIR_ENABLED:-true}
       # The receiver half of auto-deploy: gates the `workflow_run` webhook branch and the
       # DeployWorkflowService client stub. It belongs HERE and not only on `deployer`,
       # because this is the container that terminates the signed webhook. Without this

@@ -1,6 +1,7 @@
 package com.simonrowe.factory.ticketagent.workflow;
 
 import com.simonrowe.factory.linear.domain.LinearTicket;
+import com.simonrowe.factory.ticketagent.config.TicketAgentProperties;
 import com.simonrowe.factory.ticketagent.config.TicketAgentTaskQueues;
 import com.simonrowe.factory.ticketagent.domain.AttemptRequest;
 import com.simonrowe.factory.ticketagent.domain.AttemptResult;
@@ -171,7 +172,14 @@ public class TicketAgentWorkflowImpl implements TicketAgentWorkflow {
                 "Attempt %d pushed to %s. %s"
                     .formatted(attempt, pullRequest.url(), result.summary()));
           }
-          network.markSilencing(pullRequest.number(), !result.silencing().isEmpty());
+          boolean silencing = !result.silencing().isEmpty();
+          if (Workflow.getVersion("vulnerability-merge-policy", Workflow.DEFAULT_VERSION, 1)
+              == Workflow.DEFAULT_VERSION) {
+            network.markSilencing(pullRequest.number(), silencing);
+          } else {
+            network.markMergePolicy(pullRequest.number(), silencing,
+                ticket.hasLabel(TicketAgentProperties.VULNERABILITY_LABEL));
+          }
         }
         default -> throw new IllegalStateException("Unknown attempt status " + result.status());
       }

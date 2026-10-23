@@ -41,6 +41,17 @@ public interface TicketAgentActivities {
   @ActivityMethod
   void markSilencing(int pullNumber, boolean silencing);
 
+  /**
+   * As {@link #markSilencing}, except that a vulnerability repair whose build-file changes only
+   * move versions is left unlabelled, so the reviewer may arm auto-merge for it.
+   *
+   * @param pullNumber the pull request
+   * @param silencing whether the diff silences something; always a person's merge
+   * @param vulnerabilityRepair whether the ticket is a vulnerability repair the scan filed
+   */
+  @ActivityMethod
+  void markMergePolicy(int pullNumber, boolean silencing, boolean vulnerabilityRepair);
+
   @ActivityMethod
   ChecksReport readChecks(String headSha);
 

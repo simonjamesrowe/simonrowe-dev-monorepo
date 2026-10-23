@@ -436,6 +436,29 @@ public class LinearGateway {
    */
   public CreatedIssue createIssue(
       final String title, final String body, final int priority, final String labelName) {
+    return createIssue(title, body, priority, labelName, List.of());
+  }
+
+  /**
+   * Creates an issue in the team's Triage state with the producer's label and any extra labels.
+   *
+   * <p>Extra labels are created on the team when missing, unlike the producer's label: an extra
+   * label is an instruction to another module, and silently dropping it would leave the issue
+   * waiting for a hand-over that never happens.
+   *
+   * @param title the issue title
+   * @param body the issue description, in Markdown
+   * @param priority the Linear priority integer
+   * @param labelName the producer's label
+   * @param extraLabels further labels to apply
+   * @return the created issue
+   */
+  public CreatedIssue createIssue(
+      final String title,
+      final String body,
+      final int priority,
+      final String labelName,
+      final List<String> extraLabels) {
     TeamContext team = teamContext();
     ObjectNode input = objectMapper.createObjectNode();
     input.put("teamId", team.teamId());
@@ -443,9 +466,13 @@ public class LinearGateway {
     input.put("title", title);
     input.put("description", body);
     input.put("priority", priority);
+    List<String> labelIds = new ArrayList<>();
+    for (String extra : extraLabels) {
+      labelIds.add(labelId(extra, true));
+    }
     String labelId = team.labelIds().get(labelName);
     if (labelId != null) {
-      input.putArray("labelIds").add(labelId);
+      labelIds.add(labelId);
     } else {
       // The only runtime signal that human prerequisite 2 was skipped. Silently omitting the
       // label files every ticket unlabelled, forever, successfully, with nothing anywhere to
@@ -457,6 +484,9 @@ public class LinearGateway {
           container needs restarting before the new label is picked up.""",
           properties.teamKey(),
           labelName);
+    }
+    if (!labelIds.isEmpty()) {
+      labelIds.forEach(input.putArray("labelIds")::add);
     }
     JsonNode result = execute(CREATE_ISSUE, Map.of(VAR_INPUT, input)).path("issueCreate");
     if (!result.path(FIELD_SUCCESS).asBoolean(false)) {

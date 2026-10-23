@@ -3,6 +3,7 @@ package com.simonrowe.factory.ticketagent.github;
 import com.simonrowe.factory.codereview.config.CodeReviewProperties;
 import com.simonrowe.factory.codereview.github.CheckRunGateway;
 import com.simonrowe.factory.codereview.github.GitHubCredentials;
+import com.simonrowe.factory.git.DependencyPins;
 import com.simonrowe.factory.ticketagent.config.TicketAgentProperties;
 import com.simonrowe.factory.ticketagent.domain.ChecksReport;
 import com.simonrowe.factory.ticketagent.domain.PullRequestRef;
@@ -17,6 +18,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Deque;
 import java.util.Iterator;
 import java.util.List;
@@ -54,6 +56,10 @@ public class TicketAgentGitHub {
       Human merge required: this pull request changes build or dependency files. \
       The ticket agent applies `no-auto-merge`; GitHub Actions verifies the change, \
       and a person must merge it.""";
+  private static final String VERSION_BUMP_NOTE =
+      """
+      Vulnerability repair: this pull request only changes dependency versions, so the \
+      reviewer may merge it once GitHub Actions and the review pass.""";
 
   /** Hosts GitHub sends job log downloads to. Anything else is not followed. */
   private static final List<String> LOG_HOST_SUFFIXES =
@@ -156,8 +162,20 @@ public class TicketAgentGitHub {
 
   /** All paths in the full PR, including rename sources and every page of GitHub's file list. */
   public List<String> changedPaths(final int number, final Long installationId) {
-    String token = credentials.accessToken(installationId);
     List<String> paths = new ArrayList<>();
+    for (DependencyPins.FileDiff file : changedFiles(number, installationId)) {
+      paths.add(file.path());
+      if (file.previousPath() != null && !file.previousPath().isEmpty()) {
+        paths.add(file.previousPath());
+      }
+    }
+    return List.copyOf(paths);
+  }
+
+  /** Every file in the full PR with its status and patch, across every page of the listing. */
+  public List<DependencyPins.FileDiff> changedFiles(final int number, final Long installationId) {
+    String token = credentials.accessToken(installationId);
+    List<DependencyPins.FileDiff> diffs = new ArrayList<>();
     // GitHub caps this endpoint at 3,000 files. Fail closed at that cap rather than risk removing
     // no-auto-merge when an unseen file changes a dependency.
     for (int page = 1; page <= 30; page++) {
@@ -167,27 +185,71 @@ public class TicketAgentGitHub {
         throw new IllegalStateException("GitHub pull request files response was not an array");
       }
       for (JsonNode file : files) {
-        paths.add(file.path("filename").asText());
-        if (file.hasNonNull("previous_filename")) {
-          paths.add(file.path("previous_filename").asText());
-        }
+        diffs.add(new DependencyPins.FileDiff(
+            file.path("filename").asText(),
+            file.hasNonNull("previous_filename") ? file.path("previous_filename").asText() : null,
+            file.path("status").asText(""),
+            file.hasNonNull("patch") ? file.path("patch").asText() : null));
       }
       if (files.size() < 100) {
-        return List.copyOf(paths);
+        return List.copyOf(diffs);
       }
     }
     throw new IllegalStateException("Pull request file limit reached; manual review required");
   }
 
+  /** The pull request's current head commit. */
+  public String headSha(final int number, final Long installationId) {
+    String path = repoPath() + "/pulls/" + number;
+    JsonNode pull = parse(requireOk("GET", path,
+        send("GET", path, null, credentials.accessToken(installationId))));
+    return pull.path("head").path("sha").asText("");
+  }
+
+  /**
+   * A pin file's text at a commit, or null when it cannot be read. Only {@link
+   * DependencyPins#PIN_FILES} are read, so the path needs no encoding.
+   */
+  public String pinFileAt(final String file, final String ref, final Long installationId) {
+    if (!DependencyPins.isPinFile(file) || ref == null || ref.isBlank()) {
+      return null;
+    }
+    String path = "%s/contents/%s?ref=%s"
+        .formatted(repoPath(), file, URLEncoder.encode(ref, StandardCharsets.UTF_8));
+    HttpResponse<String> response =
+        send("GET", path, null, credentials.accessToken(installationId));
+    if (response.statusCode() < 200 || response.statusCode() >= 300) {
+      return null;
+    }
+    JsonNode body = parse(response);
+    if (!"base64".equals(body.path("encoding").asText(""))) {
+      return null;
+    }
+    try {
+      return new String(
+          Base64.getMimeDecoder().decode(body.path("content").asText("")), StandardCharsets.UTF_8);
+    } catch (IllegalArgumentException exception) {
+      return null;
+    }
+  }
+
+  /** Records, once, that the reviewer may merge this version-only vulnerability repair. */
+  public void noteVersionBump(final int number, final Long installationId) {
+    appendOnce(number, installationId, VERSION_BUMP_NOTE);
+  }
+
   /** Records the reason for no-auto-merge once, preserving the existing PR description. */
   public void noteDependencyReview(final int number, final Long installationId) {
+    appendOnce(number, installationId, DEPENDENCY_REVIEW_NOTE);
+  }
+
+  private void appendOnce(final int number, final Long installationId, final String note) {
     String token = credentials.accessToken(installationId);
     String path = repoPath() + "/pulls/" + number;
     JsonNode pull = parse(requireOk("GET", path, send("GET", path, null, token)));
     String body = pull.path("body").asText("");
-    if (!body.contains(DEPENDENCY_REVIEW_NOTE)) {
-      ObjectNode payload = objectMapper.createObjectNode()
-          .put("body", body + "\n\n" + DEPENDENCY_REVIEW_NOTE);
+    if (!body.contains(note)) {
+      ObjectNode payload = objectMapper.createObjectNode().put("body", body + "\n\n" + note);
       requireOk("PATCH", path, send("PATCH", path, payload, token));
     }
   }

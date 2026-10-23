@@ -1,10 +1,13 @@
 package com.simonrowe.factory.codereview.domain;
 
+import com.simonrowe.factory.git.DependencyPins;
 import com.simonrowe.factory.git.PathGlobs;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Supplier;
+import java.util.function.UnaryOperator;
 
 /**
  * Decides whether a reviewed pull request may have GitHub auto-merge armed.
@@ -93,6 +96,29 @@ public final class AutoMergePolicy {
       final String reviewedHeadSha,
       final Supplier<ChangedFiles> files,
       final List<String> guidancePaths) {
+    return decide(enabled, state, report, reviewedHeadSha, files, guidancePaths, path -> null);
+  }
+
+  /**
+   * Applies the rules, with the guidance allowlist and a way to read build files at the head.
+   *
+   * @param enabled {@code factory.codereview.auto-merge.enabled}
+   * @param state the pull request as GitHub reports it now
+   * @param report the review of {@code reviewedHeadSha}
+   * @param reviewedHeadSha the commit the review was of
+   * @param files fetched only if every earlier rule passes
+   * @param guidancePaths the globs a guidance pull request against this repository may touch
+   * @param headContent a file's text at {@code reviewedHeadSha}, or null when unreadable; asked
+   *     only when a factory pull request adds a dependency constraint
+   */
+  public static MergeDecision decide(
+      final boolean enabled,
+      final AutoMergeState state,
+      final ReviewReport report,
+      final String reviewedHeadSha,
+      final Supplier<ChangedFiles> files,
+      final List<String> guidancePaths,
+      final UnaryOperator<String> headContent) {
     if (!enabled) {
       return MergeDecision.off();
     }
@@ -136,6 +162,17 @@ public final class AutoMergePolicy {
       return guidanceDecision(changed, guidancePaths);
     }
     MergeDisposition.Classification classification = MergeDisposition.classify(changed.paths());
+    if (classification.disposition() == MergeDisposition.MANUAL && state.authorIsThisApp()) {
+      Optional<MergeDecision> pins = pinDecision(changed, headContent);
+      if (pins.isPresent()) {
+        return pins.get();
+      }
+    }
+    return pathDecision(classification);
+  }
+
+  private static MergeDecision pathDecision(
+      final MergeDisposition.Classification classification) {
     return switch (classification.disposition()) {
       case AUTO_MERGE -> MergeDecision.eligible();
       case UX_REVIEW ->
@@ -166,6 +203,45 @@ public final class AutoMergePolicy {
         .map(path -> MergeDecision.ineligible(
             "`" + path + "` is outside the guidance allowlist"))
         .orElseGet(MergeDecision::eligible);
+  }
+
+  /**
+   * The factory's own CVE repair: build files that only move versions, plus nothing a person must
+   * merge.
+   *
+   * <p>Only for this App's pull requests, which the ticket agent opens, and which it labels
+   * {@code no-auto-merge} unless the ticket is a vulnerability repair. So a person's dependency
+   * edit, and the agent's edit for any other kind of ticket, still needs a person. Paths other
+   * than the pin files keep their ordinary rules: a version bump plus a backend fix can merge, a
+   * version bump plus a compose change cannot.
+   *
+   * @return the decision, or empty when this rule does not apply and the ordinary reason stands
+   */
+  private static Optional<MergeDecision> pinDecision(
+      final ChangedFiles changed, final UnaryOperator<String> headContent) {
+    List<String> others =
+        changed.paths().stream().filter(path -> !DependencyPins.isPinFile(path)).toList();
+    if (others.size() == changed.paths().size()) {
+      return Optional.empty();
+    }
+    if (!others.isEmpty()) {
+      MergeDisposition.Classification rest = MergeDisposition.classify(others);
+      if (rest.disposition() != MergeDisposition.AUTO_MERGE) {
+        // Name what actually needs a person, not the pin file that would have qualified.
+        return Optional.of(pathDecision(rest));
+      }
+    }
+    List<DependencyPins.FileDiff> pinDiffs =
+        changed.diffs().stream()
+            .filter(diff -> DependencyPins.isPinFile(diff.path())
+                || DependencyPins.isPinFile(diff.previousPath()))
+            .toList();
+    DependencyPins.Verdict verdict = DependencyPins.check(pinDiffs, headContent);
+    return Optional.of(
+        verdict.versionsOnly()
+            ? MergeDecision.eligible()
+            : MergeDecision.ineligible(
+                "the dependency change is more than a version bump: " + verdict.reason()));
   }
 
   private static String shortSha(final String sha) {

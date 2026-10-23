@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -14,6 +15,7 @@ import com.simonrowe.factory.cvefix.domain.CveFixRequest;
 import com.simonrowe.factory.cvefix.domain.CveFixResult;
 import com.simonrowe.factory.cvefix.domain.CveFixStatus;
 import com.simonrowe.factory.cvefix.domain.Finding;
+import com.simonrowe.factory.cvefix.domain.RepairPlan;
 import com.simonrowe.factory.linear.config.LinearTaskQueues;
 import com.simonrowe.factory.linear.domain.AbsenceSweep;
 import com.simonrowe.factory.linear.domain.FiledIssue;
@@ -76,6 +78,69 @@ class CveFixWorkflowTest {
         .contains("## simonrowe-dev/backend")
         .contains("## simonrowe-dev/frontend");
     verify(activities).recordRun(any());
+  }
+
+  private static final RepairPlan PLAN = new RepairPlan(
+      "simonrowe-dev/backend", PURL, "org.example:lib", "1.0.0", "1.0.3",
+      List.of("CVE-2026-1", "CVE-2026-2"), "HIGH");
+
+  @Test
+  void filesRepairTicketForTheAgentAfterTheReport() {
+    CveFixActivities activities = mock(CveFixActivities.class);
+    LinearActivities linear = mock(LinearActivities.class);
+    when(activities.fetchFindings()).thenReturn(COMPONENTS);
+    when(activities.planRepairs(COMPONENTS)).thenReturn(List.of(PLAN));
+    when(linear.fileIssue(any())).thenReturn(
+        new FiledIssue(FilingDecision.FILED_NEW, "id", "SIM-9", "https://linear/SIM-9", "fp"));
+
+    CveFixResult result = runWithRepairs(activities, linear, "files");
+
+    assertThat(result.status()).isEqualTo(CveFixStatus.COMPLETED);
+    assertThat(result.filed()).isEqualTo(2);
+    assertThat(result.detail()).contains("1 repair ticket(s)");
+    ArgumentCaptor<IssueFiling> filings = ArgumentCaptor.forClass(IssueFiling.class);
+    verify(linear, times(2)).fileIssue(filings.capture());
+    IssueFiling report = filings.getAllValues().get(0);
+    IssueFiling repair = filings.getAllValues().get(1);
+    assertThat(report.keyParts()).contains("current-vulnerabilities");
+    assertThat(report.extraLabels()).isEmpty();
+    assertThat(repair.keyParts()).containsExactly(
+        "simonjamesrowe/simonrowe-dev-monorepo", "repair", "simonrowe-dev/backend", PURL);
+    assertThat(repair.title()).isEqualTo("Bump org.example:lib to 1.0.3 (CVE-2026-1, CVE-2026-2)");
+    assertThat(repair.body()).contains("from `1.0.0` to `1.0.3`", "constraints {}",
+        "ext[\"<name>.version\"]", "gradle/libs.versions.toml");
+    assertThat(repair.mode()).isEqualTo(FilingMode.REFRESH);
+    assertThat(repair.extraLabels()).containsExactly("factory:agent");
+  }
+
+  /** The report is already filed; a planning failure must not turn the scan red. */
+  @Test
+  void planningFailureStillCompletesTheScan() {
+    CveFixActivities activities = mock(CveFixActivities.class);
+    LinearActivities linear = mock(LinearActivities.class);
+    when(activities.fetchFindings()).thenReturn(COMPONENTS);
+    when(activities.planRepairs(any())).thenThrow(new IllegalStateException("OSV down"));
+    when(linear.fileIssue(any())).thenReturn(
+        new FiledIssue(FilingDecision.UPDATED_EXISTING, "id", "SIM-9", "u", "fp"));
+
+    CveFixResult result = runWithRepairs(activities, linear, "osv-down");
+
+    assertThat(result.status()).isEqualTo(CveFixStatus.COMPLETED);
+    assertThat(result.detail()).contains("repair planning failed");
+    verify(linear).fileIssue(any());
+  }
+
+  @Test
+  void reportOnlyRequestPlansNothing() {
+    CveFixActivities activities = mock(CveFixActivities.class);
+    LinearActivities linear = mock(LinearActivities.class);
+    when(activities.fetchFindings()).thenReturn(COMPONENTS);
+    when(linear.fileIssue(any())).thenReturn(
+        new FiledIssue(FilingDecision.FILED_NEW, "id", "SIM-9", "u", "fp"));
+
+    run(activities, linear, true, "report-only");
+
+    verify(activities, never()).planRepairs(any());
   }
 
   @Test
@@ -183,6 +248,26 @@ class CveFixWorkflowTest {
     }
   }
 
+  private static CveFixResult runWithRepairs(
+      final CveFixActivities activities, final LinearActivities linear, final String idSuffix) {
+    try (TestWorkflowEnvironment environment = TestWorkflowEnvironment.newInstance()) {
+      Worker workflowWorker = environment.newWorker(CveFixTaskQueues.CVE_FIX);
+      workflowWorker.registerWorkflowImplementationTypes(CveFixWorkflowImpl.class);
+      workflowWorker.registerActivitiesImplementations(new CveActivitiesAdapter(activities));
+      Worker linearWorker = environment.newWorker(LinearTaskQueues.LINEAR);
+      linearWorker.registerActivitiesImplementations(new LinearActivitiesAdapter(linear));
+      environment.start();
+      CveFixWorkflow workflow = environment.getWorkflowClient().newWorkflowStub(
+          CveFixWorkflow.class,
+          WorkflowOptions.newBuilder()
+              .setTaskQueue(CveFixTaskQueues.CVE_FIX)
+              .setWorkflowId("test-cve-repair-" + idSuffix)
+              .build());
+      return workflow.run(
+          new CveFixRequest(false, null, 0, null, true, true, "factory:agent"));
+    }
+  }
+
   private record CveActivitiesAdapter(CveFixActivities delegate) implements CveFixActivities {
 
     @Override
@@ -199,6 +284,11 @@ class CveFixWorkflowTest {
     @Override
     public boolean previousScanFoundFindings(final String workflowId) {
       return delegate.previousScanFoundFindings(workflowId);
+    }
+
+    @Override
+    public List<RepairPlan> planRepairs(final List<ComponentFindings> components) {
+      return delegate.planRepairs(components);
     }
   }
 

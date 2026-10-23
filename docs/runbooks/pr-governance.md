@@ -250,6 +250,16 @@ It arms only if **every** rule passes. The first rule to fail is the reason give
    `components/skills/**` in `agent-setup`, root `CLAUDE.md` everywhere else). The distiller
    checks the same list before it pushes. A person adding the label to their own pull request gets
    "not opened by the factory" rather than a different set of path rules.
+   **Version-only dependency bumps from the App are the second exception.** When the App opened
+   the pull request and the only `manual` paths are the three files versions are pinned in
+   (`gradle/libs.versions.toml`, `build.gradle.kts`, `backend/build.gradle.kts`), those files are
+   judged by `DependencyPins` instead: every changed line must only move a version (a catalogue
+   entry, an inline library version, an `ext["…"]` override, or an `implementation("g:a:v")`
+   directly inside `constraints {}`, checked against the file at the reviewed commit). Any other
+   path still takes the path rules, so a bump plus a compose change stays manual. The ticket agent
+   labels every other dependency edit `no-auto-merge`, so in practice this is only the
+   vulnerability scan's repair tickets (`cvefix.md`, "Repair tickets"). npm manifests are never
+   pin files: the agent cannot regenerate `package-lock.json`.
 
 Until 2026-10, `agent-feedback` was simply refused here. Every one of the ~23 guidance pull
 requests up to then was merged by hand unchanged, so they now merge themselves, and

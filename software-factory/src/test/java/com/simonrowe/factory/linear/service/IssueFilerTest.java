@@ -3,6 +3,7 @@ package com.simonrowe.factory.linear.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
@@ -227,6 +228,37 @@ class IssueFilerTest {
     assertThat(body.getValue()).contains("SIM-1");
     verify(gateway).attachFingerprint(eq("i9"), anyString());
     verify(gateway).relateIssues("i9", "i1");
+  }
+
+  private static IssueFiling labelled() {
+    return new IssueFiling("cvefix", List.of("repo", "repair", "pkg:maven/g/a@1.0.0"),
+        "Bump g:a to 1.0.1", "body", "scan run-1", "run-1", "cve-fix-daily",
+        FilingMode.REFRESH, List.of("factory:agent"));
+  }
+
+  @Test
+  void extraLabelsGoOnNewIssue() {
+    when(gateway.issuesForFingerprint(anyString())).thenReturn(List.of());
+    when(gateway.createIssue(anyString(), anyString(), anyInt(), anyString(), anyList()))
+        .thenReturn(new LinearGateway.CreatedIssue("i9", "SIM-9", "u"));
+
+    assertThat(filer().file(labelled()).decision()).isEqualTo(FilingDecision.FILED_NEW);
+    verify(gateway).createIssue(
+        eq("Bump g:a to 1.0.1"), anyString(), anyInt(), eq("factory:cvefix"),
+        eq(List.of("factory:agent")));
+  }
+
+  /** A fix that did not hold goes to a person, not back to the agent that made it. */
+  @Test
+  void extraLabelsNeverGoOnRegression() {
+    when(gateway.issuesForFingerprint(anyString()))
+        .thenReturn(List.of(issue(IssueStateType.COMPLETED)));
+    when(gateway.createIssue(anyString(), anyString(), anyInt(), anyString()))
+        .thenReturn(new LinearGateway.CreatedIssue("i9", "SIM-9", "u"));
+
+    assertThat(filer().file(labelled()).decision()).isEqualTo(FilingDecision.FILED_REGRESSION);
+    verify(gateway, never())
+        .createIssue(anyString(), anyString(), anyInt(), anyString(), anyList());
   }
 
   @Test

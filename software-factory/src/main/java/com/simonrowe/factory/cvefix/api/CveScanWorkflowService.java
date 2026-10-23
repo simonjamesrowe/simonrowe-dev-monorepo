@@ -1,6 +1,7 @@
 package com.simonrowe.factory.cvefix.api;
 
 import com.simonrowe.factory.cvefix.config.CveFixTaskQueues;
+import com.simonrowe.factory.cvefix.config.CveRepairProperties;
 import com.simonrowe.factory.cvefix.domain.CveFixProgress;
 import com.simonrowe.factory.cvefix.domain.CveFixRequest;
 import com.simonrowe.factory.cvefix.workflow.CveFixWorkflow;
@@ -18,10 +19,15 @@ public class CveScanWorkflowService {
 
   private final WorkflowClient client;
   private final LinearProperties linear;
+  private final CveRepairProperties repair;
 
-  public CveScanWorkflowService(final WorkflowClient client, final LinearProperties linear) {
+  public CveScanWorkflowService(
+      final WorkflowClient client,
+      final LinearProperties linear,
+      final CveRepairProperties repair) {
     this.client = client;
     this.linear = linear;
+    this.repair = repair;
   }
 
   public CveScanAccepted start() {
@@ -38,7 +44,8 @@ public class CveScanWorkflowService {
     WorkflowExecution execution =
         WorkflowClient.start(
             workflow::run,
-            new CveFixRequest(false, null, 0, null, linear.enabled()));
+            new CveFixRequest(false, null, 0, null, linear.enabled(), repair.enabled(),
+                repair.agentLabel()));
     return new CveScanAccepted(execution.getWorkflowId(), execution.getRunId(),
         "Vulnerability scan accepted");
   }

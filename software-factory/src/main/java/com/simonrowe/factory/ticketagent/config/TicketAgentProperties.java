@@ -80,7 +80,15 @@ public record TicketAgentProperties(
           "**/Dockerfile*");
 
   /**
-   * Pushable build/dependency files that always need a person's merge.
+   * The label the vulnerability scan puts on the repair tickets it files (the {@code cvefix}
+   * producer's label). On such a ticket, a change that only moves dependency versions is left for
+   * the reviewer to merge; every other build or dependency change still needs a person.
+   */
+  public static final String VULNERABILITY_LABEL = "factory:cvefix";
+
+  /**
+   * Pushable build/dependency files that need a person's merge, unless the ticket is a
+   * vulnerability repair and the change only moves versions ({@code DependencyPins}).
    *
    * <p>Accepted tradeoff: CI executes an edited build script with the PR's repository secrets
    * (SONAR_TOKEN) before a person reads it. A person approves the ticket and merges the change;

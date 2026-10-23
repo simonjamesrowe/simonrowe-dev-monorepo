@@ -1,6 +1,7 @@
 package com.simonrowe.factory.ticketagent.workflow;
 
 import com.simonrowe.factory.codereview.domain.AutoMergePolicy;
+import com.simonrowe.factory.git.DependencyPins;
 import com.simonrowe.factory.git.PathGlobs;
 import com.simonrowe.factory.git.RepositoryWorkspace;
 import com.simonrowe.factory.git.RepositoryWorkspaceFactory;
@@ -229,19 +230,70 @@ public class TicketAgentActivitiesImpl implements TicketAgentActivities {
 
   @Override
   public void markSilencing(final int pullNumber, final boolean silencing) {
+    markMergePolicy(pullNumber, silencing, false);
+  }
+
+  @Override
+  public void markMergePolicy(
+      final int pullNumber, final boolean silencing, final boolean vulnerabilityRepair) {
     Long installationId = gitHub.installationId();
     // Protect the PR before reading paths; a failed or truncated read must leave it manual.
     gitHub.setLabel(pullNumber, AutoMergePolicy.OPT_OUT_LABEL, true, installationId);
     // Read the whole PR on every attempt: a Java-only repair must not remove the label from a
     // branch whose earlier attempt changed a dependency. Include the old side of a rename too.
-    List<String> dependencies = PathGlobs.matching(
-        gitHub.changedPaths(pullNumber, installationId), TicketAgentProperties.MANUAL_MERGE_PATHS);
-    if (!silencing && dependencies.isEmpty()) {
+    List<DependencyPins.FileDiff> files = gitHub.changedFiles(pullNumber, installationId);
+    List<String> paths = new ArrayList<>();
+    for (DependencyPins.FileDiff file : files) {
+      paths.add(file.path());
+      if (file.previousPath() != null && !file.previousPath().isEmpty()) {
+        paths.add(file.previousPath());
+      }
+    }
+    List<String> dependencies =
+        PathGlobs.matching(paths, TicketAgentProperties.MANUAL_MERGE_PATHS);
+    if (silencing) {
+      if (!dependencies.isEmpty()) {
+        gitHub.noteDependencyReview(pullNumber, installationId);
+      }
+      return;
+    }
+    if (dependencies.isEmpty()) {
       gitHub.setLabel(pullNumber, AutoMergePolicy.OPT_OUT_LABEL, false, installationId);
+      return;
     }
-    if (!dependencies.isEmpty()) {
-      gitHub.noteDependencyReview(pullNumber, installationId);
+    if (vulnerabilityRepair && versionsOnly(pullNumber, files, dependencies, installationId)) {
+      // The reviewer re-checks the same diff itself before arming; this only stops the agent
+      // from vetoing a merge the review rules would allow.
+      gitHub.setLabel(pullNumber, AutoMergePolicy.OPT_OUT_LABEL, false, installationId);
+      gitHub.noteVersionBump(pullNumber, installationId);
+      return;
     }
+    gitHub.noteDependencyReview(pullNumber, installationId);
+  }
+
+  /**
+   * Whether every dependency file in the PR is a pin file whose changes only move versions.
+   * npm manifests never qualify: the agent cannot regenerate {@code package-lock.json}.
+   */
+  private boolean versionsOnly(
+      final int pullNumber,
+      final List<DependencyPins.FileDiff> files,
+      final List<String> dependencies,
+      final Long installationId) {
+    if (!dependencies.stream().allMatch(DependencyPins::isPinFile)) {
+      return false;
+    }
+    List<DependencyPins.FileDiff> pins = files.stream()
+        .filter(file -> DependencyPins.isPinFile(file.path())
+            || DependencyPins.isPinFile(file.previousPath()))
+        .toList();
+    String head = gitHub.headSha(pullNumber, installationId);
+    DependencyPins.Verdict verdict =
+        DependencyPins.check(pins, path -> gitHub.pinFileAt(path, head, installationId));
+    if (!verdict.versionsOnly()) {
+      LOGGER.info("PR #{} needs a person to merge: {}", pullNumber, verdict.reason());
+    }
+    return verdict.versionsOnly();
   }
 
   @Override

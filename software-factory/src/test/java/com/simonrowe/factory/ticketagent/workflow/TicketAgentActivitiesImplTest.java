@@ -15,6 +15,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.simonrowe.factory.git.DependencyPins;
 import com.simonrowe.factory.git.RepositoryWorkspace;
 import com.simonrowe.factory.git.RepositoryWorkspaceFactory;
 import com.simonrowe.factory.linear.domain.IssueStateType;
@@ -36,6 +37,7 @@ import com.simonrowe.factory.ticketagent.github.TicketAgentGitHub;
 import io.temporal.failure.ApplicationFailure;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -237,8 +239,8 @@ class TicketAgentActivitiesImplTest {
 
   @Test
   void backendBuildScriptGetsNoAutoMergeEvenOnRepair() {
-    when(gitHub.changedPaths(271, 7L))
-        .thenReturn(List.of("backend/build.gradle.kts", "backend/src/main/java/A.java"));
+    when(gitHub.changedFiles(271, 7L))
+        .thenReturn(files("backend/build.gradle.kts", "backend/src/main/java/A.java"));
 
     activities.markSilencing(271, false);
 
@@ -248,25 +250,98 @@ class TicketAgentActivitiesImplTest {
 
   @Test
   void ordinaryNonSilencingCodeRemovesTheLabel() {
-    when(gitHub.changedPaths(271, 7L)).thenReturn(List.of("backend/src/main/java/A.java"));
+    when(gitHub.changedFiles(271, 7L)).thenReturn(files("backend/src/main/java/A.java"));
 
     activities.markSilencing(271, false);
 
     InOrder order = inOrder(gitHub);
     order.verify(gitHub).setLabel(271, "no-auto-merge", true, 7L);
-    order.verify(gitHub).changedPaths(271, 7L);
+    order.verify(gitHub).changedFiles(271, 7L);
     order.verify(gitHub).setLabel(271, "no-auto-merge", false, 7L);
     verify(gitHub, never()).noteDependencyReview(anyInt(), any());
   }
 
   @Test
   void failedPathReadLeavesTheManualMergeLabelInPlace() {
-    when(gitHub.changedPaths(271, 7L)).thenThrow(new IllegalStateException("GitHub unavailable"));
+    when(gitHub.changedFiles(271, 7L)).thenThrow(new IllegalStateException("GitHub unavailable"));
 
     assertThatThrownBy(() -> activities.markSilencing(271, false))
         .hasMessageContaining("GitHub unavailable");
 
     verify(gitHub).setLabel(271, "no-auto-merge", true, 7L);
+    verify(gitHub, never()).setLabel(271, "no-auto-merge", false, 7L);
+  }
+
+  private static List<DependencyPins.FileDiff> files(final String... paths) {
+    return Arrays.stream(paths)
+        .map(path -> new DependencyPins.FileDiff(path, null, "modified", "@@ -1 +1 @@\n-a\n+b"))
+        .toList();
+  }
+
+  private static final DependencyPins.FileDiff OVERRIDE_BUMP = new DependencyPins.FileDiff(
+      "build.gradle.kts", null, "modified", """
+          @@ -7,1 +7,1 @@
+          -    ext["tomcat.version"] = "11.0.25"\s
+          +    ext["tomcat.version"] = "11.0.26"
+          """);
+
+  @Test
+  void vulnerabilityRepairThatOnlyMovesVersionsIsLeftForTheReviewer() {
+    when(gitHub.changedFiles(271, 7L)).thenReturn(List.of(OVERRIDE_BUMP));
+    when(gitHub.headSha(271, 7L)).thenReturn("sha1");
+
+    activities.markMergePolicy(271, false, true);
+
+    InOrder order = inOrder(gitHub);
+    order.verify(gitHub).setLabel(271, "no-auto-merge", true, 7L);
+    order.verify(gitHub).setLabel(271, "no-auto-merge", false, 7L);
+    verify(gitHub).noteVersionBump(271, 7L);
+    verify(gitHub, never()).noteDependencyReview(anyInt(), any());
+  }
+
+  /** The same diff on any other ticket still needs a person. */
+  @Test
+  void versionOnlyBumpOnOrdinaryTicketStillNeedsSomeone() {
+    when(gitHub.changedFiles(271, 7L)).thenReturn(List.of(OVERRIDE_BUMP));
+
+    activities.markMergePolicy(271, false, false);
+
+    verify(gitHub, never()).setLabel(271, "no-auto-merge", false, 7L);
+    verify(gitHub).noteDependencyReview(271, 7L);
+  }
+
+  @Test
+  void vulnerabilityRepairThatChangesTheBuildNeedsSomeone() {
+    when(gitHub.changedFiles(271, 7L)).thenReturn(List.of(new DependencyPins.FileDiff(
+        "build.gradle.kts", null, "modified", """
+            @@ -7,1 +7,2 @@
+                 ext["tomcat.version"] = "11.0.25"\s
+            +    tasks.register("x") { }
+            """)));
+    when(gitHub.headSha(271, 7L)).thenReturn("sha1");
+
+    activities.markMergePolicy(271, false, true);
+
+    verify(gitHub, never()).setLabel(271, "no-auto-merge", false, 7L);
+    verify(gitHub).noteDependencyReview(271, 7L);
+  }
+
+  @Test
+  void npmVulnerabilityRepairNeedsSomeone() {
+    when(gitHub.changedFiles(271, 7L)).thenReturn(files("frontend/package.json"));
+
+    activities.markMergePolicy(271, false, true);
+
+    verify(gitHub, never()).setLabel(271, "no-auto-merge", false, 7L);
+    verify(gitHub).noteDependencyReview(271, 7L);
+  }
+
+  @Test
+  void silencingVulnerabilityRepairNeedsSomeone() {
+    when(gitHub.changedFiles(271, 7L)).thenReturn(List.of(OVERRIDE_BUMP));
+
+    activities.markMergePolicy(271, true, true);
+
     verify(gitHub, never()).setLabel(271, "no-auto-merge", false, 7L);
   }
 

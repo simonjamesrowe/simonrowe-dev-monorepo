@@ -94,7 +94,8 @@ class CveFixWorkerRegistrationTest {
   @ComponentScan("com.simonrowe.factory.cvefix")
   // LinearProperties too: the scan reads factory.linear.enabled to decide whether findings can be
   // filed, because a @WorkflowImpl cannot inject configuration of its own.
-  @EnableConfigurationProperties({CveFixProperties.class, LinearProperties.class})
+  @EnableConfigurationProperties({
+      CveFixProperties.class, CveRepairProperties.class, LinearProperties.class})
   static class ScannedCveFixPackage {
 
     @Bean
