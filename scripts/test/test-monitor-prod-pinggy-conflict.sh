@@ -6,7 +6,7 @@
 # and the whole-stack reconcile re-runs every one-shot init container - neither can
 # fix a token conflict, and on 2026-10-22 they ran every few minutes for a day.
 #
-# `docker` is stubbed on PATH: `logs` prints $FAKE_PINGGY_LOG, `exec` fails (no
+# `docker` is stubbed on PATH: `logs` prints the file $FAKE_PINGGY_LOG, `exec` fails (no
 # deploy in progress), and every call is recorded. DRY_RUN=1 throughout, so even a
 # stub miss could not restart anything.
 set -uo pipefail
@@ -27,7 +27,7 @@ cat >"$STUBS/docker" <<'EOF'
 #!/usr/bin/env bash
 echo "docker $*" >> "$CALLS"
 case "$1" in
-  logs) printf '%s\n' "${FAKE_PINGGY_LOG:-}"; exit 0 ;;
+  logs) cat "$FAKE_PINGGY_LOG"; exit 0 ;;
   exec) exit 1 ;;
   *)    exit 0 ;;
 esac
@@ -50,11 +50,15 @@ check() {
 
 # Three ticks against a URL nothing listens on, so the third reaches
 # FAILURE_THRESHOLD. Sets $out (the third tick's output) and $rc.
+# The log goes through a file, not the environment: Linux caps one environment
+# string at 128 KiB (MAX_ARG_STRLEN), so the long-line case below could not even
+# start the script on CI if it were passed as a variable.
 run_to_threshold() {
-  local state="$TMP/state-$1"
+  local state="$TMP/state-$1" log="$TMP/pinggy-$1.log"
+  printf '%s\n' "$2" >"$log"
   : >"$CALLS"
   for _ in 1 2 3; do
-    out="$(PATH="$STUBS:$PATH" CALLS="$CALLS" FAKE_PINGGY_LOG="$2" \
+    out="$(PATH="$STUBS:$PATH" CALLS="$CALLS" FAKE_PINGGY_LOG="$log" \
       CHECK_URL="http://127.0.0.1:1/" STATE_DIR="$state" \
       COMPOSE_PROJECT="test-pinggy-conflict-$$" bash "$SCRIPT" 2>&1)"
     rc=$?
