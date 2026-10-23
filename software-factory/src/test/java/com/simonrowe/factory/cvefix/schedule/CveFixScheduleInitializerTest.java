@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.simonrowe.factory.cvefix.config.CveFixProperties;
+import com.simonrowe.factory.cvefix.config.CveRepairProperties;
 import com.simonrowe.factory.cvefix.domain.CveFixRequest;
 import com.simonrowe.factory.linear.config.LinearProperties;
 import com.simonrowe.factory.temporal.ScheduledRuns;
@@ -62,7 +63,8 @@ class CveFixScheduleInitializerTest {
         new CveFixProperties.Ci(Duration.ofMinutes(7), 5, Duration.ofHours(4), List.of("evaluate"));
     CveFixProperties properties =
         new CveFixProperties(true, null, null, null, null, null, null, null, null, null, ci);
-    return new CveFixScheduleInitializer(scheduleClient, properties, linear);
+    return new CveFixScheduleInitializer(
+        scheduleClient, properties, linear, new CveRepairProperties(false, null, null, null, null));
   }
 
   private static LinearProperties linearProperties(final boolean enabled) {

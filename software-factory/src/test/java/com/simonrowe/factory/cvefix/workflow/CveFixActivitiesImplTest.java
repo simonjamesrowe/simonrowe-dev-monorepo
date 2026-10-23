@@ -1,14 +1,20 @@
 package com.simonrowe.factory.cvefix.workflow;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.simonrowe.factory.cvefix.config.CveRepairProperties;
 import com.simonrowe.factory.cvefix.dependencytrack.DependencyTrackClient;
 import com.simonrowe.factory.cvefix.domain.ComponentFindings;
 import com.simonrowe.factory.cvefix.domain.CveFixStatus;
 import com.simonrowe.factory.cvefix.domain.Finding;
+import com.simonrowe.factory.cvefix.domain.RepairPlan;
+import com.simonrowe.factory.cvefix.osv.OsvClient;
 import com.simonrowe.factory.cvefix.persistence.CveFixRunRecord;
 import com.simonrowe.factory.cvefix.persistence.CveFixRunRepository;
 import java.time.Instant;
@@ -20,7 +26,36 @@ class CveFixActivitiesImplTest {
 
   private final DependencyTrackClient dependencyTrack = mock(DependencyTrackClient.class);
   private final CveFixRunRepository runs = mock(CveFixRunRepository.class);
-  private final CveFixActivitiesImpl activities = new CveFixActivitiesImpl(dependencyTrack, runs);
+  private final OsvClient osv = mock(OsvClient.class);
+  private final CveFixActivitiesImpl activities = new CveFixActivitiesImpl(
+      dependencyTrack, runs, osv, new CveRepairProperties(true, null, null, null, null));
+
+  @Test
+  void plansOnlyBackendMavenComponentsAndSkipsOnesOsvCannotAnswer() {
+    ComponentFindings fixable = component("simonrowe-dev/backend",
+        "pkg:maven/org.apache.tomcat.embed/tomcat-embed-core@11.0.25?type=jar", "11.0.25");
+    ComponentFindings unreachable = component("simonrowe-dev/backend",
+        "pkg:maven/io.netty/netty-codec@4.1.100.Final", "4.1.100.Final");
+    ComponentFindings npm = component("simonrowe-dev/frontend", "pkg:npm/vite@6.0.0", "6.0.0");
+    when(osv.advisories("org.apache.tomcat.embed:tomcat-embed-core", "11.0.25"))
+        .thenReturn(List.of(new OsvClient.Advisory("GHSA-1", "11.0.26")));
+    when(osv.advisories("io.netty:netty-codec", "4.1.100.Final"))
+        .thenThrow(new IllegalStateException("OSV returned 503"));
+
+    List<RepairPlan> plans = activities.planRepairs(List.of(fixable, unreachable, npm));
+
+    assertThat(plans).singleElement().satisfies(plan -> {
+      assertThat(plan.coordinate()).isEqualTo("org.apache.tomcat.embed:tomcat-embed-core");
+      assertThat(plan.targetVersion()).isEqualTo("11.0.26");
+    });
+    verify(osv, never()).advisories(eq("vite"), any());
+  }
+
+  private static ComponentFindings component(
+      final String project, final String purl, final String version) {
+    return new ComponentFindings(project, purl, "x", version, List.of("GHSA-1"),
+        List.of(new Finding(project, purl, "x", version, "GHSA-1", "HIGH", "")));
+  }
 
   @Test
   void fetchFindingsGroupsEveryAdvisoryByComponent() {

@@ -8,6 +8,7 @@ import com.simonrowe.factory.codereview.config.CodeReviewProperties;
 import com.simonrowe.factory.codereview.domain.AutoMergeState;
 import com.simonrowe.factory.codereview.domain.ChangedFiles;
 import com.simonrowe.factory.codereview.domain.PullRequestContext;
+import com.simonrowe.factory.git.DependencyPins;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -16,6 +17,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -149,6 +151,7 @@ public class AutoMergeGateway {
   public ChangedFiles listFiles(final PullRequestContext pullRequest, final int expectedCount) {
     String token = token(pullRequest);
     List<String> paths = new ArrayList<>();
+    List<DependencyPins.FileDiff> diffs = new ArrayList<>();
     int listed = 0;
     for (int page = 1; page <= MAX_PAGES; page++) {
       JsonNode batch =
@@ -162,12 +165,46 @@ public class AutoMergeGateway {
         listed++;
         addIfPresent(paths, file.path("filename").asText(""));
         addIfPresent(paths, file.path("previous_filename").asText(""));
+        diffs.add(
+            new DependencyPins.FileDiff(
+                file.path("filename").asText(""),
+                file.path("previous_filename").asText(""),
+                file.path("status").asText(""),
+                file.hasNonNull("patch") ? file.path("patch").asText() : null));
       }
       if (batch.size() < PAGE_SIZE) {
         break;
       }
     }
-    return new ChangedFiles(paths, listed == expectedCount);
+    return new ChangedFiles(paths, listed == expectedCount, diffs);
+  }
+
+  /**
+   * A file's text at a commit, or null when it cannot be read.
+   *
+   * <p>Null rather than thrown: the only caller is the dependency-pin rule, for which an unread
+   * file means "not proven", which withholds the arm and nothing more.
+   */
+  public String fileAt(final PullRequestContext pullRequest, final String path, final String ref) {
+    try {
+      JsonNode file =
+          getJson(
+              "/repos/%s/%s/contents/%s?ref=%s"
+                  .formatted(
+                      pullRequest.owner(),
+                      pullRequest.repository(),
+                      path,
+                      URLEncoder.encode(ref, StandardCharsets.UTF_8)),
+              token(pullRequest));
+      if (!"base64".equals(file.path("encoding").asText(""))) {
+        return null;
+      }
+      byte[] bytes = Base64.getMimeDecoder().decode(file.path("content").asText(""));
+      return new String(bytes, StandardCharsets.UTF_8);
+    } catch (IllegalStateException | IllegalArgumentException exception) {
+      LOGGER.warn("Could not read {} at {} on {}", path, ref, pullRequest.slug(), exception);
+      return null;
+    }
   }
 
   /** Arms squash auto-merge on exactly {@code headSha}. */

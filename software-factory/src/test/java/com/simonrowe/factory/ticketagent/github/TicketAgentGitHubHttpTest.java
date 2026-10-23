@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.simonrowe.factory.git.DependencyPins;
 import com.simonrowe.factory.codereview.config.CodeReviewProperties;
 import com.simonrowe.factory.codereview.github.GitHubCredentials;
 import com.simonrowe.factory.testsupport.TicketAgentTestProperties;
@@ -163,6 +164,27 @@ class TicketAgentGitHubHttpTest {
 
     assertThat(gitHub.changedPaths(271, 7L))
         .hasSize(102).contains("backend/build.gradle.kts", "docs/old-build.txt", "backend/A0.java");
+  }
+
+  @Test
+  void changedFilesCarryStatusAndPatch() {
+    reply("GET " + REPO + "/pulls/271/files?per_page=100&page=1", 200, """
+        [{"filename":"build.gradle.kts","status":"modified","patch":"@@ -1 +1 @@\\n-a\\n+b"},
+         {"filename":"big.bin","status":"modified"}]""");
+
+    assertThat(gitHub.changedFiles(271, 7L)).containsExactly(
+        new DependencyPins.FileDiff("build.gradle.kts", null, "modified", "@@ -1 +1 @@\n-a\n+b"),
+        new DependencyPins.FileDiff("big.bin", null, "modified", null));
+  }
+
+  @Test
+  void readsOnlyPinFilesAtCommit() {
+    reply("GET " + REPO + "/contents/build.gradle.kts?ref=sha1", 200,
+        "{\"encoding\":\"base64\",\"content\":\"aGVs\\nbG8=\\n\"}");
+
+    assertThat(gitHub.pinFileAt("build.gradle.kts", "sha1", 7L)).isEqualTo("hello");
+    assertThat(gitHub.pinFileAt("docker-compose.prod.yml", "sha1", 7L)).isNull();
+    assertThat(gitHub.pinFileAt("gradle/libs.versions.toml", "sha1", 7L)).isNull();
   }
 
   @Test

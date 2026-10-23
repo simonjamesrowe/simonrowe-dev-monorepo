@@ -291,6 +291,31 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
     are last-edited, so an older post edited after the floor still arrives, dated by the edit.
   - Images are the post's own `og:image` (a cover, or the site's `/api/og` title card), so none
     are generated.
+- cve-auto-repair: **A backend CVE now goes from Dependency-Track to production with nobody in the
+  loop**: scan, repair ticket, ticket agent, PR, CI and review, auto-merge, deploy, post-deploy log
+  scan. Before this, the scan filed one report, a person had to label it, and every dependency edit
+  carried `no-auto-merge`. Load-bearing bits:
+  - **`DependencyPins` (`factory.git`) is the whole merge control, used twice.** The ticket agent
+    leaves `no-auto-merge` off, and the reviewer arms, only when every changed line in the three pin
+    files (`gradle/libs.versions.toml`, root and backend `build.gradle.kts`) moves a version and
+    nothing else: masked-version pairing, plus new `ext[...]`, catalogue versions, and
+    `implementation("g:a:v")` only directly inside `constraints {}` (read from the file at the
+    head, so a coordinate in `dependencies {}`, which adds a library, is refused). Other paths keep
+    their own rules. Only for the App's PRs, and the agent applies it only on `factory:cvefix`
+    tickets. Possessive regexes, 400-char line cap, a 100k-char test.
+  - **The scan asks OSV for the fixed version** (`OsvClient`): Dependency-Track has none and the
+    agent has no network. `RepairPlanner` files a ticket only for a backend Maven component whose
+    every advisory has a same-major fix, and only with pattern-shaped values (ids, coordinate,
+    versions): no person reads the brief before the agent acts, so no advisory prose reaches it.
+  - **`factory:agent` goes on a brand-new ticket only** (`IssueFiling.extraLabels`, skipped on
+    regressions), keyed on the component at its current version. A bump that did not take effect
+    comes back as a linked ticket for a person, never as a loop.
+  - Versioned: `getVersion("repair-tickets")` in the scan (asked only when the request carries
+    `autoRepairEnabled`) and `getVersion("vulnerability-merge-policy")` in the ticket agent.
+  - **Operator action:** `ticket-agent-intake` is created paused and was still paused on
+    2026-10-23 (no `Ticket intake:` line in Loki for three days). Resume it from the console or
+    repair tickets wait in Linear. npm CVEs still go to a person (lockfile).
+  See `docs/runbooks/cvefix.md` ("Repair tickets").
 - blog-snippets: **Snippets now work on blog posts too**, not just news summaries: the admin
   selects text in any post at `/blogs/:id` and keeps it, and it lands in `/admin/snippets`
   beside the summary ones. `SnippetSourceType.BLOG`, `contentId` = blog id, no migration (spec 054
@@ -330,7 +355,8 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   - **The controls are on what is pushed and merged**, because the ticket quotes production log
     lines a visitor can shape: a push denylist checked in Java (secrets, infra, wrappers and
     Dockerfiles), `no-auto-merge` on any diff that silences something (`SilencingDetector`) or
-    touches build/dependency files, and the reviewer's ordinary merge rules. Dependency versions
+    touches build/dependency files (except a version-only `factory:cvefix` repair, see
+    `cve-auto-repair`), and the reviewer's ordinary merge rules. Dependency versions
     and build scripts are pushable but always a person's merge; the full PR is checked on repairs.
     Accepted: CI executes edited build scripts with `SONAR_TOKEN` before human review, because a
     person approves the ticket and merges it, and the analysis token is low-value. npm CVEs are

@@ -1,7 +1,9 @@
 # Vulnerability Scan Production Runbook
 
-The `cvefix` module is now an issue-only Dependency-Track scanner. It runs in
-`software-factory`, uses the `cve-fix` Temporal queue, and owns the daily `cve-fix-daily` schedule.
+The `cvefix` module is a Dependency-Track scanner. It runs in `software-factory`, uses the
+`cve-fix` Temporal queue, and owns the daily `cve-fix-daily` schedule. It files a consolidated
+report and, for backend components with a safe fix, repair tickets the ticket agent works on its
+own (see [Repair tickets](#repair-tickets)). The scan itself never edits code.
 
 ## What it does
 
@@ -19,8 +21,8 @@ changed produces no visible activity in the ticket beyond the rewrite itself. A 
 reopened into Triage and rewritten, rather than replaced by a linked regression issue: closing the
 report once used to cause the next dirty scan to file a second, parallel ticket beside it (SIM-10
 beside the completed SIM-9), and `ROLLING` exists specifically so that no longer happens. A
-cancelled or duplicate report is suppressed. The scan never edits dependencies, launches a repair
-agent, creates a branch or pull request, or polls CI.
+cancelled or duplicate report is suppressed. The scan never edits dependencies, creates a branch or
+pull request, or polls CI; repair tickets hand that work to the ticket agent.
 
 ## Report grouping and scope
 
@@ -109,8 +111,52 @@ container with a missing poller cannot execute the scan.
   `linear_issues` Mongo record.
 - No scheduled run: inspect `cve-fix-daily` in Temporal and confirm whether an operator paused it.
 
-A person can approve a scoped repair through the [ticket agent](ticket-agent.md): inspect a
-**Dry run ticket**, then add `factory:agent` or use **Start agent**. The scan itself never grants
-that approval. Build and dependency edits always carry `no-auto-merge` and require a human merge.
-Backend version edits need no lockfile; npm repairs still come back to a person because the agent
-cannot regenerate `package-lock.json`. Do not repair findings with an ad-hoc factory command.
+## Repair tickets
+
+With `factory.cvefix.auto-repair.enabled` (`FACTORY_CVEFIX_AUTO_REPAIR_ENABLED`, default `true`
+on `software-factory` in compose, `false` in `application.yml`), each scan also files one repair
+ticket per backend Maven component it can fix without a person, labelled `factory:cvefix` and
+`factory:agent`. The ticket agent's intake picks it up, the agent bumps the version, CI and the
+reviewer check it, and a version-only change merges and deploys itself. The post-deploy log scan
+then watches what shipped. The whole loop, with nobody in it:
+
+```
+Dependency-Track ─▶ scan ─▶ repair ticket ─▶ ticket agent ─▶ PR ─▶ CI + review
+   ─▶ auto-merge ─▶ Publish ─▶ deploy ─▶ log scan
+```
+
+A component gets a repair ticket only when every check below passes (`RepairPlanner`). Anything
+else stays in the consolidated report for a person, as before:
+
+- It is in `factory.cvefix.auto-repair.projects` (`simonrowe-dev/backend` only) and is a Maven
+  PURL. npm is left out: the agent cannot regenerate `package-lock.json`.
+- OSV (`api.osv.dev/v1/query`, by coordinate and version) knows its advisories, and every one has
+  a fixed release. Dependency-Track has no fixed-version field, and the agent has no network, so
+  the target version has to arrive in the ticket.
+- The target is the highest of those fixes, newer than the current version, and in the **same
+  major version**. A major bump is an API change and a person's call.
+- Every value in the brief is pattern-shaped: advisory ids, the coordinate, two versions. No
+  advisory prose reaches the agent, because no person reads the ticket before it acts.
+
+Each ticket is keyed on the component **at its current version** and filed under `REFRESH`: an open
+ticket is rewritten quietly each night. `factory:agent` goes on a brand-new ticket only, never on a
+regression. So a bump that merged but did not take effect (the SBOM still shows the old version)
+files a linked ticket **without** the agent label, for a person, rather than looping the agent on a
+fix that does not work. Cancel a repair ticket to stop it for good; remove `factory:agent` to keep
+it but take it off the agent.
+
+What the agent may change, and what merges itself: `ticket-agent.md` ("Dependency edits") and
+`pr-governance.md` (auto-merge rule 8). In short, only version strings in
+`gradle/libs.versions.toml`, root `build.gradle.kts` `ext["…"]` overrides and `backend` constraints.
+
+**The intake schedule must be running.** `ticket-agent-intake` is created paused. Until an
+operator resumes it from the console, repair tickets wait in Linear with the label on.
+
+Planning failures (OSV down, a component it cannot answer) never fail the scan: the report is
+already filed, and the run's detail says no repair tickets were filed. Runs started by an older
+build carry no `autoRepairEnabled` and file only the report (`Workflow.getVersion("repair-tickets")`).
+
+Do not repair findings with an ad-hoc factory command. A person can still hand any finding to the
+[ticket agent](ticket-agent.md) by hand: inspect a **Dry run ticket**, then add `factory:agent` or
+use **Start agent**. Those runs keep `no-auto-merge` on dependency edits unless the ticket carries
+`factory:cvefix`.

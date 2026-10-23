@@ -261,8 +261,14 @@ public class IssueFiler {
       final LinearProperties.Producer policy,
       final String fingerprintUrl,
       final String regressedFromIssueId) {
+    // Extra labels only on a brand-new issue: a regression is a fix that did not hold, and
+    // re-issuing an instruction like factory:agent there would loop on the same failed attempt.
+    List<String> extraLabels = regressedFromIssueId == null ? filing.extraLabels() : List.of();
     LinearGateway.CreatedIssue created =
-        gateway.createIssue(filing.title(), body, policy.priority(), policy.label());
+        extraLabels.isEmpty()
+            ? gateway.createIssue(filing.title(), body, policy.priority(), policy.label())
+            : gateway.createIssue(
+                filing.title(), body, policy.priority(), policy.label(), extraLabels);
     // Written BEFORE the attachment, so a failure between the two is recoverable.
     LinearIssueRecord pending =
         record.withPendingAttachment(created.id(), created.identifier(), created.url());

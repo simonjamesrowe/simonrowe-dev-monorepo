@@ -2,6 +2,8 @@ package com.simonrowe.factory.codereview.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.simonrowe.factory.git.DependencyPins;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
@@ -352,6 +354,86 @@ class AutoMergePolicyTest {
     AutoMergePolicy.decide(true, state(), changes, HEAD, recording(listed, BACKEND_ONLY));
 
     assertThat(listed).isFalse();
+  }
+
+  // --- the factory's own version-only dependency bump -------------------------------------------
+
+  private static final String OVERRIDE_BUMP = """
+      @@ -7,1 +7,1 @@
+      -    ext["tomcat.version"] = "11.0.25"\s
+      +    ext["tomcat.version"] = "11.0.26"
+      """;
+
+  private static ChangedFiles pins(final String path, final String patch, final String... more) {
+    List<String> paths = new ArrayList<>(List.of(path));
+    paths.addAll(List.of(more));
+    return new ChangedFiles(paths, true,
+        List.of(new DependencyPins.FileDiff(path, null, "modified", patch)));
+  }
+
+  private static MergeDecision decidePins(final AutoMergeState state, final ChangedFiles files) {
+    return AutoMergePolicy.decide(true, state, CLEAN, HEAD, () -> files, List.of(), path -> null);
+  }
+
+  @Test
+  void factoryVersionOnlyBumpIsArmed() {
+    assertThat(decidePins(fromThisApp(), pins("build.gradle.kts", OVERRIDE_BUMP)))
+        .isEqualTo(MergeDecision.eligible());
+  }
+
+  @Test
+  void factoryVersionBumpWithBackendCodeIsArmed() {
+    assertThat(decidePins(fromThisApp(),
+        pins("build.gradle.kts", OVERRIDE_BUMP, "backend/src/main/java/A.java")))
+        .isEqualTo(MergeDecision.eligible());
+  }
+
+  /** Only the factory's pull requests: a person's dependency bump still needs a person. */
+  @Test
+  void personsVersionOnlyBumpStillNeedsSomeone() {
+    assertThat(decidePins(state(), pins("build.gradle.kts", OVERRIDE_BUMP)).reason())
+        .isEqualTo("`build.gradle.kts` needs a human to merge");
+  }
+
+  @Test
+  void factoryBumpBeyondVersionsIsRefusedWithTheReason() {
+    MergeDecision decision = decidePins(fromThisApp(), pins("build.gradle.kts", """
+        @@ -7,1 +7,2 @@
+             ext["tomcat.version"] = "11.0.25"\s
+        +    tasks.register("evil") { }
+        """));
+
+    assertThat(decision.outcome()).isEqualTo(MergeDecision.Outcome.INELIGIBLE);
+    assertThat(decision.reason()).startsWith("the dependency change is more than a version bump");
+  }
+
+  /** A pin bump does not carry other manual paths with it. */
+  @Test
+  void factoryBumpAlongsideInfrastructureStaysManual() {
+    assertThat(decidePins(fromThisApp(),
+        pins("build.gradle.kts", OVERRIDE_BUMP, "docker-compose.prod.yml")).reason())
+        .isEqualTo("`docker-compose.prod.yml` needs a human to merge");
+  }
+
+  @Test
+  void factoryBumpLabelledNoAutoMergeIsNotArmed() {
+    assertThat(decidePins(fromThisApp(AutoMergePolicy.OPT_OUT_LABEL),
+        pins("build.gradle.kts", OVERRIDE_BUMP)).reason())
+        .isEqualTo("labelled `no-auto-merge`");
+  }
+
+  @Test
+  void factoryBumpWithoutPatchesIsNotArmed() {
+    assertThat(decidePins(fromThisApp(),
+        new ChangedFiles(List.of("build.gradle.kts"), true)).outcome())
+        .isEqualTo(MergeDecision.Outcome.INELIGIBLE);
+  }
+
+  @Test
+  void npmManifestIsNeverPinFile() {
+    assertThat(decidePins(fromThisApp(),
+        new ChangedFiles(List.of("frontend/package.json"), true, List.of())).reason())
+        .isEqualTo("`frontend/package.json` needs a human to merge");
   }
 
   // --- describe ---------------------------------------------------------------------------------

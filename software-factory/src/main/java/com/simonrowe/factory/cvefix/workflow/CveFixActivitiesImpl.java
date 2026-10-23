@@ -1,14 +1,22 @@
 package com.simonrowe.factory.cvefix.workflow;
 
 import com.simonrowe.factory.cvefix.config.CveFixTaskQueues;
+import com.simonrowe.factory.cvefix.config.CveRepairProperties;
 import com.simonrowe.factory.cvefix.dependencytrack.DependencyTrackClient;
 import com.simonrowe.factory.cvefix.domain.ComponentFindings;
 import com.simonrowe.factory.cvefix.domain.CveFixStatus;
+import com.simonrowe.factory.cvefix.domain.RepairPlan;
+import com.simonrowe.factory.cvefix.domain.RepairPlanner;
+import com.simonrowe.factory.cvefix.osv.OsvClient;
 import com.simonrowe.factory.cvefix.persistence.CveFixRunRecord;
 import com.simonrowe.factory.cvefix.persistence.CveFixRunRepository;
 import io.temporal.spring.boot.ActivityImpl;
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Optional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -42,14 +50,46 @@ public class CveFixActivitiesImpl implements CveFixActivities {
   private static final EnumSet<CveFixStatus> OBSERVED_DEPENDENCY_TRACK =
       EnumSet.of(CveFixStatus.COMPLETED, CveFixStatus.NO_FINDINGS);
 
+  private static final Logger LOGGER = LoggerFactory.getLogger(CveFixActivitiesImpl.class);
+
   private final DependencyTrackClient dependencyTrackClient;
   private final CveFixRunRepository runRepository;
+  private final OsvClient osvClient;
+  private final CveRepairProperties repairProperties;
 
   public CveFixActivitiesImpl(
       final DependencyTrackClient dependencyTrackClient,
-      final CveFixRunRepository runRepository) {
+      final CveFixRunRepository runRepository,
+      final OsvClient osvClient,
+      final CveRepairProperties repairProperties) {
     this.dependencyTrackClient = dependencyTrackClient;
     this.runRepository = runRepository;
+    this.osvClient = osvClient;
+    this.repairProperties = repairProperties;
+  }
+
+  @Override
+  public List<RepairPlan> planRepairs(final List<ComponentFindings> components) {
+    List<RepairPlan> plans = new ArrayList<>();
+    for (ComponentFindings component : components) {
+      if (!repairProperties.projects().contains(component.project())) {
+        continue;
+      }
+      Optional<String> coordinate = RepairPlanner.coordinate(component.purl());
+      if (coordinate.isEmpty()) {
+        continue;
+      }
+      try {
+        RepairPlanner.plan(
+                component,
+                osvClient.advisories(coordinate.get(), component.componentVersion()))
+            .ifPresent(plans::add);
+      } catch (IllegalStateException exception) {
+        LOGGER.warn("Could not ask OSV about {}; leaving it for a person", component.purl(),
+            exception);
+      }
+    }
+    return List.copyOf(plans);
   }
 
   @Override

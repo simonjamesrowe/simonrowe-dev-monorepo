@@ -58,12 +58,25 @@ the Temporal workflow, after handing the ticket back.
 
 The agent may edit dependency versions and build scripts; it still cannot run Gradle, npm, tests
 or downloads. GitHub Actions is the build machine. Every build/dependency change needs a person's
-merge, including `backend/build.gradle.kts`, which the path classifier otherwise permits.
+merge, including `backend/build.gradle.kts`, which the path classifier otherwise permits, with
+one exception: **a vulnerability repair that only moves versions merges itself.**
+
+On a ticket labelled `factory:cvefix` (the scan's repair tickets, `cvefix.md` "Repair tickets"),
+`markMergePolicy` reads the full pull request's patches. When every dependency file is a pin file
+and `DependencyPins` finds nothing but version changes, it leaves `no-auto-merge` off and notes
+why in the PR body. The reviewer re-checks the same diff before it arms (`pr-governance.md`, rule
+8), so the agent's answer only stops it vetoing a merge the reviewer's rules allow. Anything more
+than a version move, any silencing, and any npm manifest still gets `no-auto-merge`. The activity
+is new, behind `Workflow.getVersion("vulnerability-merge-policy")`; runs started before it keep
+calling `markSilencing`.
 
 **Accepted tradeoff:** CI executes an edited build script on the PR branch with the PR's repository
-secrets (`SONAR_TOKEN`) before a person reads it. This is accepted because a person approves the
-ticket, a person merges the change, and the exposed analysis token is low-value. The merge label
-protects the merge decision; it does not prevent that earlier CI execution.
+secrets (`SONAR_TOKEN`) before a person reads it. For an ordinary ticket this is accepted because
+a person approves the ticket, a person merges the change, and the exposed analysis token is
+low-value. A repair ticket has no person approving it, so the scan's brief carries no third-party
+prose at all: only advisory ids, a Maven coordinate and two versions, each pattern-checked
+(`RepairPlanner`). The merge label protects the merge decision; it does not prevent that earlier
+CI execution.
 
 **Known npm gap:** `package-lock.json` needs regenerating, including integrity hashes, after an npm
 bump. The agent has no npm. A `package.json`-only bump fails `npm ci`, and retries cannot regenerate
