@@ -190,6 +190,18 @@ class DependencyPinsTest {
   }
 
   @Test
+  void loweringVersionIsRefused() {
+    Verdict verdict = check(modified("gradle/libs.versions.toml", """
+        @@ -21,1 +21,1 @@
+        -bouncycastle = "1.85"
+        +bouncycastle = "1.80"
+        """));
+
+    assertThat(verdict.versionsOnly()).isFalse();
+    assertThat(verdict.reason()).contains("lowers a version");
+  }
+
+  @Test
   void removingPinIsRefused() {
     assertThat(check(modified("build.gradle.kts", """
         @@ -7,2 +7,1 @@

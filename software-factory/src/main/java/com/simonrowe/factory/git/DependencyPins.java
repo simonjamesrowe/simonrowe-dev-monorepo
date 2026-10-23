@@ -1,5 +1,6 @@
 package com.simonrowe.factory.git;
 
+import com.simonrowe.factory.cvefix.domain.MavenVersion;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -34,6 +35,8 @@ import java.util.regex.Pattern;
  *       coordinate added to {@code dependencies {}}, which would add a library, is refused).
  *   <li>Blank and comment lines may come and go. Every other removal must be paired: deleting a
  *       pin is not a version change.
+ *   <li>A paired change may only raise a version, never lower it, so a mislabelled ticket cannot
+ *       use this to put back a vulnerable release.
  * </ul>
  *
  * <p>Accepted limit: a new release of an existing library runs in CI and then in production, and
@@ -157,7 +160,7 @@ public final class DependencyPins {
       return Verdict.no("the diff of `" + path + "` could not be read");
     }
     boolean catalogue = VERSION_CATALOG.equals(path);
-    Map<String, Integer> removed = new HashMap<>();
+    Map<String, Deque<String>> removed = new HashMap<>();
     for (Change change : changes) {
       if (change.added()) {
         continue;
@@ -167,7 +170,8 @@ public final class DependencyPins {
         return Verdict.no(refusal(path, "removes", change.text()));
       }
       if (kind != Kind.NOISE) {
-        removed.merge(mask(change.text()), 1, Integer::sum);
+        removed.computeIfAbsent(mask(change.text()), key -> new ArrayDeque<>())
+            .add(change.text());
       }
     }
     for (Change change : changes) {
@@ -185,12 +189,14 @@ public final class DependencyPins {
         return Verdict.no(refusal(path, "sets something other than a version in", change.text()));
       }
       String masked = mask(change.text());
-      Integer partners = removed.get(masked);
+      Deque<String> partners = removed.get(masked);
       if (partners != null) {
-        if (partners == 1) {
+        String before = partners.poll();
+        if (partners.isEmpty()) {
           removed.remove(masked);
-        } else {
-          removed.put(masked, partners - 1);
+        }
+        if (!raisesOnly(before, change.text())) {
+          return Verdict.no(refusal(path, "lowers a version in", change.text()));
         }
         continue;
       }
@@ -276,6 +282,22 @@ public final class DependencyPins {
   /** The line with every version token replaced, so two lines differing only in versions match. */
   static String mask(final String line) {
     return VERSION_TOKEN.matcher(line.strip()).replaceAll("<version>");
+  }
+
+  /**
+   * Whether every version in {@code after} is at least the one in the same place in
+   * {@code before}. A downgrade is the one version-only change that can make things worse: it can
+   * put back exactly the release an advisory was about.
+   */
+  private static boolean raisesOnly(final String before, final String after) {
+    Matcher old = VERSION_TOKEN.matcher(before);
+    Matcher updated = VERSION_TOKEN.matcher(after);
+    while (old.find() && updated.find()) {
+      if (MavenVersion.of(updated.group()).compareTo(MavenVersion.of(old.group())) < 0) {
+        return false;
+      }
+    }
+    return true;
   }
 
   private static boolean newVersionsLookRight(final String line) {
