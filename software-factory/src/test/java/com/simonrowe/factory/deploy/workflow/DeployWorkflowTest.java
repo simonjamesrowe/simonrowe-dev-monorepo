@@ -704,6 +704,23 @@ class DeployWorkflowTest {
     verify(activities).scheduleLogWatchScan(any(), any(), eq(false));
   }
 
+  /**
+   * Two commits deployed by one run, the second signalled mid-deploy, each get their own scan.
+   * Keyed on the run id alone, the second scan was rejected as a duplicate of the first.
+   */
+  @Test
+  void eachCommitInTheDrainLoopGetsItsOwnLogScan() {
+    DeployActivities activities = activities();
+
+    executeSignalling(activities, requestSchedulingLogScan(), NEWER_SHA);
+
+    ArgumentCaptor<String> ids = ArgumentCaptor.forClass(String.class);
+    verify(activities, times(2)).scheduleLogWatchScan(any(), ids.capture(), anyBoolean());
+    assertThat(ids.getAllValues()).doesNotHaveDuplicates();
+    assertThat(ids.getAllValues().get(0)).endsWith("-" + SHA.substring(0, 12));
+    assertThat(ids.getAllValues().get(1)).endsWith("-" + NEWER_SHA.substring(0, 12));
+  }
+
   @Test
   void schedulesLogScanEvenWhenOnlyImagesWereDeployed() {
     DeployActivities activities = activities();

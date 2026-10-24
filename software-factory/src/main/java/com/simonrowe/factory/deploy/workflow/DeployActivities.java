@@ -148,7 +148,8 @@ public interface DeployActivities {
    * change actually broke.
    *
    * @param windowStart the moment the deploy completed; the scan covers from here to when it runs
-   * @param deployRunId the deploy's Temporal run id, used to build a unique, idempotent scan id
+   * @param deployRunId the deploy's Temporal run id and the deployed commit, used to build a
+   *     unique, idempotent scan id: one run can deploy several commits (the drain loop)
    * @param linearFilingEnabled whether the scan may file. Passed through from the deploy request
    *     rather than read here: this activity runs on the {@code deployer}, which holds no
    *     {@code FACTORY_LINEAR_ENABLED} by design, so reading it locally would resolve to false and
