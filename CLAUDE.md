@@ -280,6 +280,26 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- termtime-home-view: **Term Time opens on a home view, and reads every newsletter the school
+  publishes.** A one-line ask bar, a heads-up strip of days that change, then Coming up, the
+  latest newsletter in a 30-second summary, and "From the school" (recent approved emails). The
+  first question moves the chat into the wide column and folds the cards into a rail. The beta
+  badge and "early version" banner are gone. Load-bearing bits:
+  - **Not every newsletter is emailed.** 25 September 2026 was published on the parent portal
+    with no email, so Term Time never read it. `SchoolNewsletterPoller` reads the portal's public
+    list hourly and fetches any issue not held, through `SchoolLinkFetcher` with a link row that
+    has **no source document**. The address must be the emails' `?id=N` form, or every emailed
+    issue is stored twice.
+  - **Summaries are written once, never on view** (`SchoolNewsletterSummariser`, chat model,
+    usage kind `SUMMARISE`), stored in `school_newsletter_summaries` against the document's
+    `contentHash`, at most three an hour. The prompt drops every child's name ("stars of the
+    week"). The collection is backed up.
+  - **One card per publication date**: the school re-publishes an issue under a new id with
+    slightly different text (166 and 167, both 2 October), so the hash cannot dedupe it.
+  - **The CoParent utility blob sets `--color-primary: teal` on `:root` for every page** (found,
+    not fixed), so Term Time now carries its own `--school-accent` pair. **Tests that render the
+    page must mock `school/schoolNewsApi`.**
+  See `docs/runbooks/term-time.md` ("The page: a home view, then the conversation").
 - static-analysis-to-linear: **SonarCloud no longer analyses pull requests; the software factory
   files `main`'s findings in Linear instead.** The `Static Analysis` CI job (never required,
   advisory gate) ran after all three build jobs and took ~2 or ~16 minutes, which held the `CI`
@@ -697,7 +717,7 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
     display is always the source's own wording.
   - **Tests that render the Term Time page must mock `school/schoolCalendarApi`.**
   - Action tags ("Bring a tin") are not built: nothing extracts what a letter asks a parent to do.
-  See `docs/runbooks/term-time.md` ("The calendar pane beside the chat").
+  See `docs/runbooks/term-time.md` ("The calendar card").
 - tts-playlist: **`/playlist` is a shared listening queue of summaries (and posts) read aloud
   one after another**, `com.simonrowe.playlist`, collections `playlist_items` and
   `playlist_settings` (`V056CreatePlaylist`). Load-bearing bits:

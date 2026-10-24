@@ -77,6 +77,15 @@ class BackupCollectionsTest {
   }
 
   @Test
+  void schoolNewsletterSummariesAreBackedUpAndRestored() throws ReflectiveOperationException {
+    // Each costs a model call, and the page has nothing to show for a newsletter without one.
+    assertThat(readList(BackupService.class, "BACKUP_COLLECTIONS"))
+        .contains("school_newsletter_summaries");
+    assertThat(readList(RestoreService.class, "IMPORT_ORDER_INDEPENDENT"))
+        .contains("school_newsletter_summaries");
+  }
+
+  @Test
   void newsletterReviewDecisionsAreBackedUpAndRestored() throws ReflectiveOperationException {
     assertThat(readList(BackupService.class, "BACKUP_COLLECTIONS"))
         .contains("newsletter_candidates");

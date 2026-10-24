@@ -1385,7 +1385,8 @@ export async function editSchoolDocument(
 /** A hyperlink found in a document. Nothing has been requested from it. */
 export interface SchoolLinkSummary {
   id: string
-  sourceDocumentId: string
+  /** Null for a newsletter the poller read off the school's own list: nothing linked to it. */
+  sourceDocumentId: string | null
   url: string
   anchorText: string
   likelyKind: string

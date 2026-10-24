@@ -39,6 +39,13 @@ vi.mock('../../src/services/siteStatus', () => ({
 }))
 
 const fetchSchoolCalendar = vi.fn()
+// The newsletter and "From the school" cards load on open, and the test environment's API base
+// URL is production, so an unmocked fetch would reach the live API.
+vi.mock('../../src/school/schoolNewsApi', () => ({
+  fetchNewsletters: () => new Promise(() => {}),
+  fetchSchoolMessages: () => new Promise(() => {}),
+}))
+
 vi.mock('../../src/school/schoolCalendarApi', () => ({
   fetchSchoolCalendar: (...a: unknown[]) => fetchSchoolCalendar(...a),
   CalendarUnavailableError: class extends Error {},
@@ -86,7 +93,7 @@ describe('Term Time analytics', () => {
   it('reports a typed question as input', async () => {
     render(<App />)
 
-    fireEvent.change(screen.getByPlaceholderText('Type a message...'), {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Ask a question' }), {
       target: { value: 'Is there swimming this week?' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Send message' }))

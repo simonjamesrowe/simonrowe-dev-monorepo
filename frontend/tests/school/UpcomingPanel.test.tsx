@@ -1,8 +1,10 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { HeadsUpStrip } from '../../src/school/components/HeadsUpStrip'
 import { UpcomingPanel } from '../../src/school/components/UpcomingPanel'
 import type { SchoolCalendar } from '../../src/school/schoolCalendarApi'
+import { useSchoolCalendar } from '../../src/school/useSchoolCalendar'
 
 const fetchSchoolCalendar = vi.fn()
 vi.mock('../../src/school/schoolCalendarApi', async () => {
@@ -67,24 +69,55 @@ const CALENDAR: SchoolCalendar = {
   ],
 }
 
+/** The page's wiring: one calendar fetch, shared by the strip and the card. */
+function Calendar({ yearGroups, onAsk }: { yearGroups: string[]; onAsk: (q: string) => void }) {
+  const calendar = useSchoolCalendar(yearGroups)
+  return (
+    <>
+      <HeadsUpStrip calendar={calendar} onAsk={onAsk} />
+      <UpcomingPanel calendar={calendar} onAsk={onAsk} />
+    </>
+  )
+}
+
 describe('UpcomingPanel', () => {
   beforeEach(() => {
     fetchSchoolCalendar.mockReset()
     window.localStorage.clear()
   })
 
-  it("pins today's events and pulls no-school days into the heads-up strip", async () => {
+  it("pins today's events and pulls no-school days into the heads-up strip, not the list", async () => {
     fetchSchoolCalendar.mockResolvedValue(CALENDAR)
-    render(<UpcomingPanel yearGroups={[]} onAsk={vi.fn()} />)
+    render(<Calendar yearGroups={[]} onAsk={vi.fn()} />)
 
     expect(await screen.findByText('Today · Tuesday 13 October')).toBeInTheDocument()
     expect(screen.getByText('Harvest Festival assembly')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /No school, Fri 23 Oct: INSET day/ })).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: '3 weeks' }))
+    expect(screen.getAllByText('INSET day')).toHaveLength(1)
+  })
+
+  it('reads the calendar once for the strip and the card together', async () => {
+    fetchSchoolCalendar.mockResolvedValue(CALENDAR)
+    render(<Calendar yearGroups={[]} onAsk={vi.fn()} />)
+
+    await screen.findByText('Harvest Festival assembly')
+    expect(fetchSchoolCalendar).toHaveBeenCalledTimes(1)
+  })
+
+  it('asks the chat about a day with no school from the strip', async () => {
+    fetchSchoolCalendar.mockResolvedValue(CALENDAR)
+    const onAsk = vi.fn()
+    render(<Calendar yearGroups={[]} onAsk={onAsk} />)
+
+    fireEvent.click(await screen.findByRole('button', { name: /No school, Fri 23 Oct/ }))
+
+    expect(onAsk).toHaveBeenCalledWith('Tell me more about "INSET day" on Friday 23 October.')
   })
 
   it('shows this week by default and three weeks on request, remembering the choice', async () => {
     fetchSchoolCalendar.mockResolvedValue(CALENDAR)
-    render(<UpcomingPanel yearGroups={[]} onAsk={vi.fn()} />)
+    render(<Calendar yearGroups={[]} onAsk={vi.fn()} />)
 
     expect(await screen.findByText('Horniman Museum trip')).toBeInTheDocument()
     expect(screen.queryByText('Halloween disco')).toBeNull()
@@ -102,7 +135,7 @@ describe('UpcomingPanel', () => {
   it('asks the chat about an event when it is clicked', async () => {
     fetchSchoolCalendar.mockResolvedValue(CALENDAR)
     const onAsk = vi.fn()
-    render(<UpcomingPanel yearGroups={[]} onAsk={onAsk} />)
+    render(<Calendar yearGroups={[]} onAsk={onAsk} />)
 
     fireEvent.click(await screen.findByText('Horniman Museum trip'))
 
@@ -113,11 +146,11 @@ describe('UpcomingPanel', () => {
 
   it('fetches again for the new year groups when the selection changes', async () => {
     fetchSchoolCalendar.mockResolvedValue(CALENDAR)
-    const { rerender } = render(<UpcomingPanel yearGroups={['Year 3']} onAsk={vi.fn()} />)
+    const { rerender } = render(<Calendar yearGroups={['Year 3']} onAsk={vi.fn()} />)
     await screen.findByText('Horniman Museum trip')
 
-    rerender(<UpcomingPanel yearGroups={['Year 3']} onAsk={vi.fn()} />)
-    rerender(<UpcomingPanel yearGroups={['Year 3', 'Year 6']} onAsk={vi.fn()} />)
+    rerender(<Calendar yearGroups={['Year 3']} onAsk={vi.fn()} />)
+    rerender(<Calendar yearGroups={['Year 3', 'Year 6']} onAsk={vi.fn()} />)
 
     await waitFor(() => expect(fetchSchoolCalendar).toHaveBeenCalledTimes(2))
     expect(fetchSchoolCalendar.mock.calls[0][0]).toEqual(['Year 3'])
@@ -126,7 +159,7 @@ describe('UpcomingPanel', () => {
 
   it('says when there is nothing on today rather than showing an empty card', async () => {
     fetchSchoolCalendar.mockResolvedValue({ ...CALENDAR, events: [] })
-    render(<UpcomingPanel yearGroups={[]} onAsk={vi.fn()} />)
+    render(<Calendar yearGroups={[]} onAsk={vi.fn()} />)
 
     expect(await screen.findByText('Nothing on at school today.')).toBeInTheDocument()
     expect(screen.getByText('Nothing else on the calendar until Sun 18 Oct.')).toBeInTheDocument()
@@ -134,7 +167,7 @@ describe('UpcomingPanel', () => {
 
   it('offers a retry when the calendar cannot be loaded', async () => {
     fetchSchoolCalendar.mockRejectedValueOnce(new Error('boom')).mockResolvedValue(CALENDAR)
-    render(<UpcomingPanel yearGroups={[]} onAsk={vi.fn()} />)
+    render(<Calendar yearGroups={[]} onAsk={vi.fn()} />)
 
     fireEvent.click(await screen.findByRole('button', { name: /Try again/ }))
 

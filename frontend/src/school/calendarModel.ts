@@ -171,3 +171,23 @@ export function yearsLabel(yearGroups: string[]): string {
 export function questionAbout(event: CalendarEvent): string {
   return `Tell me more about "${event.title}" on ${formatLongDay(event.startDate)}.`
 }
+
+/**
+ * The date of something the school published, such as a newsletter or an email, read in the
+ * school's time zone.
+ *
+ * The server can record a newsletter's date as midnight in London, and in British Summer Time
+ * that is 23:00 the day before in UTC, so formatting in UTC or the visitor's own zone could put
+ * a Friday newsletter on Thursday.
+ *
+ * @param iso an ISO instant
+ * @param style `date` for "23 Oct", `short` for "Fri 23 Oct", `long` for "Friday 23 October"
+ */
+export function formatPublished(iso: string, style: 'date' | 'short' | 'long' = 'short'): string {
+  return new Date(iso).toLocaleDateString('en-GB', {
+    ...(style === 'date' ? {} : { weekday: style === 'long' ? 'long' : 'short' }),
+    day: 'numeric',
+    month: style === 'long' ? 'long' : 'short',
+    timeZone: 'Europe/London',
+  })
+}

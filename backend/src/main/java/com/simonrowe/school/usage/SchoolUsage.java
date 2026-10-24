@@ -53,6 +53,8 @@ public record SchoolUsage(
     EXTRACT,
     /** Reading a photographed page into text. */
     TRANSCRIBE,
+    /** Writing the short summary of a newsletter shown on the page. */
+    SUMMARISE,
     /** Turning content into vectors for retrieval. */
     EMBEDDING
   }

@@ -48,6 +48,9 @@ public class SchoolWebsiteCrawler {
   private static final Duration TIMEOUT = Duration.ofSeconds(20);
   private static final Pattern SITEMAP_LOC = Pattern.compile("<loc>([^<]*+)</loc>");
   private static final int MAX_PAGES = 250;
+  private static final String NEWSLETTER_PATH = "/parentportal/newsletter/";
+  private static final java.time.format.DateTimeFormatter LIST_DATE =
+      java.time.format.DateTimeFormatter.ofPattern("d MMM uuuu", java.util.Locale.ENGLISH);
 
   private final SchoolProperties properties;
   private final SchoolLinkFilter linkFilter;
@@ -130,6 +133,74 @@ public class SchoolWebsiteCrawler {
     }
     LOG.info("Read {} page update times from the CMS feed", dates.size());
     return java.util.Map.copyOf(dates);
+  }
+
+  /**
+   * Every newsletter the school's parent portal lists, newest first.
+   *
+   * <p>The portal's list page is public and names each issue by id and date. It exists because
+   * following the link in the Friday email is not enough: on 25 September 2026 the school
+   * published a newsletter on the portal and sent no email, so Term Time never read it. The
+   * page is absent from the sitemap, so the crawl never reaches it either.
+   *
+   * <p>Each issue's address is built in the same form the emails link to,
+   * {@code /parentportal/newsletter/?id=N}, never the list's own {@code ?action=list&itemid=N}
+   * form. The document id hashes the address, so the email path and this one must agree on it or
+   * every newsletter is stored twice.
+   *
+   * @return the issues listed, or empty when the page could not be read
+   */
+  public List<PortalNewsletter> listNewsletters() {
+    final String html = fetchText(properties.websiteBaseUrl() + NEWSLETTER_PATH);
+    if (html == null) {
+      return List.of();
+    }
+    return parseNewsletterList(html, properties.websiteBaseUrl());
+  }
+
+  /**
+   * Reads the portal's newsletter list markup.
+   *
+   * <p>Package-private so the parsing can be asserted against the real markup without a network
+   * call. An item with no numeric id or no readable date is skipped rather than guessed at.
+   *
+   * @param html the list page
+   * @param baseUrl the school website's base URL, without a trailing slash
+   * @return the issues in page order
+   */
+  static List<PortalNewsletter> parseNewsletterList(final String html, final String baseUrl) {
+    final List<PortalNewsletter> found = new java.util.ArrayList<>();
+    for (org.jsoup.nodes.Element item
+        : Jsoup.parse(html).select("a[data-load=newsletters][data-id]")) {
+      final String id = item.attr("data-id").trim();
+      if (!id.matches("\\d{1,9}")) {
+        continue;
+      }
+      final java.util.Optional<java.time.LocalDate> date =
+          parseListDate(item.select(".connect-public-content-item-subtitle").text());
+      if (date.isEmpty()) {
+        continue;
+      }
+      final String title = item.select(".connect-public-content-item-title").text().trim();
+      found.add(new PortalNewsletter(id, baseUrl + NEWSLETTER_PATH + "?id=" + id,
+          title.isEmpty() ? "School newsletter" : title, date.get()));
+    }
+    return List.copyOf(found);
+  }
+
+  /**
+   * Parses a list date such as {@code 23 Oct 2026}.
+   *
+   * <p>{@code Sept} is accepted as well as {@code Sep}: British English writes it that way, and
+   * so does the JDK's own UK locale data, so the CMS may well start doing so too.
+   */
+  private static java.util.Optional<java.time.LocalDate> parseListDate(final String text) {
+    final String normalised = text.trim().replaceFirst("(?i)\\bSept\\b", "Sep");
+    try {
+      return java.util.Optional.of(java.time.LocalDate.parse(normalised, LIST_DATE));
+    } catch (java.time.format.DateTimeParseException e) {
+      return java.util.Optional.empty();
+    }
   }
 
   /**
@@ -325,5 +396,16 @@ public class SchoolWebsiteCrawler {
   public record CrawledPage(
       String url, String canonicalUrl, String title, String text, String html,
       List<String> links) {
+  }
+
+  /**
+   * One issue on the parent portal's newsletter list.
+   *
+   * @param id the portal's numeric id for the issue
+   * @param url the issue's address, in the form the school's emails link to
+   * @param title the list's title for it
+   * @param date the date the list gives it
+   */
+  public record PortalNewsletter(String id, String url, String title, java.time.LocalDate date) {
   }
 }

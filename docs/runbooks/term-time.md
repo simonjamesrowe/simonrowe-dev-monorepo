@@ -608,6 +608,24 @@ on **first write** — `SchoolDocumentWriter` carries `prior.visibility()` forwa
 human decision — so newsletters already stored as `RESTRICTED` stay that way and must be approved
 in the console, which is also the only path that re-embeds the chunks.
 
+### The portal's own list is read too, because not every newsletter is emailed
+
+On **25 September 2026** the school published a newsletter on the portal and sent no email, so
+Term Time never read it, and nothing said a week was missing. `SchoolNewsletterPoller` now reads
+the portal's public list (`/parentportal/newsletter/`, `SchoolWebsiteCrawler.listNewsletters`)
+every hour (`school.schedule.newsletters-ms`, default 3,600,000) and fetches any issue no document
+holds yet, newest eight only, none before the ingest cutoff.
+
+- **The address is built in the form the emails link to**, `/parentportal/newsletter/?id=N`,
+  never the list's own `?action=list&itemid=N`. The document id hashes the address, so the two
+  paths must agree or every emailed newsletter is stored twice.
+- **It goes through `SchoolLinkFetcher` like the email link**, so it lands at the same tier, with
+  the same event extraction. A link row is written first, with **no source document**, which is
+  why `fetch` now tolerates a null `sourceDocumentId`. Ignoring that row in the console stops the
+  poller fetching that issue for good; a failed row is retried on the next run.
+- An empty list logs a WARN: the list has had an issue on it every week of term for years, so
+  empty means the page moved or could not be read.
+
 ### A failed fetch used to be permanent
 
 `GmailIngestService.recordLinks` skipped every link row it had already seen *before* reaching the
@@ -1004,12 +1022,58 @@ conversation rather than reusing one with history behind it.
 rather than a conversation, so it is a much smaller leak than the one closed here, but it is the
 same shape and the same endpoint.
 
-## The calendar pane beside the chat
+## The page: a home view, then the conversation
 
-The page shows **Coming up** to the right of the chat (`UpcomingPanel`). It covers today, a
-heads-up strip and a list whose reach is chosen as Today, This week or 3 weeks. On a narrow screen
-the chat and the calendar take turns behind two toggle buttons, and the page opens on the
-calendar, unless a `?q=` question was handed over. The data comes from
+The page opens on a **home view**: a one-line question box with suggested questions, a heads-up
+strip of days that change (`HeadsUpStrip`), then three cards: **Coming up** (`UpcomingPanel`),
+the latest **Newsletter** (`NewsletterCard`) and **From the school** (`SchoolMessagesCard`). The
+first question switches it to the **conversation view**: the chat takes the wide column and the
+same strip and cards fold into a rail beside it (their `compact` variants). "Back to this week"
+returns to the home view and keeps the conversation, which "Back to your conversation" reopens;
+Clear chat ends it and returns home. A `?q=` question opens straight into the conversation. There
+is no beta badge or "early version" banner any more; the footer disclaimer stays.
+
+- **The calendar is fetched once** (`useSchoolCalendar`) and shared by the strip and the card, so
+  the two can never disagree. The newsletters and messages are read once on open
+  (`useSchoolNews`), not per year group.
+- **Term Time has its own accent colour** (`--school-accent`, `--school-on-accent`). The
+  CoParent stylesheet's frozen utility blob sets `--color-primary: teal` on `:root` for every
+  page, so the site token is a named colour that `--on-primary` was never chosen against: navy on
+  teal in dark mode is about 2.9:1. The page's own pair is 5.7:1 or better in both themes.
+- **Tests that render the Term Time page must mock `school/schoolNewsApi`** as well as
+  `school/schoolCalendarApi`.
+
+## Newsletters and "From the school"
+
+`GET /api/school/newsletters` and `GET /api/school/messages` (`SchoolNewsController`,
+`SchoolNewsService`). Both read **public documents only**, whoever asks, and neither calls a model.
+
+- **Newsletters** are the `WEBSITE_PAGE` documents whose address is the portal newsletter path
+  (`SchoolLinkFilter.isAutoFetchable`), from the last 120 days, newest first, **one per
+  publication date**. The school sometimes publishes an issue twice under two ids (166 and 167
+  are both 2 October 2026, the second a fuller re-publish), and the content hash cannot catch it,
+  so the longer text is kept.
+- **Each newsletter's summary is written once** (`SchoolNewsletterSummariser`, the chat model,
+  usage kind `SUMMARISE`) and stored in `school_newsletter_summaries`, keyed by the document id
+  and tied to its `contentHash`. A summary whose hash no longer matches is not served, and is
+  rewritten. The hourly newsletter job (below) writes at most three a run for the six newest. The
+  prompt leaves out every child's name, so "stars of the week" and class awards never reach the
+  card. The model's output is checked before it is stored: at most six points, real year groups
+  only, headline and points capped in length.
+- A newsletter with no summary yet still shows, with a link to the school's page. The page
+  never waits on a model, and a visitor cannot cause a call.
+- **From the school** is the public `EMAIL` documents of the last 30 days, minus the ones that
+  only cover a newsletter. Those are recognised by carrying an auto-fetchable newsletter link,
+  not by their subject: the school words it differently every week, and the October online-safety
+  newsletter is a real email that also says "newsletter". Only approved emails are public, so
+  the card can be shorter than a parent's inbox.
+- `school_newsletter_summaries` is in the backup and restore. It has no index beyond `_id`, so
+  it has no change unit.
+
+## The calendar card
+
+**Coming up** (`UpcomingPanel`) covers today and a list whose reach is chosen as Today, This
+week or 3 weeks. The data comes from
 `GET /api/school/calendar?yearGroups=…` (`SchoolCalendarController`, `SchoolQueryService.upcoming`).
 It is one indexed read of `school_events`, with no model call behind it.
 
@@ -1059,8 +1123,8 @@ It is one indexed read of `school_events`, with no model call behind it.
   - Precision over recall: a duplicate left showing costs a second glance, a wrong merge hides
     an event. Still shown twice on purpose: the 31 Oct secondary application deadline, tagged
     Year 6 in one source and Year 7 in another, with unrelated wording.
-- **Clicking an event asks the chat about it** with the visitor's year groups, and on a phone it
-  switches to Ask.
+- **Clicking an event asks the chat about it** with the visitor's year groups, and switches the
+  page to the conversation.
 - A tab left open reloads the calendar when it becomes visible again after 30 minutes, so
   yesterday's events are not pinned as today's.
 - Not rate limited, like `/api/school/config`. **Tests that render the Term Time page must mock

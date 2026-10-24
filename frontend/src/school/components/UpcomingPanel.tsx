@@ -1,12 +1,11 @@
 import { CalendarDays, MessageCircleQuestion, RefreshCw } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 
 import {
   buildCalendarView,
   CALENDAR_RANGES,
   formatDay,
   formatLongDay,
-  formatSpan,
   headsUpLabel,
   isHeadsUp,
   questionAbout,
@@ -15,32 +14,13 @@ import {
   type CalendarRange,
 } from '../calendarModel'
 import { track } from '../../analytics/analytics'
-import {
-  CalendarUnavailableError,
-  fetchSchoolCalendar,
-  type CalendarEvent,
-  type SchoolCalendar,
-} from '../schoolCalendarApi'
+import type { CalendarEvent } from '../schoolCalendarApi'
+import type { SchoolCalendarState } from '../useSchoolCalendar'
 
 const RANGE_STORAGE_KEY = 'term-time-calendar-range'
 
-/** Which part of the pane an event was picked from, for analytics. */
-type PaneSection = 'today' | 'heads-up' | 'day'
-
-/**
- * How old the calendar may be before a returning tab reloads it.
- *
- * The page is often left open, and a tab opened yesterday would otherwise pin yesterday's events
- * as today's. Checked when the tab becomes visible again rather than on a timer, so a tab nobody
- * is looking at makes no requests.
- */
-const STALE_AFTER_MS = 30 * 60 * 1000
-
-type LoadState =
-  | { status: 'loading' }
-  | { status: 'ready'; calendar: SchoolCalendar; checkedAt: Date }
-  | { status: 'error' }
-  | { status: 'off' }
+/** Which part of the card an event was picked from, for analytics. */
+type PaneSection = 'today' | 'day'
 
 function readRange(): CalendarRange {
   try {
@@ -60,53 +40,26 @@ function writeRange(range: CalendarRange): void {
 }
 
 interface UpcomingPanelProps {
-  /** The visitor's year groups; empty means every year. Shared with the chat. */
-  yearGroups: string[]
+  /** The calendar for the visitor's year groups, shared with the heads-up strip. */
+  calendar: SchoolCalendarState
   /** Asks the chat a question about an event the visitor picked. */
   onAsk: (question: string) => void
+  /** The narrower version shown beside a conversation. */
+  compact?: boolean
 }
 
 /**
- * What is on today and over the next three weeks, beside the chat.
+ * What is on today and over the next three weeks.
  *
- * Today is pinned at the top, and INSET days, half terms and term dates are pulled into one
- * strip for the whole window whatever range is chosen, because a day with no school is the thing
- * a long list hides. Every event is a button that asks the chat about it: the pane says what is
- * on, and the chat has the letter with the times, the kit and the booking link.
+ * Today is pinned at the top. Days with no school are not listed here: the heads-up strip above
+ * the cards carries them for the whole window, whatever range is chosen, because a day with no
+ * school is the thing a long list hides. Every event is a button that asks the chat about it:
+ * the card says what is on, and the chat has the letter with the times, the kit and the booking
+ * link.
  */
-export function UpcomingPanel({ yearGroups, onAsk }: UpcomingPanelProps) {
+export function UpcomingPanel({ calendar, onAsk, compact = false }: UpcomingPanelProps) {
   const [range, setRange] = useState<CalendarRange>(readRange)
-  const [state, setState] = useState<LoadState>({ status: 'loading' })
-  const [reloads, setReloads] = useState(0)
-  // A string key, so a new array with the same years does not refetch.
-  const yearsKey = yearGroups.join('|')
-
-  useEffect(() => {
-    const controller = new AbortController()
-    setState((prior) => (prior.status === 'ready' ? prior : { status: 'loading' }))
-    fetchSchoolCalendar(yearsKey ? yearsKey.split('|') : [], controller.signal)
-      .then((calendar) => setState({ status: 'ready', calendar, checkedAt: new Date() }))
-      .catch((error: unknown) => {
-        if (controller.signal.aborted) return
-        setState({ status: error instanceof CalendarUnavailableError ? 'off' : 'error' })
-      })
-    return () => controller.abort()
-  }, [yearsKey, reloads])
-
-  const checkedAt = state.status === 'ready' ? state.checkedAt : null
-  useEffect(() => {
-    if (!checkedAt) return
-    const onVisible = () => {
-      if (
-        document.visibilityState === 'visible' &&
-        Date.now() - checkedAt.getTime() > STALE_AFTER_MS
-      ) {
-        setReloads((n) => n + 1)
-      }
-    }
-    document.addEventListener('visibilitychange', onVisible)
-    return () => document.removeEventListener('visibilitychange', onVisible)
-  }, [checkedAt])
+  const state = calendar.load
 
   const view = useMemo(
     () => (state.status === 'ready' ? buildCalendarView(state.calendar, range) : null),
@@ -123,8 +76,13 @@ export function UpcomingPanel({ yearGroups, onAsk }: UpcomingPanelProps) {
     onAsk(questionAbout(event))
   }
 
+  const checkedAt = state.status === 'ready' ? state.checkedAt : null
+
   return (
-    <aside className="school-upcoming" aria-labelledby="school-upcoming-title">
+    <section
+      className={`school-upcoming${compact ? ' school-upcoming--compact' : ''}`}
+      aria-labelledby="school-upcoming-title"
+    >
       <div className="school-upcoming__head">
         <h2 id="school-upcoming-title" className="school-upcoming__title">
           <CalendarDays size={17} aria-hidden="true" />
@@ -164,7 +122,7 @@ export function UpcomingPanel({ yearGroups, onAsk }: UpcomingPanelProps) {
             <button
               type="button"
               className="school-upcoming__retry"
-              onClick={() => setReloads((n) => n + 1)}
+              onClick={calendar.reload}
             >
               <RefreshCw size={14} aria-hidden="true" />
               Try again
@@ -194,32 +152,6 @@ export function UpcomingPanel({ yearGroups, onAsk }: UpcomingPanelProps) {
                 </ul>
               )}
             </section>
-
-            {view.headsUp.length > 0 && (
-              <section className="school-upcoming__heads-up" aria-label="Days that change">
-                <ul className="school-upcoming__list">
-                  {view.headsUp.map((event) => (
-                    <li key={event.id}>
-                      <button
-                        type="button"
-                        className="school-upcoming__heads-up-item"
-                        onClick={() => ask(event, 'heads-up')}
-                        aria-label={`${headsUpLabel(event.type)}, ${formatSpan(event)}: ${
-                          event.title
-                        }. Ask about this`}
-                      >
-                        <strong>{headsUpLabel(event.type)}</strong>
-                        <span>
-                          {' · '}
-                          {formatSpan(event)}
-                          {event.type !== 'HALF_TERM' && ` — ${event.title}`}
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            )}
 
             {view.days.map((day) => (
               <section
@@ -262,7 +194,7 @@ export function UpcomingPanel({ yearGroups, onAsk }: UpcomingPanelProps) {
           </span>
         )}
       </p>
-    </aside>
+    </section>
   )
 }
 

@@ -225,7 +225,11 @@ public class SchoolLinkFetcher {
       if (!UrlFetcher.isFetchableUrl(link.url())) {
         return fail(link, "That address is not safe to fetch (non-public or unsupported scheme)");
       }
-      final SchoolDocument parent = documents.findById(link.sourceDocumentId()).orElse(null);
+      // A link can have no parent document: the newsletter poller records the issues it reads
+      // off the portal's own list, which no email or page mentioned. findById(null) throws.
+      final SchoolDocument parent = link.sourceDocumentId() == null
+          ? null
+          : documents.findById(link.sourceDocumentId()).orElse(null);
       final Visibility tier = tierFor(link.url(), parent);
 
       final byte[] body;
