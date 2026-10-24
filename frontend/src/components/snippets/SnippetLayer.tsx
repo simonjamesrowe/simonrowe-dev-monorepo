@@ -251,6 +251,10 @@ export function SnippetLayer({
         return start >= 0 && offset >= start && offset <= start + snippet.exact.length
       })
       if (hit) {
+        // The click is the highlight's alone. In the playlist's read-along the same words also
+        // move the audio when clicked, and opening a note must not lose the listener's place.
+        // React listens at the root, so stopping it here keeps it from React's handlers too.
+        event.stopPropagation()
         openSnippet(hit.id, { left: event.clientX - 20, top: event.clientY, bottom: event.clientY + 6 })
       }
     }

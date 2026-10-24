@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
@@ -17,6 +17,9 @@ import { useNarrationAudio } from '../narration/useNarrationAudio'
  * The highlight runs on its own animation-frame loop from the audio element's clock and touches
  * only the spans that change. Going through React state would re-render every word several times
  * a second, and `position` only updates about four times a second, which is too slow for words.
+ *
+ * Text selected in the box holds it still: following the reading would carry the selection out
+ * of view, and the snippet toolbar with it (snippets are kept from here as from the drawer).
  */
 
 interface HastNode {
@@ -92,9 +95,18 @@ interface ReadAlongProps {
   /** The timings file, or undefined for audio made before read-along, shown as plain text. */
   timingsUrl?: string
   className?: string
+  /** Handed the box holding the rendered text, for a snippet layer to read and highlight. */
+  textRef?: RefObject<HTMLDivElement | null>
 }
 
-export function ReadAlong({ markdown, timingsUrl, className }: ReadAlongProps) {
+/** Whether some of the box's text is selected. */
+function hasSelectionIn(box: HTMLElement): boolean {
+  const selection = document.getSelection()
+  return !!selection && selection.rangeCount > 0 && !selection.isCollapsed
+    && selection.getRangeAt(0).intersectsNode(box)
+}
+
+export function ReadAlong({ markdown, timingsUrl, className, textRef }: ReadAlongProps) {
   const { currentTime, seek, playing, position } = useNarrationAudio()
   const scrollerRef = useRef<HTMLDivElement>(null)
   const layoutRef = useRef<Layout>(EMPTY_LAYOUT)
@@ -102,6 +114,7 @@ export function ReadAlong({ markdown, timingsUrl, className }: ReadAlongProps) {
   const lastLineRef = useRef<number | null>(null)
   const pausedUntilRef = useRef(0)
   const pauseTimerRef = useRef<number | undefined>(undefined)
+  const selectingRef = useRef(false)
   const [timings, setTimings] = useState<WordTiming[] | null>(null)
   const [paused, setPaused] = useState(false)
 
@@ -175,8 +188,10 @@ export function ReadAlong({ markdown, timingsUrl, className }: ReadAlongProps) {
     const scroller = scrollerRef.current
     if (!current || !scroller) return
     current.classList.add(CURRENT)
-    // Scroll only when the line changes, and never while the reader is scrolling themselves.
-    if (current.offsetTop === lastLineRef.current || Date.now() < pausedUntilRef.current) return
+    // Scroll only when the line changes, and never while the reader is scrolling themselves or
+    // has text selected. The line is not recorded then, so the next word after either catches up.
+    if (current.offsetTop === lastLineRef.current || Date.now() < pausedUntilRef.current
+      || selectingRef.current) return
     lastLineRef.current = current.offsetTop
     const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
     scroller.scrollTo?.({
@@ -207,6 +222,20 @@ export function ReadAlong({ markdown, timingsUrl, className }: ReadAlongProps) {
 
   useEffect(() => () => window.clearTimeout(pauseTimerRef.current), [])
 
+  useEffect(() => {
+    const onSelectionChange = () => {
+      const box = scrollerRef.current
+      selectingRef.current = !!box && hasSelectionIn(box)
+    }
+    document.addEventListener('selectionchange', onSelectionChange)
+    return () => document.removeEventListener('selectionchange', onSelectionChange)
+  }, [])
+
+  const setScroller = useCallback((node: HTMLDivElement | null) => {
+    scrollerRef.current = node
+    if (textRef) textRef.current = node
+  }, [textRef])
+
   // Every scroll restarts the grace period, so the button and the pause end together.
   const pauseFollowing = () => {
     if (!timings) return
@@ -228,6 +257,8 @@ export function ReadAlong({ markdown, timingsUrl, className }: ReadAlongProps) {
   }
 
   const onClick = (event: React.MouseEvent) => {
+    // A click that ends a selection is choosing text, not a place to listen from.
+    if (hasSelectionIn(event.currentTarget as HTMLElement)) return
     const word = (event.target as HTMLElement).closest(`.${TIMED}`)
     if (!word) return
     const { words, starts } = layoutRef.current
@@ -247,7 +278,7 @@ export function ReadAlong({ markdown, timingsUrl, className }: ReadAlongProps) {
         onKeyDown={(event) => { if (SCROLL_KEYS.has(event.key)) pauseFollowing() }}
         onTouchMove={pauseFollowing}
         onWheel={pauseFollowing}
-        ref={scrollerRef}
+        ref={setScroller}
         role="region"
         tabIndex={0}
       >

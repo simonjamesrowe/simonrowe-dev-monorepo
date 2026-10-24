@@ -1,4 +1,5 @@
 import type { BlogDetail } from '../../types/blog'
+import type { NarrationTrack } from '../../types/narrationAudio'
 import type { ArticleResponse } from '../../types/news'
 import type { SnippetSourceType } from '../../types/snippets'
 
@@ -39,5 +40,33 @@ export function postSource(blog: BlogDetail): SnippetSource {
     author: 'Simon Rowe',
     url: `${window.location.origin}/blogs/${blog.id}`,
     publishedAt: blog.createdDate,
+  }
+}
+
+/**
+ * Whatever the player is on: a summary, cited as one of the original article, or a post, cited
+ * exactly as `postSource` cites it. The playlist does not carry an article's author, so a copy
+ * made before saving names none; the saved snippet's citation comes from the server and does.
+ */
+export function trackSource(track: NarrationTrack, publishedAt: string | null): SnippetSource {
+  if (track.contentType === 'BLOG') {
+    return {
+      sourceType: 'BLOG',
+      contentId: track.contentId,
+      title: track.title,
+      sourceName: 'simonrowe.dev',
+      author: 'Simon Rowe',
+      url: `${window.location.origin}/blogs/${track.contentId}`,
+      publishedAt,
+    }
+  }
+  return {
+    sourceType: 'ARTICLE_SUMMARY',
+    contentId: track.contentId,
+    title: track.title,
+    sourceName: track.sourceName ?? '',
+    author: null,
+    url: track.href,
+    publishedAt,
   }
 }
