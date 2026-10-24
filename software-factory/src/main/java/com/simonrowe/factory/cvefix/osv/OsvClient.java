@@ -16,7 +16,8 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * Asks OSV which advisories affect a Maven component version, and which release fixes each.
+ * Asks OSV which advisories affect a Maven or npm component version, and which release fixes
+ * each.
  *
  * <p>Dependency-Track says <em>that</em> a component is vulnerable but carries no fixed-version
  * field, and the ticket agent has no network, so the target version has to arrive in the ticket.
@@ -29,6 +30,12 @@ import tools.jackson.databind.node.ObjectNode;
 public class OsvClient {
 
   private static final int MAX_PAGES = 10;
+
+  /** OSV's name for Maven. */
+  public static final String MAVEN = "Maven";
+
+  /** OSV's name for npm. */
+  public static final String NPM = "npm";
 
   private final CveRepairProperties properties;
   private final ObjectMapper objectMapper;
@@ -55,7 +62,7 @@ public class OsvClient {
   }
 
   /**
-   * Every advisory OSV records against {@code coordinate} at {@code version}.
+   * Every advisory OSV records against a Maven {@code coordinate} at {@code version}.
    *
    * @param coordinate {@code group:artifact}
    * @param version the version in use
@@ -63,11 +70,29 @@ public class OsvClient {
    * @throws IllegalStateException when OSV cannot be read
    */
   public List<Advisory> advisories(final String coordinate, final String version) {
+    return advisories(MAVEN, coordinate, version);
+  }
+
+  /**
+   * Every advisory OSV records against a package at {@code version}.
+   *
+   * <p>One comparison serves both ecosystems: {@link MavenVersion} orders plain semantic versions
+   * the way npm does, and an npm pre-release ({@code 1.0.0-beta.1}) below its release. A
+   * mis-ordering costs a refused or wasted pull request, never an unreviewed merge.
+   *
+   * @param ecosystem {@link #MAVEN} or {@link #NPM}
+   * @param name {@code group:artifact} for Maven, the package name for npm
+   * @param version the version in use
+   * @return the advisories; empty when OSV knows of none
+   * @throws IllegalStateException when OSV cannot be read
+   */
+  public List<Advisory> advisories(
+      final String ecosystem, final String name, final String version) {
     List<Advisory> advisories = new ArrayList<>();
     String pageToken = null;
     for (int page = 0; page < MAX_PAGES; page++) {
       ObjectNode query = objectMapper.createObjectNode().put("version", version);
-      query.putObject("package").put("name", coordinate).put("ecosystem", "Maven");
+      query.putObject("package").put("name", name).put("ecosystem", ecosystem);
       if (pageToken != null) {
         query.put("page_token", pageToken);
       }
@@ -76,7 +101,7 @@ public class OsvClient {
         advisories.add(
             new Advisory(
                 vulnerability.path("id").asText(""),
-                fixedVersion(vulnerability, coordinate, MavenVersion.of(version))));
+                fixedVersion(vulnerability, ecosystem, name, MavenVersion.of(version))));
       }
       pageToken = body.path("next_page_token").asText("");
       if (pageToken.isEmpty()) {
@@ -95,11 +120,19 @@ public class OsvClient {
    */
   static String fixedVersion(
       final JsonNode vulnerability, final String coordinate, final MavenVersion current) {
+    return fixedVersion(vulnerability, MAVEN, coordinate, current);
+  }
+
+  static String fixedVersion(
+      final JsonNode vulnerability,
+      final String ecosystem,
+      final String name,
+      final MavenVersion current) {
     MavenVersion best = null;
     for (JsonNode affected : vulnerability.path("affected")) {
       JsonNode pkg = affected.path("package");
-      if (!"maven".equalsIgnoreCase(pkg.path("ecosystem").asText(""))
-          || !coordinate.equals(pkg.path("name").asText(""))) {
+      if (!ecosystem.equalsIgnoreCase(pkg.path("ecosystem").asText(""))
+          || !name.equals(pkg.path("name").asText(""))) {
         continue;
       }
       for (JsonNode range : affected.path("ranges")) {

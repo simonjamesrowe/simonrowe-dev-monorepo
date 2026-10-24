@@ -31,24 +31,30 @@ class CveFixActivitiesImplTest {
       dependencyTrack, runs, osv, new CveRepairProperties(true, null, null, null, null));
 
   @Test
-  void plansOnlyBackendMavenComponentsAndSkipsOnesOsvCannotAnswer() {
+  void plansBackendMavenAndFrontendNpmAndSkipsOnesOsvCannotAnswer() {
     ComponentFindings fixable = component("simonrowe-dev/backend",
         "pkg:maven/org.apache.tomcat.embed/tomcat-embed-core@11.0.25?type=jar", "11.0.25");
     ComponentFindings unreachable = component("simonrowe-dev/backend",
         "pkg:maven/io.netty/netty-codec@4.1.100.Final", "4.1.100.Final");
     ComponentFindings npm = component("simonrowe-dev/frontend", "pkg:npm/vite@6.0.0", "6.0.0");
-    when(osv.advisories("org.apache.tomcat.embed:tomcat-embed-core", "11.0.25"))
+    ComponentFindings image = component("simonrowe-dev/frontend-image",
+        "pkg:apk/alpine/openssl@3.3.0", "3.3.0");
+    when(osv.advisories("Maven", "org.apache.tomcat.embed:tomcat-embed-core", "11.0.25"))
         .thenReturn(List.of(new OsvClient.Advisory("GHSA-1", "11.0.26")));
-    when(osv.advisories("io.netty:netty-codec", "4.1.100.Final"))
+    when(osv.advisories("Maven", "io.netty:netty-codec", "4.1.100.Final"))
         .thenThrow(new IllegalStateException("OSV returned 503"));
+    when(osv.advisories("npm", "vite", "6.0.0"))
+        .thenReturn(List.of(new OsvClient.Advisory("GHSA-1", "6.0.9")));
 
-    List<RepairPlan> plans = activities.planRepairs(List.of(fixable, unreachable, npm));
+    List<RepairPlan> plans = activities.planRepairs(List.of(fixable, unreachable, npm, image));
 
-    assertThat(plans).singleElement().satisfies(plan -> {
-      assertThat(plan.coordinate()).isEqualTo("org.apache.tomcat.embed:tomcat-embed-core");
-      assertThat(plan.targetVersion()).isEqualTo("11.0.26");
-    });
-    verify(osv, never()).advisories(eq("vite"), any());
+    assertThat(plans).extracting(RepairPlan::coordinate, RepairPlan::targetVersion,
+            RepairPlan::ecosystem)
+        .containsExactly(
+            org.assertj.core.groups.Tuple.tuple(
+                "org.apache.tomcat.embed:tomcat-embed-core", "11.0.26", "Maven"),
+            org.assertj.core.groups.Tuple.tuple("vite", "6.0.9", "npm"));
+    verify(osv, never()).advisories(any(), eq("openssl"), any());
   }
 
   private static ComponentFindings component(

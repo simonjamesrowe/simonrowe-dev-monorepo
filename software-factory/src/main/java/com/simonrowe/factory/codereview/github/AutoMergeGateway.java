@@ -9,7 +9,9 @@ import com.simonrowe.factory.codereview.domain.AutoMergeState;
 import com.simonrowe.factory.codereview.domain.ChangedFiles;
 import com.simonrowe.factory.codereview.domain.PullRequestContext;
 import com.simonrowe.factory.git.DependencyPins;
+import com.simonrowe.factory.git.NpmLockPins;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -203,6 +205,52 @@ public class AutoMergeGateway {
       return new String(bytes, StandardCharsets.UTF_8);
     } catch (IllegalStateException | IllegalArgumentException exception) {
       LOGGER.warn("Could not read {} at {} on {}", path, ref, pullRequest.slug(), exception);
+      return null;
+    }
+  }
+
+  /**
+   * The npm lockfile's text at a commit, or null when it cannot be read.
+   *
+   * <p>Read raw, not as base64 JSON: the contents API stops returning base64 at 1 MB, and the
+   * lockfile (0.6 MB in October 2026) only grows. Capped at {@link NpmLockPins#MAX_CHARS}. Null on
+   * any failure, which the lockfile rule reads as "not proven" and withholds the arm.
+   */
+  public String lockfileAt(final PullRequestContext pullRequest, final String ref) {
+    String path =
+        "/repos/%s/%s/contents/%s?ref=%s"
+            .formatted(
+                pullRequest.owner(),
+                pullRequest.repository(),
+                NpmLockPins.LOCKFILE,
+                URLEncoder.encode(ref, StandardCharsets.UTF_8));
+    try {
+      HttpRequest request =
+          HttpRequest.newBuilder()
+              .uri(URI.create(properties.github().apiBaseUrl() + path))
+              .timeout(properties.github().requestTimeout())
+              .header("Accept", "application/vnd.github.raw+json")
+              .header("X-GitHub-Api-Version", API_VERSION)
+              .header("User-Agent", "temporal-code-reviewer")
+              .header("Authorization", "Bearer " + token(pullRequest))
+              .GET()
+              .build();
+      HttpResponse<InputStream> response =
+          httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
+      try (InputStream body = response.body()) {
+        if (response.statusCode() != 200) {
+          LOGGER.warn("Reading {} at {} on {} answered {}", NpmLockPins.LOCKFILE, ref,
+              pullRequest.slug(), response.statusCode());
+          return null;
+        }
+        return NpmLockPins.text(body.readNBytes(NpmLockPins.MAX_CHARS + 1));
+      }
+    } catch (IOException | IllegalStateException | IllegalArgumentException exception) {
+      LOGGER.warn("Could not read {} at {} on {}", NpmLockPins.LOCKFILE, ref, pullRequest.slug(),
+          exception);
+      return null;
+    } catch (InterruptedException exception) {
+      Thread.currentThread().interrupt();
       return null;
     }
   }

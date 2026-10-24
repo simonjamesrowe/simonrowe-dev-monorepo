@@ -4,11 +4,13 @@ import com.simonrowe.factory.codereview.config.CodeReviewProperties;
 import com.simonrowe.factory.codereview.github.CheckRunGateway;
 import com.simonrowe.factory.codereview.github.GitHubCredentials;
 import com.simonrowe.factory.git.DependencyPins;
+import com.simonrowe.factory.git.NpmLockPins;
 import com.simonrowe.factory.ticketagent.config.TicketAgentProperties;
 import com.simonrowe.factory.ticketagent.domain.ChecksReport;
 import com.simonrowe.factory.ticketagent.domain.PullRequestRef;
 import com.simonrowe.factory.ticketagent.domain.PullRequestState;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URLEncoder;
@@ -61,7 +63,7 @@ public class TicketAgentGitHub {
       Vulnerability repair: this pull request only changes dependency versions, so the \
       reviewer may merge it once GitHub Actions and the review pass.""";
 
-  /** Hosts GitHub sends job log downloads to. Anything else is not followed. */
+  /** Hosts GitHub sends job log and artifact downloads to. Anything else is not followed. */
   private static final List<String> LOG_HOST_SUFFIXES =
       List.of(".actions.githubusercontent.com", ".blob.core.windows.net");
 
@@ -204,6 +206,54 @@ public class TicketAgentGitHub {
     JsonNode pull = parse(requireOk("GET", path,
         send("GET", path, null, credentials.accessToken(installationId))));
     return pull.path("head").path("sha").asText("");
+  }
+
+  /** The pull request's base commit. */
+  public String baseSha(final int number, final Long installationId) {
+    String path = repoPath() + "/pulls/" + number;
+    JsonNode pull = parse(requireOk("GET", path,
+        send("GET", path, null, credentials.accessToken(installationId))));
+    return pull.path("base").path("sha").asText("");
+  }
+
+  /**
+   * The npm lockfile's text at a commit, or null when it cannot be read.
+   *
+   * <p>Read raw rather than as base64 JSON, which the contents API stops serving at 1 MB; the
+   * lockfile was 0.6 MB in October 2026 and only grows. Capped at {@link NpmLockPins#MAX_CHARS}.
+   */
+  public String lockfileAt(final String ref, final Long installationId) {
+    if (ref == null || ref.isBlank()) {
+      return null;
+    }
+    String path = "%s/contents/%s?ref=%s"
+        .formatted(repoPath(), NpmLockPins.LOCKFILE,
+            URLEncoder.encode(ref, StandardCharsets.UTF_8));
+    try {
+      HttpResponse<InputStream> response =
+          httpClient.send(
+              HttpRequest.newBuilder()
+                  .uri(URI.create(codeReviewProperties.github().apiBaseUrl() + path))
+                  .timeout(codeReviewProperties.github().requestTimeout())
+                  .header("Accept", "application/vnd.github.raw+json")
+                  .header("X-GitHub-Api-Version", API_VERSION)
+                  .header("User-Agent", USER_AGENT)
+                  .header("Authorization", "Bearer " + credentials.accessToken(installationId))
+                  .GET()
+                  .build(),
+              HttpResponse.BodyHandlers.ofInputStream());
+      try (InputStream body = response.body()) {
+        return response.statusCode() == 200
+            ? NpmLockPins.text(body.readNBytes(NpmLockPins.MAX_CHARS + 1))
+            : null;
+      }
+    } catch (IOException exception) {
+      LOGGER.warn("Could not read {} at {}", NpmLockPins.LOCKFILE, ref, exception);
+      return null;
+    } catch (InterruptedException exception) {
+      Thread.currentThread().interrupt();
+      return null;
+    }
   }
 
   /**
@@ -480,8 +530,11 @@ public class TicketAgentGitHub {
     return value.length() <= MAX_LINE_CHARS ? value : value.substring(0, MAX_LINE_CHARS) + "...";
   }
 
-  /** Only an https redirect to a host GitHub stores logs on is followed. */
-  static Optional<URI> logLocation(final String location) {
+  /**
+   * Only an https redirect to a host GitHub stores logs and artifacts on is followed, and always
+   * without the GitHub token.
+   */
+  public static Optional<URI> logLocation(final String location) {
     try {
       URI uri = new URI(location);
       String host = uri.getHost() == null ? "" : uri.getHost().toLowerCase(Locale.ROOT);

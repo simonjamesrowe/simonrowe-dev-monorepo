@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.simonrowe.factory.git.DependencyPins;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.Test;
@@ -427,6 +428,105 @@ class AutoMergePolicyTest {
     assertThat(decidePins(fromThisApp(),
         new ChangedFiles(List.of("build.gradle.kts"), true)).outcome())
         .isEqualTo(MergeDecision.Outcome.INELIGIBLE);
+  }
+
+  // --- the factory's own npm lockfile repair ---------------------------------------------------
+
+  private static final String LOCKFILE = "frontend/package-lock.json";
+  private static final String BASE_SHA = "base000";
+  private static final String INTEGRITY = "sha512-" + "abcdefghi+".repeat(8) + "abcdef==";
+  private static final String LOCK_BASE = """
+      {"lockfileVersion": 3, "packages": {"": {"name": "f"},
+        "node_modules/postcss": {"version": "8.5.6"}}}""";
+  private static final String LOCK_HEAD = """
+      {"lockfileVersion": 3, "packages": {"": {"name": "f"},
+        "node_modules/postcss": {"version": "8.5.31",
+          "resolved": "https://registry.npmjs.org/postcss/-/postcss-8.5.31.tgz",
+          "integrity": "%s"}}}""".formatted(INTEGRITY);
+
+  private static ChangedFiles lockfile(final String... more) {
+    List<String> paths = new ArrayList<>(List.of(LOCKFILE));
+    paths.addAll(List.of(more));
+    // GitHub omits the patch for a diff this size, so none is given here.
+    return new ChangedFiles(paths, true,
+        List.of(new DependencyPins.FileDiff(LOCKFILE, null, "modified", null)));
+  }
+
+  private static MergeDecision decideLockfile(
+      final AutoMergeState state, final ChangedFiles files, final String baseSha,
+      final Map<String, String> lockfileByRef) {
+    return AutoMergePolicy.decide(true, state, CLEAN, HEAD, () -> files, List.of(), path -> null,
+        baseSha, lockfileByRef::get);
+  }
+
+  private static Map<String, String> lockfiles(final String base, final String head) {
+    return Map.of(BASE_SHA, base, HEAD, head);
+  }
+
+  @Test
+  void factoryLockfileUpgradeIsArmedFromWholeFilesWithNoPatch() {
+    assertThat(decideLockfile(fromThisApp(), lockfile(), BASE_SHA,
+        lockfiles(LOCK_BASE, LOCK_HEAD))).isEqualTo(MergeDecision.eligible());
+  }
+
+  @Test
+  void factoryLockfileUpgradeAlongsideVersionBumpIsArmed() {
+    ChangedFiles both = new ChangedFiles(List.of(LOCKFILE, "build.gradle.kts"), true, List.of(
+        new DependencyPins.FileDiff(LOCKFILE, null, "modified", null),
+        new DependencyPins.FileDiff("build.gradle.kts", null, "modified", OVERRIDE_BUMP)));
+
+    assertThat(decideLockfile(fromThisApp(), both, BASE_SHA, lockfiles(LOCK_BASE, LOCK_HEAD)))
+        .isEqualTo(MergeDecision.eligible());
+  }
+
+  @Test
+  void factoryLockfileThatAddsPackageIsRefusedWithTheReason() {
+    String postcss = "\"node_modules/postcss\"";
+    String added = LOCK_HEAD.replace(postcss, "\"node_modules/evil\": {}, " + postcss);
+
+    MergeDecision decision = decideLockfile(fromThisApp(), lockfile(), BASE_SHA,
+        lockfiles(LOCK_BASE, added));
+
+    assertThat(decision.reason()).isEqualTo(
+        "the lockfile change is more than a version bump: it adds `node_modules/evil`");
+  }
+
+  @Test
+  void personsLockfileUpgradeStillNeedsSomeone() {
+    assertThat(decideLockfile(state(), lockfile(), BASE_SHA, lockfiles(LOCK_BASE, LOCK_HEAD))
+        .reason()).isEqualTo("`frontend/package-lock.json` needs a human to merge");
+  }
+
+  @Test
+  void lockfileWithManifestChangeNeedsSomeone() {
+    assertThat(decideLockfile(fromThisApp(), lockfile("frontend/package.json"), BASE_SHA,
+        lockfiles(LOCK_BASE, LOCK_HEAD)).reason())
+        .isEqualTo("`frontend/package.json` needs a human to merge");
+  }
+
+  /** Decided by the path list, like a pin file: a lockfile GitHub did not describe is refused. */
+  @Test
+  void lockfileMissingFromTheDiffListingIsNotArmed() {
+    assertThat(decideLockfile(fromThisApp(), new ChangedFiles(List.of(LOCKFILE), true),
+        BASE_SHA, lockfiles(LOCK_BASE, LOCK_HEAD)).outcome())
+        .isEqualTo(MergeDecision.Outcome.INELIGIBLE);
+  }
+
+  @Test
+  void unreadableLockfileOrUnknownBaseIsNotArmed() {
+    assertThat(decideLockfile(fromThisApp(), lockfile(), BASE_SHA, Map.of()).reason())
+        .contains("could not be read");
+    assertThat(decideLockfile(fromThisApp(), lockfile(), null, lockfiles(LOCK_BASE, LOCK_HEAD))
+        .reason()).contains("base commit is unknown");
+  }
+
+  @Test
+  void renamedLockfileIsNotArmed() {
+    ChangedFiles renamed = new ChangedFiles(List.of(LOCKFILE, "frontend/old-lock.json"), true,
+        List.of(new DependencyPins.FileDiff(LOCKFILE, "frontend/old-lock.json", "renamed", null)));
+
+    assertThat(decideLockfile(fromThisApp(), renamed, BASE_SHA, lockfiles(LOCK_BASE, LOCK_HEAD))
+        .outcome()).isEqualTo(MergeDecision.Outcome.INELIGIBLE);
   }
 
   @Test

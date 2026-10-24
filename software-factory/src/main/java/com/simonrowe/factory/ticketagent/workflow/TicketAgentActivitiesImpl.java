@@ -1,7 +1,9 @@
 package com.simonrowe.factory.ticketagent.workflow;
 
 import com.simonrowe.factory.codereview.domain.AutoMergePolicy;
+import com.simonrowe.factory.cvefix.domain.NpmRepairTitle;
 import com.simonrowe.factory.git.DependencyPins;
+import com.simonrowe.factory.git.NpmLockPins;
 import com.simonrowe.factory.git.PathGlobs;
 import com.simonrowe.factory.git.RepositoryWorkspace;
 import com.simonrowe.factory.git.RepositoryWorkspaceFactory;
@@ -24,12 +26,17 @@ import com.simonrowe.factory.ticketagent.domain.TicketAgentRequest;
 import com.simonrowe.factory.ticketagent.domain.TicketAgentSettings;
 import com.simonrowe.factory.ticketagent.domain.TicketBrief;
 import com.simonrowe.factory.ticketagent.github.TicketAgentGitHub;
+import com.simonrowe.factory.ticketagent.npm.NpmLockfileRepair;
 import io.temporal.activity.Activity;
 import io.temporal.failure.ApplicationFailure;
 import io.temporal.spring.boot.ActivityImpl;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
@@ -67,6 +74,7 @@ public class TicketAgentActivitiesImpl implements TicketAgentActivities {
   private final TicketAgentEngine engine;
   private final RepositoryWorkspaceFactory workspaces;
   private final TicketAgentService service;
+  private final NpmLockfileRepair npmRepair;
 
   public TicketAgentActivitiesImpl(
       final TicketAgentProperties properties,
@@ -74,13 +82,15 @@ public class TicketAgentActivitiesImpl implements TicketAgentActivities {
       final TicketAgentGitHub gitHub,
       final TicketAgentEngine engine,
       final RepositoryWorkspaceFactory workspaces,
-      final TicketAgentService service) {
+      final TicketAgentService service,
+      final NpmLockfileRepair npmRepair) {
     this.properties = properties;
     this.linear = linear;
     this.gitHub = gitHub;
     this.engine = engine;
     this.workspaces = workspaces;
     this.service = service;
+    this.npmRepair = npmRepair;
   }
 
   @Override
@@ -123,6 +133,10 @@ public class TicketAgentActivitiesImpl implements TicketAgentActivities {
   }
 
   AttemptResult attempt(final AttemptRequest request, final Consumer<String> heartbeat) {
+    Optional<NpmRepairTitle.Parsed> npm = npmRepair(request.ticket());
+    if (npm.isPresent()) {
+      return npmAttempt(request, npm.get(), heartbeat);
+    }
     Long installationId = gitHub.installationId();
     // The first attempt starts from main; a repair builds on what the earlier attempts pushed.
     String cloneBranch = request.attempt() == 1 ? null : request.branch();
@@ -173,6 +187,114 @@ public class TicketAgentActivitiesImpl implements TicketAgentActivities {
               heartbeat);
       return result(AttemptResult.Status.PUSHED, headSha, edit, changed, silencing, null);
     }
+  }
+
+  /**
+   * The npm repair a ticket asks for: a vulnerability repair the scan filed, titled in the scan's
+   * npm format. Anything else, including an npm ticket a person wrote by hand, goes to the agent.
+   */
+  static Optional<NpmRepairTitle.Parsed> npmRepair(final LinearTicket ticket) {
+    return ticket != null && ticket.hasLabel(TicketAgentProperties.VULNERABILITY_LABEL)
+        ? NpmRepairTitle.parse(ticket.title())
+        : Optional.empty();
+  }
+
+  /**
+   * An npm vulnerability repair, made without the agent: GitHub Actions regenerates the lockfile,
+   * {@link NpmLockfileRepair} checks it, and this pushes it.
+   *
+   * <p>One attempt only. Regenerating the lockfile again gives the same lockfile, so a red build
+   * on it is a person's problem, and the later attempts hand it back instead of repeating it.
+   */
+  private AttemptResult npmAttempt(
+      final AttemptRequest request,
+      final NpmRepairTitle.Parsed repair,
+      final Consumer<String> heartbeat) {
+    if (request.attempt() > 1) {
+      return npmNoChange(
+          """
+          The lockfile came from `npm update` and CI or the reviewer still rejected it. \
+          Regenerating it would give the same lockfile, so this needs a person.""");
+    }
+    Long installationId = gitHub.installationId();
+    try (RepositoryWorkspace workspace =
+        workspaces.create(
+            properties.owner(), properties.repository(), installationId,
+            properties.workspaceRoot(), "ticket-agent-", null, heartbeat)) {
+      Path lockfile = workspace.repository().resolve(NpmLockPins.LOCKFILE);
+      String base = Files.isRegularFile(lockfile) ? Files.readString(lockfile) : null;
+      NpmLockfileRepair.Outcome outcome;
+      try {
+        outcome = npmRepair.run(repair, base, installationId, heartbeat);
+      } catch (IllegalStateException exception) {
+        return npmNoChange("The npm lockfile repair could not run: " + exception.getMessage());
+      }
+      if (!outcome.pushable()) {
+        return npmNoChange(outcome.reason());
+      }
+      Files.writeString(lockfile, outcome.lockfile());
+      List<String> changed = workspaces.changedPaths(workspace, heartbeat);
+      if (!changed.equals(List.of(NpmLockPins.LOCKFILE))) {
+        return npmNoChange("The repair changed %s, not only the lockfile."
+            .formatted(String.join(", ", changed)));
+      }
+      AgentEdit edit = npmEdit(repair, outcome, request.ticket());
+      String diff = workspaces.stagedDiff(workspace, heartbeat);
+      List<String> silencing = SilencingDetector.reasons(diff);
+      if (request.dryRun()) {
+        return result(
+            AttemptResult.Status.DRY_RUN, null, edit, changed, silencing,
+            diff.length() <= MAX_DIFF_CHARS ? diff : diff.substring(0, MAX_DIFF_CHARS));
+      }
+      String headSha =
+          workspaces.commitAndPush(
+              workspace, request.branch(), edit.prTitle(), properties.gitAuthorName(),
+              properties.gitAuthorEmail(), installationId, true, heartbeat);
+      return result(AttemptResult.Status.PUSHED, headSha, edit, changed, silencing, null);
+    } catch (IOException exception) {
+      throw new IllegalStateException("Could not read or write the lockfile", exception);
+    }
+  }
+
+  private static AttemptResult npmNoChange(final String reason) {
+    return result(
+        AttemptResult.Status.NO_CHANGE, null, new AgentEdit(false, reason, null, null),
+        List.of(), List.of(), null);
+  }
+
+  /** The pull request for an npm repair, written from what actually moved. */
+  static AgentEdit npmEdit(
+      final NpmRepairTitle.Parsed repair,
+      final NpmLockfileRepair.Outcome outcome,
+      final LinearTicket ticket) {
+    String to = outcome.changes().stream()
+        .filter(change -> change.name().equals(repair.name()))
+        .map(NpmLockPins.Change::to)
+        .findFirst()
+        .orElse(repair.fixedVersion());
+    StringBuilder table = new StringBuilder("| Package | From | To |\n|---|---|---|\n");
+    for (NpmLockPins.Change change : outcome.changes()) {
+      table.append("| `%s` | %s | %s |\n".formatted(change.name(), change.from(), change.to()));
+    }
+    String title = "fix: update npm package %s to %s".formatted(repair.name(), to);
+    String body = """
+        Fixes %s: `%s` needed %s or later.
+
+        %s
+        Only `%s` changed. GitHub Actions regenerated it with \
+        `npm update %s --package-lock-only --ignore-scripts` on the default branch (%s), and the \
+        factory checked it before pushing: nothing added or removed, every moved package goes up \
+        within its major version to the npm registry's own tarball, and `%s` reached %s in every \
+        copy. `npm update` also moves the package's own dependencies within their ranges, which \
+        is why more than one row can appear.
+
+        No agent wrote this change."""
+        .formatted(ticket.identifier(), repair.name(), repair.fixedVersion(), table,
+            NpmLockPins.LOCKFILE, repair.name(), outcome.runUrl(), repair.name(),
+            repair.fixedVersion());
+    String summary = "Regenerated `%s`: %d package(s) moved, `%s` now %s."
+        .formatted(NpmLockPins.LOCKFILE, outcome.changes().size(), repair.name(), to);
+    return new AgentEdit(true, summary, title, body);
   }
 
   private static AttemptResult result(
@@ -276,8 +398,9 @@ public class TicketAgentActivitiesImpl implements TicketAgentActivities {
   }
 
   /**
-   * Whether every dependency file in the PR is a pin file whose changes only move versions.
-   * npm manifests never qualify: the agent cannot regenerate {@code package-lock.json}.
+   * Whether every dependency file in the PR is a pin file or the npm lockfile, and every change
+   * in them only moves versions. {@code package.json} never qualifies: an npm repair regenerates
+   * the lockfile alone.
    */
   private boolean versionsOnly(
       final int pullNumber,
@@ -285,7 +408,8 @@ public class TicketAgentActivitiesImpl implements TicketAgentActivities {
       final List<DependencyPins.FileDiff> files,
       final List<String> dependencies,
       final Long installationId) {
-    if (!dependencies.stream().allMatch(DependencyPins::isPinFile)) {
+    if (!dependencies.stream()
+        .allMatch(path -> DependencyPins.isPinFile(path) || NpmLockPins.isLockfile(path))) {
       return false;
     }
     if (head == null || head.isBlank()
@@ -297,12 +421,25 @@ public class TicketAgentActivitiesImpl implements TicketAgentActivities {
         .filter(file -> DependencyPins.isPinFile(file.path())
             || DependencyPins.isPinFile(file.previousPath()))
         .toList();
-    DependencyPins.Verdict verdict =
-        DependencyPins.check(pins, path -> gitHub.pinFileAt(path, head, installationId));
-    if (!verdict.versionsOnly()) {
-      LOGGER.info("PR #{} needs a person to merge: {}", pullNumber, verdict.reason());
+    if (dependencies.stream().anyMatch(DependencyPins::isPinFile)) {
+      DependencyPins.Verdict verdict =
+          DependencyPins.check(pins, path -> gitHub.pinFileAt(path, head, installationId));
+      if (!verdict.versionsOnly()) {
+        LOGGER.info("PR #{} needs a person to merge: {}", pullNumber, verdict.reason());
+        return false;
+      }
     }
-    return verdict.versionsOnly();
+    if (dependencies.stream().anyMatch(NpmLockPins::isLockfile)) {
+      NpmLockPins.Verdict verdict =
+          NpmLockPins.check(
+              gitHub.lockfileAt(gitHub.baseSha(pullNumber, installationId), installationId),
+              gitHub.lockfileAt(head, installationId));
+      if (!verdict.versionsOnly()) {
+        LOGGER.info("PR #{} needs a person to merge: {}", pullNumber, verdict.reason());
+        return false;
+      }
+    }
+    return true;
   }
 
   @Override

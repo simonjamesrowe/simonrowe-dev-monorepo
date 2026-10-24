@@ -280,6 +280,37 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- npm-cve-repair: **Frontend npm vulnerabilities now repair themselves too, with no agent writing
+  anything.** The scan files `Bump npm package <name> to <version> (…)` tickets for
+  `simonrowe-dev/frontend` (`RepairPlanner`, OSV in the `npm` ecosystem). The ticket agent
+  recognises that title (`NpmRepairTitle`, one class for both sides) on a `factory:cvefix` ticket,
+  skips Claude, and has GitHub Actions regenerate the lockfile: `npm-lockfile-repair.yml` on
+  `main`, `contents: read`, no secret, inputs through `env` only,
+  `npm update <name> --package-lock-only --ignore-scripts`. The factory downloads the artifact,
+  checks it and pushes `frontend/package-lock.json` alone; then CI, review, auto-merge, deploy.
+  Load-bearing bits:
+  - **`NpmLockPins` compares the lockfiles as JSON, never as a diff.** A regenerated entry gains
+    `resolved`/`integrity` lines and rewrites its own dependency ranges, so a line rule refuses an
+    ordinary update. Allowed: nothing added or removed, each moved entry up within its major to a
+    release, `resolved` exactly the registry tarball, SHA-512 `integrity`, no field outside
+    `MAY_CHANGE` (so no new `bin` or install script), at most 25 entries.
+  - **Not "only the named package".** `npm update postcss` moved nanoid and source-map-js too on
+    the real 2026-10-24 lockfile, so that rule would refuse the common case. The agent instead
+    requires every copy of the named package to reach the fix (`NpmLockPins.below`), on top of the
+    workflow's own report, which is never trusted alone.
+  - **The reviewer reads the whole lockfile raw at base and head** (GitHub omits the patch, and the
+    contents API stops base64 at 1 MB). **Whether a pin or lockfile check runs is decided by the
+    changed paths, not the supplied patches**: the first cut skipped the Gradle check when the
+    patch list was empty, which `factoryBumpWithoutPatchesIsNotArmed` caught.
+  - **One attempt**: regenerating gives the same lockfile, so a red CI is handed back as stuck.
+  - **Operator action: grant the GitHub App `Actions: read and write`.** `actions` is now asked
+    for at `write`, falling back to `read` (job logs) when only that is granted, so the token never
+    422s. Without `write`, npm repairs are handed back saying so.
+  - `software-factory`'s test task declares the workflow file as an input:
+    `NpmRepairWorkflowContractTest` reads it from the repo root, and without the declaration a
+    change to the workflow alone was served the cached result (found by mutation). The compose-file
+    tests read `docker-compose.prod.yml` the same way and have the same gap; not fixed here.
+  See `docs/runbooks/ticket-agent.md` ("npm repairs").
 - termtime-home-view: **Term Time opens on a home view, and reads every newsletter the school
   publishes.** A one-line ask bar, a heads-up strip of days that change, then Coming up and the
   latest newsletter in a 30-second summary. (A "From the school" card of recent emails shipped
@@ -373,7 +404,7 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
     `autoRepairEnabled`) and `getVersion("vulnerability-merge-policy")` in the ticket agent.
   - **Operator action:** `ticket-agent-intake` is created paused and was still paused on
     2026-10-23 (no `Ticket intake:` line in Loki for three days). Resume it from the console or
-    repair tickets wait in Linear. npm CVEs still go to a person (lockfile).
+    repair tickets wait in Linear. npm CVEs went to a person until `npm-cve-repair` (above).
   See `docs/runbooks/cvefix.md` ("Repair tickets").
 - blog-snippets: **Snippets now work on blog posts too**, not just news summaries: the admin
   selects text in any post at `/blogs/:id` and keeps it, and it lands in `/admin/snippets`
@@ -418,8 +449,9 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
     `cve-auto-repair`), and the reviewer's ordinary merge rules. Dependency versions
     and build scripts are pushable but always a person's merge; the full PR is checked on repairs.
     Accepted: CI executes edited build scripts with `SONAR_TOKEN` before human review, because a
-    person approves the ticket and merges it, and the analysis token is low-value. npm CVEs are
-    handed back: the agent cannot regenerate `package-lock.json`; Gradle bumps need no lockfile.
+    person approves the ticket and merges it, and the analysis token is low-value. npm CVEs were
+    handed back (the agent cannot regenerate `package-lock.json`) until `npm-cve-repair` moved
+    them to GitHub Actions; Gradle bumps need no lockfile.
   - **Linear is the record**: the label is the approval (the console adds it too), In Progress is
     claimed, In Review is green, Done is merged; a hand-back removes the label (adds
     `agent:stuck` on failure). A hand-back completes the workflow; only a crash fails it.

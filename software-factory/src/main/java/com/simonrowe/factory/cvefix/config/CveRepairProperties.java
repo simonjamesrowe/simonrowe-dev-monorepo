@@ -14,9 +14,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param agentLabel the ticket agent's hand-over label ({@code factory.ticket-agent.label})
  * @param osvBaseUrl where fixed versions are looked up
  * @param requestTimeout per OSV request
- * @param projects the Dependency-Track projects whose Maven components get repair tickets. The
- *     backend only: npm repairs need a regenerated {@code package-lock.json}, which the agent
- *     cannot produce, and the image projects carry base-OS packages no manifest here controls
+ * @param projects the Dependency-Track projects whose components get repair tickets: the backend's
+ *     Maven components and the frontend's npm packages. Not the image projects, which carry
+ *     base-OS packages no manifest here controls
  */
 @ConfigurationProperties("factory.cvefix.auto-repair")
 public record CveRepairProperties(
@@ -32,7 +32,7 @@ public record CveRepairProperties(
     requestTimeout = requestTimeout == null ? Duration.ofSeconds(20) : requestTimeout;
     projects =
         projects == null || projects.isEmpty()
-            ? List.of("simonrowe-dev/backend")
+            ? List.of("simonrowe-dev/backend", "simonrowe-dev/frontend")
             : List.copyOf(projects);
   }
 }

@@ -15,7 +15,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.simonrowe.factory.cvefix.domain.NpmRepairTitle;
 import com.simonrowe.factory.git.DependencyPins;
+import com.simonrowe.factory.git.NpmLockPins;
 import com.simonrowe.factory.git.RepositoryWorkspace;
 import com.simonrowe.factory.git.RepositoryWorkspaceFactory;
 import com.simonrowe.factory.linear.domain.IssueStateType;
@@ -34,7 +36,10 @@ import com.simonrowe.factory.ticketagent.domain.PullRequestRef;
 import com.simonrowe.factory.ticketagent.domain.PullRequestState;
 import com.simonrowe.factory.ticketagent.domain.TicketAgentSettings;
 import com.simonrowe.factory.ticketagent.github.TicketAgentGitHub;
+import com.simonrowe.factory.ticketagent.npm.NpmLockfileRepair;
+import com.simonrowe.factory.ticketagent.npm.NpmRepairUnavailableException;
 import io.temporal.failure.ApplicationFailure;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Arrays;
@@ -57,10 +62,11 @@ class TicketAgentActivitiesImplTest {
   private final TicketAgentEngine engine = mock(TicketAgentEngine.class);
   private final RepositoryWorkspaceFactory workspaces = mock(RepositoryWorkspaceFactory.class);
   private final RepositoryWorkspace workspace = mock(RepositoryWorkspace.class);
+  private final NpmLockfileRepair npmRepair = mock(NpmLockfileRepair.class);
   private final TicketAgentActivitiesImpl activities =
       new TicketAgentActivitiesImpl(
           TicketAgentTestProperties.of(true), linear, gitHub, engine, workspaces,
-          mock(TicketAgentService.class));
+          mock(TicketAgentService.class), npmRepair);
 
   @TempDir Path checkout;
 
@@ -338,14 +344,189 @@ class TicketAgentActivitiesImplTest {
     verify(gitHub).noteDependencyReview(271, 7L);
   }
 
+  private static final String INTEGRITY = "sha512-" + "abcdefghi+".repeat(8) + "abcdef==";
+  private static final String LOCK_BASE = """
+      {"lockfileVersion": 3, "packages": {"": {"name": "f"},
+        "node_modules/postcss": {"version": "8.5.6"}}}""";
+  private static final String LOCK_HEAD = """
+      {"lockfileVersion": 3, "packages": {"": {"name": "f"},
+        "node_modules/postcss": {"version": "8.5.31",
+          "resolved": "https://registry.npmjs.org/postcss/-/postcss-8.5.31.tgz",
+          "integrity": "%s"}}}""".formatted(INTEGRITY);
+
   @Test
-  void npmVulnerabilityRepairNeedsSomeone() {
+  void npmRepairWhoseLockfileOnlyMovesVersionsIsLeftForTheReviewer() {
+    when(gitHub.changedFiles(271, 7L)).thenReturn(files("frontend/package-lock.json"));
+    when(gitHub.headSha(271, 7L)).thenReturn("sha1");
+    when(gitHub.baseSha(271, 7L)).thenReturn("base1");
+    when(gitHub.lockfileAt("base1", 7L)).thenReturn(LOCK_BASE);
+    when(gitHub.lockfileAt("sha1", 7L)).thenReturn(LOCK_HEAD);
+
+    activities.markMergePolicy(271, false, true);
+
+    verify(gitHub).setLabel(271, "no-auto-merge", false, 7L);
+    verify(gitHub).noteVersionBump(271, 7L);
+  }
+
+  @Test
+  void npmRepairWhoseLockfileAddsPackageNeedsSomeone() {
+    when(gitHub.changedFiles(271, 7L)).thenReturn(files("frontend/package-lock.json"));
+    when(gitHub.headSha(271, 7L)).thenReturn("sha1");
+    when(gitHub.baseSha(271, 7L)).thenReturn("base1");
+    when(gitHub.lockfileAt("base1", 7L)).thenReturn(LOCK_BASE);
+    String postcss = "\"node_modules/postcss\"";
+    when(gitHub.lockfileAt("sha1", 7L))
+        .thenReturn(LOCK_HEAD.replace(postcss, "\"node_modules/evil\": {}, " + postcss));
+
+    activities.markMergePolicy(271, false, true);
+
+    verify(gitHub, never()).setLabel(271, "no-auto-merge", false, 7L);
+    verify(gitHub).noteDependencyReview(271, 7L);
+  }
+
+  @Test
+  void unreadableLockfileNeedsSomeone() {
+    when(gitHub.changedFiles(271, 7L)).thenReturn(files("frontend/package-lock.json"));
+    when(gitHub.headSha(271, 7L)).thenReturn("sha1");
+    when(gitHub.baseSha(271, 7L)).thenReturn("base1");
+
+    activities.markMergePolicy(271, false, true);
+
+    verify(gitHub, never()).setLabel(271, "no-auto-merge", false, 7L);
+  }
+
+  @Test
+  void npmManifestChangeNeedsSomeone() {
     when(gitHub.changedFiles(271, 7L)).thenReturn(files("frontend/package.json"));
 
     activities.markMergePolicy(271, false, true);
 
     verify(gitHub, never()).setLabel(271, "no-auto-merge", false, 7L);
     verify(gitHub).noteDependencyReview(271, 7L);
+  }
+
+  private static LinearTicket npmTicket(final String... labels) {
+    return new LinearTicket("issue-2", "SIM-120", "Bump npm package postcss to 8.5.10 (GHSA-a)",
+        "Body.", "https://linear/SIM-120", IssueStateType.TRIAGE, "Triage", List.of(labels), 2,
+        Instant.EPOCH);
+  }
+
+  private AttemptResult npmAttempt(final int attempt, final boolean dryRun) {
+    return activities.attempt(
+        new AttemptRequest(npmTicket("factory:agent", "factory:cvefix"), "agent/sim-120",
+            attempt, null, dryRun),
+        NO_HEARTBEAT);
+  }
+
+  private void baseLockfile() throws Exception {
+    Files.createDirectories(checkout.resolve("frontend"));
+    Files.writeString(checkout.resolve("frontend/package-lock.json"), LOCK_BASE);
+  }
+
+  private static NpmLockfileRepair.Outcome pushable() {
+    return new NpmLockfileRepair.Outcome(true, "", LOCK_HEAD,
+        List.of(new NpmLockPins.Change("postcss", "node_modules/postcss", "8.5.6", "8.5.31")),
+        "https://github.com/o/r/actions/runs/9");
+  }
+
+  @Test
+  void npmRepairPushesTheCheckedLockfileWithNoAgent() throws Exception {
+    baseLockfile();
+    when(npmRepair.run(eq(new NpmRepairTitle.Parsed("postcss", "8.5.10")), eq(LOCK_BASE), eq(7L),
+        any())).thenReturn(pushable());
+    when(workspaces.changedPaths(workspace, NO_HEARTBEAT))
+        .thenReturn(List.of("frontend/package-lock.json"));
+    when(workspaces.stagedDiff(workspace, NO_HEARTBEAT)).thenReturn("+++ b/x\n+ \"8.5.31\"\n");
+    when(workspaces.commitAndPush(eq(workspace), eq("agent/sim-120"),
+        eq("fix: update npm package postcss to 8.5.31"), anyString(), anyString(), eq(7L),
+        eq(true), any())).thenReturn("sha3");
+
+    AttemptResult result = npmAttempt(1, false);
+
+    assertThat(result.status()).isEqualTo(AttemptResult.Status.PUSHED);
+    assertThat(result.headSha()).isEqualTo("sha3");
+    assertThat(result.prBody()).contains("| `postcss` | 8.5.6 | 8.5.31 |", "SIM-120",
+        "No agent wrote this change", "actions/runs/9");
+    assertThat(Files.readString(checkout.resolve("frontend/package-lock.json")))
+        .isEqualTo(LOCK_HEAD);
+    verify(engine, never()).attempt(any(), anyString(), any());
+    verify(workspaces).create(anyString(), anyString(), any(), any(), anyString(), isNull(),
+        any());
+  }
+
+  @Test
+  void refusedNpmRepairPushesNothingAndSaysWhy() throws Exception {
+    baseLockfile();
+    when(npmRepair.run(any(), any(), any(), any())).thenReturn(
+        new NpmLockfileRepair.Outcome(false, "A dependent does not allow it.", null, List.of(),
+            null));
+
+    AttemptResult result = npmAttempt(1, false);
+
+    assertThat(result.status()).isEqualTo(AttemptResult.Status.NO_CHANGE);
+    assertThat(result.summary()).isEqualTo("A dependent does not allow it.");
+    verify(workspaces, never()).commitAndPush(any(), anyString(), anyString(), anyString(),
+        anyString(), any(), anyBoolean(), any());
+  }
+
+  @Test
+  void npmRepairThatCannotStartSaysWhichGrantIsMissing() throws Exception {
+    baseLockfile();
+    when(npmRepair.run(any(), any(), any(), any())).thenThrow(
+        new NpmRepairUnavailableException("grant it `actions: write`"));
+
+    AttemptResult result = npmAttempt(1, false);
+
+    assertThat(result.status()).isEqualTo(AttemptResult.Status.NO_CHANGE);
+    assertThat(result.summary()).contains("could not run", "actions: write");
+  }
+
+  @Test
+  void npmRepairThatTouchedAnotherFileIsNotPushed() throws Exception {
+    baseLockfile();
+    when(npmRepair.run(any(), any(), any(), any())).thenReturn(pushable());
+    when(workspaces.changedPaths(workspace, NO_HEARTBEAT))
+        .thenReturn(List.of("frontend/package-lock.json", "frontend/package.json"));
+
+    assertThat(npmAttempt(1, false).status()).isEqualTo(AttemptResult.Status.NO_CHANGE);
+    verify(workspaces, never()).commitAndPush(any(), anyString(), anyString(), anyString(),
+        anyString(), any(), anyBoolean(), any());
+  }
+
+  @Test
+  void laterNpmAttemptHandsBackWithoutRegenerating() {
+    AttemptResult result = npmAttempt(2, false);
+
+    assertThat(result.status()).isEqualTo(AttemptResult.Status.NO_CHANGE);
+    assertThat(result.summary()).contains("needs a person");
+    verify(npmRepair, never()).run(any(), any(), any(), any());
+    verify(workspaces, never()).create(anyString(), anyString(), any(), any(), anyString(), any(),
+        any());
+  }
+
+  @Test
+  void npmDryRunReturnsTheDiffAndPushesNothing() throws Exception {
+    baseLockfile();
+    when(npmRepair.run(any(), any(), any(), any())).thenReturn(pushable());
+    when(workspaces.changedPaths(workspace, NO_HEARTBEAT))
+        .thenReturn(List.of("frontend/package-lock.json"));
+    when(workspaces.stagedDiff(workspace, NO_HEARTBEAT)).thenReturn("diff");
+
+    AttemptResult result = npmAttempt(1, true);
+
+    assertThat(result.status()).isEqualTo(AttemptResult.Status.DRY_RUN);
+    assertThat(result.diff()).isEqualTo("diff");
+    verify(workspaces, never()).commitAndPush(any(), anyString(), anyString(), anyString(),
+        anyString(), any(), anyBoolean(), any());
+  }
+
+  /** Only a ticket the scan filed takes the npm path; a hand-written one goes to the agent. */
+  @Test
+  void onlyVulnerabilityTicketsInTheScansFormatTakeTheNpmPath() {
+    assertThat(TicketAgentActivitiesImpl.npmRepair(npmTicket("factory:agent", "factory:cvefix")))
+        .contains(new NpmRepairTitle.Parsed("postcss", "8.5.10"));
+    assertThat(TicketAgentActivitiesImpl.npmRepair(npmTicket("factory:agent"))).isEmpty();
+    assertThat(TicketAgentActivitiesImpl.npmRepair(ticket())).isEmpty();
   }
 
   @Test
