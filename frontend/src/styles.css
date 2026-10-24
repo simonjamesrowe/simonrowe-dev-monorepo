@@ -11869,11 +11869,24 @@ body[data-narration-bar] .app-layout__main {
    --------------------------------------------------------------------------- */
 
 .school-page {
-  /* Wide enough for the chat and the calendar side by side. The intro text keeps its own
-     narrower measure below, so widening the page does not stretch the paragraphs. */
-  max-width: 76rem;
+  /* Colours the whole page shares: the heads-up strip, the calendar card and the newsletter's
+     year tags all speak the same amber and green. Darker in light mode below, because the dark
+     theme's amber and green are too pale to read on white. */
+  --upcoming-amber: var(--secondary);
+  --upcoming-green: #8fe3b0;
+  --upcoming-violet: var(--ai-accent);
+  --school-card-shadow: 0 1px 2px rgba(0, 0, 0, 0.12), 0 6px 20px rgba(0, 0, 0, 0.08);
+  /* Term Time's own accent rather than --color-primary. The CoParent stylesheet's frozen
+     utility blob sets `--color-primary: teal` on :root for every page, so the site token is a
+     named colour that --on-primary was never chosen against: navy text on it in dark mode is
+     about 2.9:1. These are tuned for 4.5:1 or better on both themes. */
+  --school-accent: #3fb5a7;
+  --school-accent-rgb: 63, 181, 167;
+  --school-on-accent: #04201d;
+
+  max-width: 80rem;
   margin: 0 auto;
-  padding: 2rem 1.25rem 3rem;
+  padding: 0 1.25rem 2.5rem;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -11881,31 +11894,625 @@ body[data-narration-bar] .app-layout__main {
   color: var(--color-text);
 }
 
-.school-page__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
+[data-theme="light"] .school-page {
+  --school-accent: #1f6f66;
+  --school-accent-rgb: 31, 111, 102;
+  --school-on-accent: #ffffff;
+  --upcoming-amber: #c2410c;
+  --upcoming-green: #15803d;
+  --school-card-shadow: 0 1px 2px rgba(20, 24, 40, 0.05), 0 4px 16px rgba(20, 24, 40, 0.05);
 }
 
-.school-page__title {
+/* Header: name, school, year groups and theme on one row. */
+
+.school-top {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  color: var(--color-primary);
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  padding: 1.1rem 0;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid var(--color-border);
 }
 
-.school-page__title h1 {
+.school-top__brand {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin-right: auto;
+}
+
+.school-top__mark {
+  display: grid;
+  place-items: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 10px;
+  background: var(--school-accent);
+  color: var(--school-on-accent);
+}
+
+.school-top__name {
   margin: 0;
-  font-size: 1.6rem;
+  font-family: var(--font-heading);
+  font-size: 1.3rem;
+  line-height: 1.15;
   color: var(--color-text);
 }
 
-.school-page__actions {
+.school-top__school {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.school-top__theme {
+  flex-shrink: 0;
+}
+
+/* Year selector, as a row of chips in the header. */
+
+.school-years {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+
+/* The legend still names the group for a screen reader; the chips say it to everyone else. */
+.school-years__legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/*
+ * The checkbox itself is hidden but still focusable and still the thing that toggles: the chip
+ * is a <label> wrapping it, so keyboard and screen-reader users get real checkbox semantics
+ * while sighted users get the chip. display:none would remove it from the tab order.
+ */
+.school-years__checkbox {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+
+.school-years__option:focus-within {
+  outline: 2px solid var(--school-accent);
+  outline-offset: 1px;
+}
+
+.school-years__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.school-years__option {
+  position: relative;
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.school-years__option:hover {
+  border-color: var(--school-accent);
+  color: var(--school-accent);
+}
+
+.school-years__option--on,
+.school-years__option--on:hover {
+  background: var(--school-accent);
+  border-color: var(--school-accent);
+  color: var(--school-on-accent);
+  font-weight: 600;
+}
+
+/* Home view: the question box, the heads-up strip, then three cards. */
+
+.school-home {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.school-ask__bar {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.75rem;
+  padding: 0.55rem 0.55rem 0.55rem 1.1rem;
+  border: 1.5px solid color-mix(in srgb, var(--school-accent) 35%, var(--color-border));
+  border-radius: 16px;
+  background: var(--color-surface);
+  box-shadow: 0 0 0 5px rgba(var(--school-accent-rgb), 0.07), var(--school-card-shadow);
+}
+
+.school-ask__bar:focus-within {
+  border-color: var(--school-accent);
+}
+
+.school-ask__icon {
   flex-shrink: 0;
+  color: var(--ai-accent);
+}
+
+.school-ask__field {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 1rem;
+  padding: 0.45rem 0;
+}
+
+.school-ask__field:focus {
+  outline: none;
+}
+
+.school-ask__field::placeholder {
+  color: var(--color-text-muted);
+}
+
+.school-ask__send {
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 0;
+  border-radius: 11px;
+  background: var(--school-accent);
+  color: var(--school-on-accent);
+  cursor: pointer;
+}
+
+.school-ask__send:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.school-ask__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.7rem;
+}
+
+.school-ask__chip,
+.school-ask__resume {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.8rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.school-ask__chip:hover,
+.school-ask__resume:hover {
+  border-color: var(--school-accent);
+  color: var(--school-accent);
+}
+
+.school-ask__resume {
+  border-color: var(--school-accent);
+  color: var(--school-accent);
+  font-weight: 600;
+}
+
+.school-ask__chip:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.school-home__cards {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+/* Days that change: half terms, INSET days and term dates. */
+
+.school-headsup__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.school-headsup--compact .school-headsup__list {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.4rem;
+}
+
+.school-headsup__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.2rem 0.6rem;
+  width: 100%;
+  height: 100%;
+  padding: 0.65rem 0.9rem;
+  border: 1px solid color-mix(in srgb, var(--upcoming-amber) 45%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--upcoming-amber) 11%, transparent);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.87rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.school-headsup__item:hover {
+  background: color-mix(in srgb, var(--upcoming-amber) 18%, transparent);
+}
+
+.school-headsup__item--calm {
+  border-color: color-mix(in srgb, var(--upcoming-green) 45%, transparent);
+  background: color-mix(in srgb, var(--upcoming-green) 10%, transparent);
+}
+
+.school-headsup__item--calm:hover {
+  background: color-mix(in srgb, var(--upcoming-green) 16%, transparent);
+}
+
+.school-headsup__tag {
+  font-weight: 700;
+  color: var(--upcoming-amber);
+}
+
+.school-headsup__item--calm .school-headsup__tag {
+  color: var(--upcoming-green);
+}
+
+.school-headsup__when {
+  font-weight: 600;
+}
+
+.school-headsup__what {
+  color: var(--color-text-muted);
+}
+
+.school-headsup__item:focus-visible {
+  outline: 2px solid var(--school-accent);
+  outline-offset: 1px;
+}
+
+/* Cards: the shared frame of Coming up, the newsletter and From the school. */
+
+.school-card,
+.school-upcoming {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--color-surface);
+  box-shadow: var(--school-card-shadow);
+  overflow: hidden;
+}
+
+.school-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.95rem 1.15rem 0;
+}
+
+.school-card__title {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 1rem;
+}
+
+.school-card__title svg {
+  color: var(--school-accent);
+}
+
+.school-card__meta {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+
+.school-card__body {
+  padding: 0.8rem 1.15rem 1.1rem;
+}
+
+.school-card__status {
+  margin: 0;
+  font-size: 0.86rem;
+  color: var(--color-text-muted);
+}
+
+.school-card--compact .school-card__head {
+  padding: 0.8rem 1rem 0;
+}
+
+.school-card--compact .school-card__title {
+  font-size: 0.92rem;
+}
+
+.school-card--compact .school-card__body {
+  padding: 0.55rem 1rem 0.9rem;
+}
+
+.school-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.85rem;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.school-button:hover {
+  border-color: var(--school-accent);
+  color: var(--school-accent);
+}
+
+.school-button--ai {
+  border-color: color-mix(in srgb, var(--ai-accent) 35%, transparent);
+  background: var(--ai-accent-bg);
+  color: var(--ai-accent);
+}
+
+.school-button--ai:hover {
+  border-color: var(--ai-accent);
+  color: var(--ai-accent);
+}
+
+.school-button:focus-visible {
+  outline: 2px solid var(--school-accent);
+  outline-offset: 1px;
+}
+
+/* The newsletter card. */
+
+.school-newsletter__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  background: var(--ai-accent-bg);
+  color: var(--ai-accent);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.school-newsletter__headline {
+  margin: 0.6rem 0 0;
+  font-family: var(--font-heading);
+  font-size: 1.2rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.school-card--compact .school-newsletter__headline {
+  margin-top: 0;
+  font-size: 0.95rem;
+}
+
+.school-newsletter__points {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0.8rem 0 0;
+  padding: 0 0 0 1.1rem;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.school-newsletter__point::marker {
+  color: var(--school-accent);
+}
+
+.school-card--compact .school-newsletter__points {
+  gap: 0.3rem;
+  margin-top: 0.45rem;
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+}
+
+.school-newsletter__years {
+  display: inline-block;
+  margin-left: 0.4rem;
+  padding: 0 0.45rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--school-accent) 14%, transparent);
+  color: var(--school-accent);
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.school-newsletter__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.school-card--compact .school-newsletter__actions {
+  margin-top: 0.7rem;
+}
+
+.school-newsletter__archive {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 1rem;
+  padding-top: 0.85rem;
+  border-top: 1px dashed var(--color-border);
+}
+
+.school-newsletter__issue {
+  padding: 0.2rem 0.65rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--surface-container-high);
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.school-newsletter__issue--on {
+  background: var(--color-text);
+  color: var(--color-bg);
+  font-weight: 600;
+}
+
+.school-newsletter__issue:focus-visible {
+  outline: 2px solid var(--school-accent);
+  outline-offset: 1px;
+}
+
+/* From the school. */
+
+.school-messages__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.school-messages__list li + li {
+  border-top: 1px solid var(--color-border);
+}
+
+.school-messages__item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.1rem 0.5rem;
+  width: 100%;
+  padding: 0.6rem 0.4rem;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.school-messages__item:hover,
+.school-messages__item:focus-visible {
+  background: var(--surface-container-high);
+}
+
+.school-messages__item:focus-visible {
+  outline: 2px solid var(--school-accent);
+  outline-offset: 1px;
+}
+
+.school-messages__title {
+  font-size: 0.88rem;
+  font-weight: 500;
+}
+
+.school-messages__meta {
+  grid-column: 1;
+  font-size: 0.76rem;
+  color: var(--color-text-muted);
+}
+
+.school-messages__ask {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  display: inline-flex;
+  color: var(--upcoming-violet);
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.school-messages__item:hover .school-messages__ask,
+.school-messages__item:focus-visible .school-messages__ask {
+  opacity: 1;
+}
+
+/* Conversation view: the chat takes the wide column and the cards fold into a rail. */
+
+.school-convo {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 22rem;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+/*
+ * The conversation. Tall enough that the input sits near the bottom of the screen, and the
+ * transcript scrolls inside it rather than pushing the input off the page.
+ */
+.school-page__chat {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 9rem);
+  min-height: 26rem;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--color-surface);
+  box-shadow: var(--school-card-shadow);
+  overflow: hidden;
+}
+
+.school-convo__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.school-convo__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.4rem;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.school-convo__back:hover {
+  color: var(--school-accent);
 }
 
 .school-page__clear {
@@ -11923,67 +12530,41 @@ body[data-narration-bar] .app-layout__main {
 }
 
 .school-page__clear:hover {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
-}
-
-.school-page__strapline {
-  margin: 0.35rem 0 0.5rem;
-  color: var(--color-text-muted);
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.school-page__beta {
-  display: inline-block;
-  padding: 0.05rem 0.45rem;
-  border-radius: 999px;
-  border: 1px solid var(--color-primary);
-  color: var(--color-primary);
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  flex-shrink: 0;
-}
-
-.school-page__beta-note {
-  max-width: 52rem;
-  margin: 0 0 1.4rem;
-  font-size: 0.82rem;
-  line-height: 1.5;
-  color: var(--color-text-muted);
-  padding: 0.6rem 0.8rem;
-  border-left: 3px solid var(--color-primary);
-  background: var(--color-primary-subtle);
-  border-radius: 0 8px 8px 0;
-}
-
-/*
- * The conversation area. Flex-grows so the input stays at the bottom on a tall
- * screen and the transcript scrolls rather than pushing it off the page.
- */
-.school-page__chat {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 24rem;
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-  background: var(--color-surface);
-  overflow: hidden;
+  border-color: var(--school-accent);
+  color: var(--school-accent);
 }
 
 .school-page__chat .chat-panel__messages {
   flex: 1;
   overflow-y: auto;
-  padding: 1.25rem;
+  padding: 1.25rem 1.5rem;
+}
+
+.school-page__chat .chat-input {
+  margin: 0 1rem;
+}
+
+.school-page__chat .chat-input__counter {
+  margin: 0.25rem 1rem 0.6rem;
+}
+
+.school-convo__rail {
+  position: sticky;
+  top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+}
+
+/* The rail scrolls as a whole; without this its cards shrink to fit and clip their own lists. */
+.school-convo__rail > * {
+  flex-shrink: 0;
 }
 
 .school-page__error {
-  margin: 0.75rem 1.25rem;
+  margin: 0.75rem 0;
   padding: 0.7rem 0.9rem;
   border-radius: 8px;
   background: var(--color-primary-subtle);
@@ -11999,7 +12580,7 @@ body[data-narration-bar] .app-layout__main {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
-  margin: 0.75rem 1.25rem;
+  margin: 0.75rem 0;
   padding: 0.55rem 0.9rem;
   border: 1px solid var(--color-border);
   border-radius: 8px;
@@ -12007,9 +12588,10 @@ body[data-narration-bar] .app-layout__main {
   font-size: 0.85rem;
 }
 
+/* How this works, in the footer. */
 
 .school-about {
-  margin: 0 0 1.25rem;
+  margin: 0 0 0.75rem;
 }
 
 .school-about__toggle {
@@ -12026,7 +12608,7 @@ body[data-narration-bar] .app-layout__main {
 }
 
 .school-about__toggle:hover {
-  color: var(--color-primary);
+  color: var(--school-accent);
 }
 
 .school-about__body {
@@ -12037,6 +12619,7 @@ body[data-narration-bar] .app-layout__main {
   background: var(--color-surface);
   font-size: 0.87rem;
   line-height: 1.55;
+  color: var(--color-text);
 }
 
 .school-about__body h3 {
@@ -12069,7 +12652,7 @@ body[data-narration-bar] .app-layout__main {
 }
 
 .school-page__footer {
-  margin-top: 1.5rem;
+  margin-top: 2rem;
   padding-top: 1rem;
   border-top: 1px solid var(--color-border);
   font-size: 0.82rem;
@@ -12077,117 +12660,10 @@ body[data-narration-bar] .app-layout__main {
 }
 
 .school-page__disclaimer {
-  margin: 0;
+  margin: 0 0 0.5rem;
 }
 
-/* Year selector */
-
-.school-years {
-  border: 0;
-  padding: 0;
-  margin: 0 0 1.25rem;
-}
-
-.school-years__legend {
-  padding: 0;
-  font-weight: 600;
-  font-size: 0.88rem;
-  margin-bottom: 0.55rem;
-  color: var(--color-text);
-}
-
-.school-years__hint {
-  font-weight: 400;
-  color: var(--color-text-muted);
-}
-
-/*
- * The checkbox itself is hidden but still focusable and still the thing that toggles: the chip
- * is a <label> wrapping it, so keyboard and screen-reader users get real checkbox semantics
- * while sighted users get the chip. display:none would remove it from the tab order.
- */
-.school-years__checkbox {
-  position: absolute;
-  opacity: 0;
-  width: 1px;
-  height: 1px;
-}
-
-.school-years__option:focus-within {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 1px;
-}
-
-.school-years__options {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-}
-
-.school-years__option {
-  font: inherit;
-  font-size: 0.87rem;
-  padding: 0.32rem 0.8rem;
-  border-radius: 999px;
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  color: var(--color-text-muted);
-  cursor: pointer;
-}
-
-.school-years__option:hover {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
-}
-
-.school-years__option--on {
-  background: var(--color-primary);
-  border-color: var(--color-primary);
-  color: var(--color-bg);
-  font-weight: 600;
-}
-
-/*
- * Term Time's two panes: the chat, and the calendar beside it. On a narrow screen they take
- * turns behind the two toggle buttons, and the body's data-tab says which one is showing.
- */
-.school-page__tabs {
-  display: none;
-}
-
-.school-page__body {
-  flex: 1;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 23rem;
-  gap: 1.25rem;
-}
-
-.school-page__upcoming {
-  min-width: 0;
-}
-
-.school-upcoming {
-  --upcoming-amber: var(--secondary);
-  --upcoming-green: #8fe3b0;
-  --upcoming-violet: var(--ai-accent);
-
-  /* Stays in view while a long conversation scrolls the page. */
-  position: sticky;
-  top: 1rem;
-  max-height: calc(100vh - 2rem);
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-  background: var(--color-surface-subtle);
-  overflow: hidden;
-}
-
-/* Darker in light mode: the dark theme's amber and green are too pale to read on white. */
-[data-theme="light"] .school-upcoming {
-  --upcoming-amber: #c2410c;
-  --upcoming-green: #15803d;
-}
+/* Coming up. */
 
 .school-upcoming__head {
   display: flex;
@@ -12195,8 +12671,7 @@ body[data-narration-bar] .app-layout__main {
   align-items: center;
   justify-content: space-between;
   gap: 0.6rem;
-  padding: 0.85rem 1rem 0.75rem;
-  border-bottom: 1px solid var(--color-border);
+  padding: 0.95rem 1.15rem 0;
 }
 
 .school-upcoming__title {
@@ -12204,30 +12679,26 @@ body[data-narration-bar] .app-layout__main {
   align-items: center;
   gap: 0.45rem;
   margin: 0;
+  font-family: var(--font-heading);
   font-size: 1rem;
 }
 
 .school-upcoming__title svg {
-  color: var(--color-primary);
+  color: var(--school-accent);
 }
 
-.school-upcoming__ranges,
-.school-page__tabs {
+.school-upcoming__ranges {
+  display: flex;
   padding: 3px;
   gap: 2px;
   border-radius: 999px;
   background: var(--surface-container-high);
 }
 
-.school-upcoming__ranges {
-  display: flex;
-}
-
-.school-upcoming__range,
-.school-page__tab {
+.school-upcoming__range {
   font: inherit;
-  font-size: 0.78rem;
-  padding: 0.25rem 0.65rem;
+  font-size: 0.74rem;
+  padding: 0.2rem 0.55rem;
   border: 0;
   border-radius: 999px;
   background: transparent;
@@ -12235,36 +12706,29 @@ body[data-narration-bar] .app-layout__main {
   cursor: pointer;
 }
 
-.school-upcoming__range:hover,
-.school-page__tab:hover {
+.school-upcoming__range:hover {
   color: var(--color-text);
 }
 
 .school-upcoming__range--on,
-.school-upcoming__range--on:hover,
-.school-page__tab--on,
-.school-page__tab--on:hover {
-  background: var(--color-primary);
-  color: var(--on-primary);
+.school-upcoming__range--on:hover {
+  background: var(--school-accent);
+  color: var(--school-on-accent);
   font-weight: 600;
 }
 
 .school-upcoming__range:focus-visible,
-.school-page__tab:focus-visible,
 .school-upcoming__event:focus-visible,
-.school-upcoming__heads-up-item:focus-visible,
 .school-upcoming__retry:focus-visible {
-  outline: 2px solid var(--color-primary);
+  outline: 2px solid var(--school-accent);
   outline-offset: 1px;
 }
 
 .school-upcoming__body {
-  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 0.9rem;
-  padding: 0.9rem 1rem;
-  overflow-y: auto;
+  padding: 0.85rem 1rem 1rem;
 }
 
 .school-upcoming__list {
@@ -12274,15 +12738,10 @@ body[data-narration-bar] .app-layout__main {
 }
 
 .school-upcoming__today {
-  padding: 0.75rem 0.6rem 0.55rem;
-  border: 1px solid rgba(var(--primary-rgb), 0.45);
+  padding: 0.65rem 0.5rem 0.5rem;
+  border: 1px solid rgba(var(--school-accent-rgb), 0.35);
   border-radius: 12px;
-  background: linear-gradient(
-    135deg,
-    rgba(var(--primary-rgb), 0.14),
-    rgba(var(--primary-rgb), 0.03)
-  );
-  box-shadow: 0 0 18px rgba(var(--primary-rgb), 0.1);
+  background: rgba(var(--school-accent-rgb), 0.06);
 }
 
 .school-upcoming__today-date {
@@ -12291,42 +12750,13 @@ body[data-narration-bar] .app-layout__main {
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--color-primary);
+  color: var(--school-accent);
 }
 
 .school-upcoming__today-empty {
   margin: 0.15rem 0.5rem 0.2rem;
-  font-size: 0.88rem;
+  font-size: 0.86rem;
   color: var(--color-text-muted);
-}
-
-.school-upcoming__heads-up {
-  padding: 0.3rem;
-  border: 1px solid color-mix(in srgb, var(--upcoming-amber) 55%, transparent);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--upcoming-amber) 12%, transparent);
-}
-
-.school-upcoming__heads-up-item {
-  display: block;
-  width: 100%;
-  padding: 0.3rem 0.5rem;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--color-text);
-  font: inherit;
-  font-size: 0.85rem;
-  text-align: left;
-  cursor: pointer;
-}
-
-.school-upcoming__heads-up-item:hover {
-  background: color-mix(in srgb, var(--upcoming-amber) 14%, transparent);
-}
-
-.school-upcoming__heads-up-item strong {
-  color: var(--upcoming-amber);
 }
 
 .school-upcoming__day-name {
@@ -12374,7 +12804,7 @@ body[data-narration-bar] .app-layout__main {
   width: 0.5rem;
   height: 0.5rem;
   border-radius: 50%;
-  background: var(--color-primary);
+  background: var(--school-accent);
 }
 
 .school-upcoming__event--club .school-upcoming__dot {
@@ -12423,7 +12853,8 @@ body[data-narration-bar] .app-layout__main {
 }
 
 @media (hover: none) {
-  .school-upcoming__ask {
+  .school-upcoming__ask,
+  .school-messages__ask {
     opacity: 0.7;
   }
 }
@@ -12453,8 +12884,8 @@ body[data-narration-bar] .app-layout__main {
 }
 
 .school-upcoming__retry:hover {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
+  border-color: var(--school-accent);
+  color: var(--school-accent);
 }
 
 .school-upcoming__foot {
@@ -12463,10 +12894,27 @@ body[data-narration-bar] .app-layout__main {
   justify-content: space-between;
   gap: 0.5rem 0.75rem;
   margin: 0;
-  padding: 0.6rem 1rem;
+  padding: 0.6rem 1.15rem;
   border-top: 1px solid var(--color-border);
   font-size: 0.72rem;
   color: var(--color-text-muted);
+}
+
+.school-upcoming--compact .school-upcoming__head {
+  padding: 0.8rem 1rem 0;
+}
+
+.school-upcoming--compact .school-upcoming__title {
+  font-size: 0.92rem;
+}
+
+.school-upcoming--compact .school-upcoming__body {
+  padding: 0.6rem 0.75rem 0.75rem;
+  gap: 0.6rem;
+}
+
+.school-upcoming--compact .school-upcoming__foot {
+  display: none;
 }
 
 .school-upcoming__sr {
@@ -12479,36 +12927,58 @@ body[data-narration-bar] .app-layout__main {
   white-space: nowrap;
 }
 
-@media (max-width: 60rem) {
-  .school-page__tabs {
-    display: flex;
-    margin: 0 0 0.9rem;
+@media (max-width: 68rem) {
+  .school-home__cards {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
 
-  .school-page__tab {
-    flex: 1;
-    padding: 0.45rem 0.65rem;
-    font-size: 0.88rem;
-  }
-
-  .school-page__body {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .school-page__body[data-tab='upcoming'] .school-page__chat,
-  .school-page__body[data-tab='ask'] .school-page__upcoming {
-    display: none;
-  }
-
-  .school-upcoming {
-    position: static;
-    max-height: none;
+  /* The newsletter is the widest card; on two columns it gets a row of its own. */
+  .school-home__cards .school-newsletter {
+    grid-column: 1 / -1;
+    grid-row: 1;
   }
 }
 
-@media (max-width: 34rem) {
+@media (max-width: 60rem) {
+  .school-convo {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .school-page__chat {
+    height: calc(100vh - 12rem);
+  }
+
+  .school-convo__rail {
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
+}
+
+@media (max-width: 44rem) {
   .school-page {
-    padding: 1.25rem 0.9rem 2rem;
+    padding: 0 0.9rem 2rem;
+  }
+
+  .school-top {
+    margin-bottom: 1rem;
+  }
+
+  /* On a phone the year chips scroll sideways under the name rather than wrapping to three
+     rows and pushing the question box off the first screen. */
+  .school-years {
+    order: 3;
+    width: 100%;
+  }
+
+  .school-years__options {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 0.2rem;
+  }
+
+  .school-home__cards {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .school-page__chat .chat-panel__messages {

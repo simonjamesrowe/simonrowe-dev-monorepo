@@ -17,13 +17,18 @@ vi.mock('../../src/school/schoolChatService', () => ({
   isConnected: () => true,
 }))
 
+vi.mock('../../src/school/schoolNewsApi', () => ({
+  fetchNewsletters: () => new Promise(() => {}),
+  fetchSchoolMessages: () => new Promise(() => {}),
+}))
+
 const fetchSchoolCalendar = vi.fn()
 vi.mock('../../src/school/schoolCalendarApi', () => ({
   fetchSchoolCalendar: (...a: unknown[]) => fetchSchoolCalendar(...a),
   CalendarUnavailableError: class extends Error {},
 }))
 
-describe('the calendar pane beside the chat', () => {
+describe('the Coming up card', () => {
   it('asks the chat about a clicked event with the visitor’s year groups, and shows the answer', async () => {
     window.localStorage.setItem('term-time-year-groups', JSON.stringify(['Year 3']))
     fetchSchoolCalendar.mockResolvedValue({
@@ -46,11 +51,8 @@ describe('the calendar pane beside the chat', () => {
     })
     render(<App />)
 
-    // On a narrow screen the page opens on the calendar.
-    expect(screen.getByRole('button', { name: 'Coming up' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    )
+    // The page opens on the home view, with the calendar and no conversation.
+    expect(screen.queryByRole('region', { name: 'Conversation' })).toBeNull()
     expect(fetchSchoolCalendar.mock.calls[0][0]).toEqual(['Year 3'])
 
     fireEvent.click(await screen.findByText('Horniman Museum trip'))
@@ -60,7 +62,9 @@ describe('the calendar pane beside the chat', () => {
       message: 'Tell me more about "Horniman Museum trip" on Thursday 15 October.',
       yearGroups: ['Year 3'],
     })
-    expect(screen.getByRole('button', { name: 'Ask' })).toHaveAttribute('aria-pressed', 'true')
+    // Asking switches to the conversation, with the calendar still beside it.
+    expect(screen.getByRole('region', { name: 'Conversation' })).toBeInTheDocument()
+    expect(screen.getByText('Horniman Museum trip')).toBeInTheDocument()
     window.localStorage.clear()
   })
 })

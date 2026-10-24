@@ -69,6 +69,9 @@ public class BackupService {
       // Fetch/ignore decisions on links found in email. Losing these re-offers every
       // link already declined, which is the one outcome that makes the queue useless.
       "school_links",
+      // Newsletter summaries cost a model call each, and the page shows a newsletter with no
+      // summary until the hourly run gets to it, at most three an hour.
+      "school_newsletter_summaries",
       // The home page hero's copy, edited in the CMS. Nothing re-derives it: without it a
       // restore silently falls back to the built-in default wording.
       "home_page",

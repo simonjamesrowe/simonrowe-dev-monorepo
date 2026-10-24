@@ -1,4 +1,4 @@
-import { GraduationCap, Moon, Sun, Trash2 } from 'lucide-react'
+import { ArrowLeft, GraduationCap, Moon, Sun, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { track } from '../analytics/analytics'
@@ -15,11 +15,17 @@ import {
 import type { ChatMessageModel } from '../components/chat/chatTypes'
 import type { ChatResponse } from '../services/chatService'
 import { probeSiteStatus, reloadPage } from '../services/siteStatus'
+import { AskBar } from './components/AskBar'
+import { HeadsUpStrip } from './components/HeadsUpStrip'
 import { HowItWorks } from './components/HowItWorks'
+import { NewsletterCard } from './components/NewsletterCard'
+import { SchoolMessagesCard } from './components/SchoolMessagesCard'
 import { UpcomingPanel } from './components/UpcomingPanel'
 import { YearSelector } from './components/YearSelector'
 import * as schoolChat from './schoolChatService'
 import type { SchoolConnectionState } from './schoolChatService'
+import { useSchoolCalendar } from './useSchoolCalendar'
+import { useSchoolNews } from './useSchoolNews'
 
 const YEAR_STORAGE_KEY = 'term-time-year-groups'
 const SCHOOL_URL = 'https://www.kilmorieschool.co.uk'
@@ -33,10 +39,17 @@ const SCHOOL_URL = 'https://www.kilmorieschool.co.uk'
  */
 const SITE_STATUS_POLL_MS = 10_000
 
-type MobileTab = 'upcoming' | 'ask'
+/**
+ * Which layout the page shows. `home` leads with what is going on at school under a one-line
+ * question box; `conversation` gives the chat the wide column and folds the cards into a rail.
+ */
+type PageView = 'home' | 'conversation'
 
-/** Where a question came from, for analytics: typed, a suggestion chip, the calendar, or `?q=`. */
-type QuestionSource = 'input' | 'chip' | 'calendar' | 'link'
+/**
+ * Where a question came from, for analytics: typed, a suggestion chip, the calendar, `?q=`, the
+ * newsletter card or the "From the school" card.
+ */
+type QuestionSource = 'input' | 'chip' | 'calendar' | 'link' | 'newsletter' | 'message'
 
 /** The question in flight, for the analytics event its answer closes. Never the question's text. */
 interface PendingAnswer {
@@ -61,7 +74,7 @@ const SUGGESTIONS = [
   'When is half term?',
   'When are the INSET days?',
   "What's on this week?",
-  'When do enrichment clubs start?',
+  "What did last week's newsletter say?",
 ]
 
 /**
@@ -164,10 +177,11 @@ export default function App() {
   // address is sent with the visitor's year groups and not with an empty selection.
   const [yearGroups, setYearGroups] = useState<string[]>(readStoredYearGroups)
   const [initialQuestion] = useState<string | null>(takeQuestionFromAddress)
-  // Which pane a narrow screen shows; on a wide one both are visible and this is ignored. Opens
-  // on the calendar, because "what's on today" then needs no typing, unless the address handed
-  // over a question, whose answer is what the visitor came for.
-  const [mobileTab, setMobileTab] = useState<MobileTab>(initialQuestion ? 'ask' : 'upcoming')
+  // Opens on the home view, because "is there school on Monday" then needs no typing, unless the
+  // address handed over a question, whose answer is what the visitor came for.
+  const [view, setView] = useState<PageView>(initialQuestion ? 'conversation' : 'home')
+  const calendar = useSchoolCalendar(yearGroups)
+  const news = useSchoolNews()
   const initialQuestionSentRef = useRef(false)
   const sessionIdRef = useRef<string>(newSessionId())
   const endRef = useRef<HTMLDivElement>(null)
@@ -310,6 +324,7 @@ export default function App() {
     setMessages([])
     setError(null)
     setAwaiting(false)
+    setView('home')
     schoolChat.connect(sessionIdRef.current, handlers)
   }
 
@@ -329,6 +344,7 @@ export default function App() {
       pendingAnswerRef.current = { startedAt: performance.now(), toolCount: 0 }
       setError(null)
       setAwaiting(true)
+      setView('conversation')
 
       const now = formatTimestamp()
       setMessages((prior) => [
@@ -354,13 +370,14 @@ export default function App() {
     [awaiting, yearGroups],
   )
 
-  const askAboutEvent = useCallback(
-    (question: string) => {
-      setMobileTab('ask')
-      void send(question.slice(0, MAX_QUESTION_LENGTH), 'calendar')
-    },
+  const askFrom = useCallback(
+    (source: QuestionSource) => (question: string) =>
+      void send(question.slice(0, MAX_QUESTION_LENGTH), source),
     [send],
   )
+  const askAboutEvent = useMemo(() => askFrom('calendar'), [askFrom])
+  const askAboutNewsletter = useMemo(() => askFrom('newsletter'), [askFrom])
+  const askAboutMessage = useMemo(() => askFrom('message'), [askFrom])
 
   // Sent without waiting for the socket: the transport holds one message until the connection
   // it is already opening is up. Deferred a tick and cancelled on cleanup because a development
@@ -374,161 +391,141 @@ export default function App() {
     return () => clearTimeout(timer)
   }, [initialQuestion, send])
 
+  /*
+    Nothing to press, and nothing to see for the first several seconds.
+
+    'connecting' is where every visit starts, so a notice there would fire on every single page
+    load. 'reconnecting' is a socket that dropped and is already coming back — typically inside
+    a second — and saying so would be noise about something the reader cannot act on and will
+    not outlast. Only 'offline', which the transport reaches after the retries have genuinely
+    not worked, says anything, and what it says is that it is still trying. The retry is
+    automatic, and a question typed in the meantime is held and sent the moment the socket
+    returns.
+
+    role="status" rather than role="alert": this is polite, and a screen reader interrupting an
+    answer being read out to announce a reconnection is worse than the reconnection.
+  */
+  const connectionNotice = connection === 'offline' && (
+    <p className="school-page__notice" role="status">
+      Reconnecting to Term Time…
+    </p>
+  )
+  const errorNotice = error && <p className="school-page__error">{error}</p>
+
   return (
     <div className="school-page">
-      <header className="school-page__header">
-        <div className="school-page__title">
-          <GraduationCap size={24} aria-hidden="true" />
-          <h1>Term Time</h1>
+      <header className="school-top">
+        <div className="school-top__brand">
+          <span className="school-top__mark" aria-hidden="true">
+            <GraduationCap size={20} />
+          </span>
+          <div>
+            <h1 className="school-top__name">Term Time</h1>
+            <p className="school-top__school">Kilmorie Primary School</p>
+          </div>
         </div>
-        <div className="school-page__actions">
-          {messages.length > 0 && (
-            <button
-              type="button"
-              className="school-page__clear"
-              onClick={clearChat}
-              aria-label="Clear this conversation"
-            >
-              <Trash2 size={15} aria-hidden="true" />
-              Clear chat
-            </button>
-          )}
-          <button
-            type="button"
-            className="nav__theme-toggle"
-            aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-            onClick={toggleTheme}
-          >
-            {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
-          </button>
-        </div>
+        <YearSelector yearGroups={YEAR_GROUPS} selected={yearGroups} onChange={chooseYears} />
+        <button
+          type="button"
+          className="nav__theme-toggle school-top__theme"
+          aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          onClick={toggleTheme}
+        >
+          {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+        </button>
       </header>
 
-      <p className="school-page__strapline">
-        <span className="school-page__beta">Beta</span>
-        Questions about Kilmorie Primary School — term dates, events, clubs and arrangements.
-      </p>
-
-      {/*
-        Stated at the top rather than buried in the footer disclaimer. Someone deciding whether
-        to act on an answer about their child's school should see this before they read it, not
-        after.
-      */}
-      <p className="school-page__beta-note">
-        This is an early version, built by a parent and not by the school. It can be wrong or
-        out of date — please check anything important against the school&rsquo;s own
-        communications.
-      </p>
-
-      <YearSelector yearGroups={YEAR_GROUPS} selected={yearGroups} onChange={chooseYears} />
-
-      <HowItWorks />
-
-      {/*
-        Shown only on a narrow screen, where the two panes take turns. Toggle buttons rather than
-        ARIA tabs: on a wide screen these are hidden and both panes are visible, and tab panels
-        with no tabs would be announced as something they are not.
-      */}
-      <div className="school-page__tabs" role="group" aria-label="Show">
-        <button
-          type="button"
-          aria-pressed={mobileTab === 'upcoming'}
-          className={`school-page__tab${mobileTab === 'upcoming' ? ' school-page__tab--on' : ''}`}
-          onClick={() => setMobileTab('upcoming')}
-        >
-          Coming up
-        </button>
-        <button
-          type="button"
-          aria-pressed={mobileTab === 'ask'}
-          className={`school-page__tab${mobileTab === 'ask' ? ' school-page__tab--on' : ''}`}
-          onClick={() => setMobileTab('ask')}
-        >
-          Ask
-        </button>
-      </div>
-
-      <div className="school-page__body" data-tab={mobileTab}>
-        <div className="school-page__chat">
-          <div className="chat-panel__messages">
-            {messages.length === 0 && (
-              <div className="chat-panel__welcome">
-                <GraduationCap size={32} className="chat-panel__welcome-icon" />
-                <p className="chat-panel__welcome-title">Ask about school</p>
-                <p className="chat-panel__welcome-text">
-                  Term dates, INSET days, what&rsquo;s on this week, clubs and arrangements.
-                </p>
-                <div className="chat-panel__welcome-prompts">
-                  {SUGGESTIONS.map((suggestion) => (
-                    <button
-                      key={suggestion}
-                      className="chat-panel__welcome-chip"
-                      onClick={() => void send(suggestion, 'chip')}
-                    >
-                      {suggestion}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {messages.map((message, index) => (
-              <ChatMessage
-                key={`${message.timestamp}-${index}`}
-                role={message.role}
-                content={message.content}
-                blocks={message.blocks}
-                timestamp={message.timestamp}
-                // Term Time emits no widgets, so without this its own refusal advice — "check
-                // the school's website" — would render as unclickable plain text.
-                extraAllowedUrls={[SCHOOL_URL, `${SCHOOL_URL}/`]}
-                // Deep links the model got from a tool result — a calendar event, a PDF — are
-                // never seen by the browser, so exact-URL matching would strip every one. The
-                // prefix is our own constant, not model output.
-                allowedLinkPrefixes={[SCHOOL_URL]}
-              />
-            ))}
-
-            {awaiting && messages[messages.length - 1]?.blocks?.length === 0 && (
-              <div className="chat-message chat-message--assistant">
-                <ChatTypingIndicator />
-              </div>
-            )}
-
-            {/*
-              Nothing to press, and nothing to see for the first several seconds.
-
-              'connecting' is where every visit starts, so a notice there would fire on every
-              single page load. 'reconnecting' is a socket that dropped and is already coming
-              back — typically inside a second — and saying so would be noise about something
-              the reader cannot act on and will not outlast. Only 'offline', which the transport
-              reaches after the retries have genuinely not worked, says anything, and what it
-              says is that it is still trying. The retry is automatic, and a question typed in
-              the meantime is held and sent the moment the socket returns.
-
-              role="status" rather than role="alert": this is polite, and a screen reader
-              interrupting an answer being read out to announce a reconnection is worse than the
-              reconnection.
-            */}
-            {connection === 'offline' && (
-              <p className="school-page__notice" role="status">
-                Reconnecting to Term Time…
-              </p>
-            )}
-
-            {error && <p className="school-page__error">{error}</p>}
-            <div ref={endRef} />
+      {view === 'home' ? (
+        <main className="school-home">
+          <AskBar
+            onSend={(text) => void send(text, 'input')}
+            onSuggestion={(text) => void send(text, 'chip')}
+            suggestions={SUGGESTIONS}
+            disabled={awaiting}
+            maxLength={MAX_QUESTION_LENGTH}
+            conversationLength={messages.length}
+            onResume={() => setView('conversation')}
+          />
+          {connectionNotice}
+          {errorNotice}
+          <HeadsUpStrip calendar={calendar} onAsk={askAboutEvent} />
+          <div className="school-home__cards">
+            <UpcomingPanel calendar={calendar} onAsk={askAboutEvent} />
+            <NewsletterCard state={news.newsletters} onAsk={askAboutNewsletter} />
+            <SchoolMessagesCard state={news.messages} onAsk={askAboutMessage} />
           </div>
+        </main>
+      ) : (
+        <main className="school-convo">
+          <section className="school-page__chat" aria-label="Conversation">
+            <div className="school-convo__head">
+              <button
+                type="button"
+                className="school-convo__back"
+                onClick={() => setView('home')}
+              >
+                <ArrowLeft size={15} aria-hidden="true" />
+                Back to this week
+              </button>
+              {messages.length > 0 && (
+                <button
+                  type="button"
+                  className="school-page__clear"
+                  onClick={clearChat}
+                  aria-label="Clear this conversation"
+                >
+                  <Trash2 size={15} aria-hidden="true" />
+                  Clear chat
+                </button>
+              )}
+            </div>
+            <div className="chat-panel__messages">
+              {messages.map((message, index) => (
+                <ChatMessage
+                  key={`${message.timestamp}-${index}`}
+                  role={message.role}
+                  content={message.content}
+                  blocks={message.blocks}
+                  timestamp={message.timestamp}
+                  // Term Time emits no widgets, so without this its own refusal advice — "check
+                  // the school's website" — would render as unclickable plain text.
+                  extraAllowedUrls={[SCHOOL_URL, `${SCHOOL_URL}/`]}
+                  // Deep links the model got from a tool result — a calendar event, a PDF — are
+                  // never seen by the browser, so exact-URL matching would strip every one. The
+                  // prefix is our own constant, not model output.
+                  allowedLinkPrefixes={[SCHOOL_URL]}
+                />
+              ))}
 
-          <ChatInput onSend={(text) => void send(text, 'input')} disabled={awaiting} maxLength={MAX_QUESTION_LENGTH} />
-        </div>
+              {awaiting && messages[messages.length - 1]?.blocks?.length === 0 && (
+                <div className="chat-message chat-message--assistant">
+                  <ChatTypingIndicator />
+                </div>
+              )}
 
-        <div className="school-page__upcoming">
-          <UpcomingPanel yearGroups={yearGroups} onAsk={askAboutEvent} />
-        </div>
-      </div>
+              {connectionNotice}
+              {errorNotice}
+              <div ref={endRef} />
+            </div>
+
+            <ChatInput
+              onSend={(text) => void send(text, 'input')}
+              disabled={awaiting}
+              maxLength={MAX_QUESTION_LENGTH}
+            />
+          </section>
+
+          <aside className="school-convo__rail" aria-label="What is on at school">
+            <HeadsUpStrip calendar={calendar} onAsk={askAboutEvent} compact />
+            <UpcomingPanel calendar={calendar} onAsk={askAboutEvent} compact />
+            <NewsletterCard state={news.newsletters} onAsk={askAboutNewsletter} compact />
+            <SchoolMessagesCard state={news.messages} onAsk={askAboutMessage} compact />
+          </aside>
+        </main>
+      )}
 
       <footer className="school-page__footer">
+        <HowItWorks />
         <p className="school-page__disclaimer">
           Term Time is not affiliated with or endorsed by Kilmorie Primary School. It can be
           wrong or out of date — always check{' '}

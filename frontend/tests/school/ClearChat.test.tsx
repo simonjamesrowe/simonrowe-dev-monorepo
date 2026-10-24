@@ -9,8 +9,15 @@ Element.prototype.scrollIntoView = vi.fn()
 const theme = { theme: 'dark' as const, toggleTheme: vi.fn() }
 vi.mock('../../src/contexts/ThemeContext', () => ({ useTheme: () => theme }))
 
-// The page now loads the calendar pane beside the chat. The test environment's API base URL is
+// The page loads the calendar on open. The test environment's API base URL is
 // production, so an unmocked fetch would reach the live API.
+// The newsletter and "From the school" cards load on open, and the test environment's API base
+// URL is production, so an unmocked fetch would reach the live API.
+vi.mock('../../src/school/schoolNewsApi', () => ({
+  fetchNewsletters: () => new Promise(() => {}),
+  fetchSchoolMessages: () => new Promise(() => {}),
+}))
+
 vi.mock('../../src/school/schoolCalendarApi', () => ({
   fetchSchoolCalendar: () => new Promise(() => {}),
   CalendarUnavailableError: class extends Error {},
@@ -48,10 +55,11 @@ describe('clearing the chat', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Clear this conversation/ }))
 
-    // Asserted on the transcript, not on the text: once cleared, the welcome panel returns and
-    // one of its suggestion chips carries exactly the same wording as the question.
+    // Asserted on the transcript, not on the text: once cleared, the page goes back to the home
+    // view, and one of its suggestion chips carries exactly the same wording as the question.
     await waitFor(() => expect(document.querySelectorAll('.chat-message')).toHaveLength(0))
-    expect(screen.getByText('Ask about school')).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Ask a question' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Back to your conversation/ })).toBeNull()
 
     // A new session id, not just an empty list: the backend caps messages per session and
     // names the reply topic after it, so reuse would carry the old cap across.

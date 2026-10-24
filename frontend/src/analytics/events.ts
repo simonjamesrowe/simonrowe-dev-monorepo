@@ -41,7 +41,10 @@ export const EVENTS = {
   'Favourite Toggled': { contentType: ['article', 'event'], favourited: 'flag' },
 
   // Term Time
-  'Question Asked': { source: ['input', 'chip', 'calendar', 'link'], yearGroupCount: 'count' },
+  'Question Asked': {
+    source: ['input', 'chip', 'calendar', 'link', 'newsletter', 'message'],
+    yearGroupCount: 'count',
+  },
   'Answer Received': { toolCount: 'count', latencyMs: 'duration', failed: 'flag' },
   'Calendar Event Clicked': {
     eventType: ['TERM_BOUNDARY', 'HALF_TERM', 'INSET', 'CLUB', 'TRIP', 'OTHER'],

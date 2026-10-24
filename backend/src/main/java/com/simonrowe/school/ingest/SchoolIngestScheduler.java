@@ -1,5 +1,6 @@
 package com.simonrowe.school.ingest;
 
+import com.simonrowe.school.news.SchoolNewsService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -35,17 +36,25 @@ public class SchoolIngestScheduler {
   private static final String CALENDAR_INTERVAL = "${school.schedule.calendar-ms:21600000}";
   private static final String WEBSITE_INTERVAL = "${school.schedule.website-ms:43200000}";
   private static final String GMAIL_INTERVAL = "${school.schedule.gmail-ms:1800000}";
+  // One request for the portal's newsletter list, plus a fetch for any issue not yet held.
+  private static final String NEWSLETTER_INTERVAL = "${school.schedule.newsletters-ms:3600000}";
   private static final String STARTUP_DELAY = "120000";
   private static final String STARTUP_DELAY_WEBSITE = "240000";
   private static final String STARTUP_DELAY_GMAIL = "360000";
+  private static final String STARTUP_DELAY_NEWSLETTERS = "480000";
 
   private final SchoolIngestService ingestService;
   private final GmailIngestService gmailIngestService;
+  private final SchoolNewsletterPoller newsletterPoller;
+  private final SchoolNewsService newsService;
 
   public SchoolIngestScheduler(
-      final SchoolIngestService ingestService, final GmailIngestService gmailIngestService) {
+      final SchoolIngestService ingestService, final GmailIngestService gmailIngestService,
+      final SchoolNewsletterPoller newsletterPoller, final SchoolNewsService newsService) {
     this.ingestService = ingestService;
     this.gmailIngestService = gmailIngestService;
+    this.newsletterPoller = newsletterPoller;
+    this.newsService = newsService;
   }
 
   /**
@@ -101,6 +110,29 @@ public class SchoolIngestScheduler {
       ingestService.ingestWebsite();
     } catch (RuntimeException e) {
       LOG.warn("Website ingest failed: {}", e.getMessage());
+    }
+  }
+
+  /**
+   * Reads any newsletter the school has published that Term Time does not hold, then writes the
+   * page's summaries for any that lack one.
+   *
+   * <p>Summarising runs whether or not the poll found anything, because the email path also
+   * brings newsletters in, and a restore or an edited newsletter leaves one without a current
+   * summary. The two are caught separately so a failed poll still lets summaries catch up.
+   */
+  @Scheduled(
+      initialDelayString = STARTUP_DELAY_NEWSLETTERS, fixedDelayString = NEWSLETTER_INTERVAL)
+  public void ingestNewsletters() {
+    try {
+      newsletterPoller.poll();
+    } catch (RuntimeException e) {
+      LOG.warn("Newsletter poll failed: {}", e.getMessage());
+    }
+    try {
+      newsService.summariseMissing();
+    } catch (RuntimeException e) {
+      LOG.warn("Newsletter summaries failed: {}", e.getMessage());
     }
   }
 }
