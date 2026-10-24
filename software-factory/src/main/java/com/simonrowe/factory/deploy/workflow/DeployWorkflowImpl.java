@@ -543,7 +543,7 @@ public class DeployWorkflowImpl implements DeployWorkflow {
       }
     }
 
-    String scanDetail = scheduleLogWatchScan(request, status, detail);
+    String scanDetail = scheduleLogWatchScan(request, sha, status, detail);
 
     DeployRunRecord finalRecord =
         record(
@@ -577,7 +577,8 @@ public class DeployWorkflowImpl implements DeployWorkflow {
    * @return the detail to record, with a note appended when scheduling was attempted
    */
   private String scheduleLogWatchScan(
-      final DeployRequest request, final DeployStatus status, final String detail) {
+      final DeployRequest request, final String sha, final DeployStatus status,
+      final String detail) {
     boolean succeeded =
         status == DeployStatus.DEPLOYED || status == DeployStatus.DEPLOYED_IMAGES_ONLY;
     if (!succeeded || !request.logWatchTriggerEnabled()) {
@@ -587,7 +588,13 @@ public class DeployWorkflowImpl implements DeployWorkflow {
       String scanId =
           fast.scheduleLogWatchScan(
               Instant.ofEpochMilli(Workflow.currentTimeMillis()),
-              Workflow.getInfo().getRunId(),
+              // The run id alone is not unique: the drain loop deploys a commit signalled
+              // mid-deploy in the SAME run, and its scan collided with the first pass's, still
+              // waiting out its start delay, so the second commit was never scanned (two merges
+              // two minutes apart on 2026-10-24). The commit makes each pass's scan its own, and
+              // an activity retry of one pass still gets the same id, so it stays idempotent.
+              // Only an argument changes, so replaying an older history is unaffected.
+              Workflow.getInfo().getRunId() + "-" + sha.substring(0, Math.min(12, sha.length())),
               request.linearFilingEnabled());
       return detail + "; log scan " + scanId + " scheduled in 5 minutes";
     } catch (RuntimeException exception) {
