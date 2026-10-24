@@ -10,11 +10,11 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * The newsletter and "From the school" cards on the Term Time page.
+ * The newsletter card on the Term Time page.
  *
  * <p>Public, and fixed to public content by {@link SchoolNewsService}. Not rate limited, like
- * {@code /api/school/calendar}: the page reads both on load, and each is a few indexed Mongo
- * reads with no model call behind it. Summaries are written on a schedule, never here.
+ * {@code /api/school/calendar}: the page reads it on load, and it is a few indexed Mongo reads
+ * with no model call behind it. Summaries are written on a schedule, never here.
  */
 @RestController
 @RequestMapping("/api/school")
@@ -22,8 +22,6 @@ public class SchoolNewsController {
 
   static final int DEFAULT_NEWSLETTERS = 6;
   static final int MAX_NEWSLETTERS = 12;
-  static final int DEFAULT_MESSAGES = 5;
-  static final int MAX_MESSAGES = 10;
 
   private final SchoolNewsService news;
   private final SchoolProperties properties;
@@ -47,21 +45,6 @@ public class SchoolNewsController {
     }
     return ResponseEntity.ok(news.newsletters(clamp(limit, DEFAULT_NEWSLETTERS, MAX_NEWSLETTERS))
         .stream().map(NewsletterResponse::from).toList());
-  }
-
-  /**
-   * Recent emails from the school, approved for the public.
-   *
-   * @param limit how many, capped at {@value #MAX_MESSAGES}
-   * @return messages newest first, or 503 when Term Time is switched off
-   */
-  @GetMapping("/messages")
-  public ResponseEntity<List<SchoolNewsService.Message>> messages(
-      @RequestParam(name = "limit", required = false) final Integer limit) {
-    if (!properties.enabled()) {
-      return ResponseEntity.status(503).build();
-    }
-    return ResponseEntity.ok(news.recentMessages(clamp(limit, DEFAULT_MESSAGES, MAX_MESSAGES)));
   }
 
   private static int clamp(final Integer requested, final int fallback, final int max) {

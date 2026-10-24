@@ -15,19 +15,9 @@ export interface Newsletter {
   url: string
   /** ISO instant. */
   publishedAt: string
-  /** Null until the summary has been written, which happens within an hour of it arriving. */
+  /** Null until the summary has been written, usually within minutes of the newsletter arriving. */
   headline: string | null
   points: NewsletterPoint[]
-}
-
-/** A recent email from the school that has been approved for the public. */
-export interface SchoolMessage {
-  id: string
-  /** The email's subject. */
-  title: string
-  /** ISO instant. */
-  publishedAt: string
-  yearGroups: string[]
 }
 
 async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
@@ -41,9 +31,4 @@ async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
 /** The newest newsletters, newest first. Public content only, and needs no token. */
 export function fetchNewsletters(signal?: AbortSignal): Promise<Newsletter[]> {
   return getJson<Newsletter[]>('/api/school/newsletters', signal)
-}
-
-/** The school's recent emails, newest first, leaving out the ones that only cover a newsletter. */
-export function fetchSchoolMessages(signal?: AbortSignal): Promise<SchoolMessage[]> {
-  return getJson<SchoolMessage[]>('/api/school/messages', signal)
 }

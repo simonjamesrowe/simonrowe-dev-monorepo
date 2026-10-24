@@ -13,11 +13,10 @@ vi.mock('../../src/contexts/ThemeContext', () => ({ useTheme: () => theme }))
 
 // The page loads the calendar on open. The test environment's API base URL is
 // production, so an unmocked fetch would reach the live API.
-// The newsletter and "From the school" cards load on open, and the test environment's API base
+// The newsletter card loads on open, and the test environment's API base
 // URL is production, so an unmocked fetch would reach the live API.
 vi.mock('../../src/school/schoolNewsApi', () => ({
   fetchNewsletters: () => new Promise(() => {}),
-  fetchSchoolMessages: () => new Promise(() => {}),
 }))
 
 vi.mock('../../src/school/schoolCalendarApi', () => ({

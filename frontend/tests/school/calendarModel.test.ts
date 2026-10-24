@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest'
 import {
   buildCalendarView,
   formatDay,
+  formatPublished,
   formatSpan,
+  headsUpItems,
   questionAbout,
   timeLabel,
   yearsLabel,
@@ -119,5 +121,37 @@ describe('formatting', () => {
     expect(questionAbout(event({ id: 'Horniman Museum trip', startDate: '2026-10-15' }))).toBe(
       'Tell me more about "Horniman Museum trip" on Thursday 15 October.',
     )
+  })
+})
+
+describe('headsUpItems', () => {
+  // The strip as production showed it on 2026-10-24: five boxes for three facts.
+  const seen = [
+    event({ id: 'ht', type: 'HALF_TERM', title: 'Half term', startDate: '2026-10-26', endDate: '2026-10-31' }),
+    event({ id: 'inset', type: 'INSET', title: 'Inset Day', startDate: '2026-11-02' }),
+    event({ id: 'span', type: 'TERM_BOUNDARY', title: 'Autumn term 2', startDate: '2026-11-02', endDate: '2026-12-18' }),
+    event({ id: 'reopen', type: 'TERM_BOUNDARY', title: 'School reopens after half-term', startDate: '2026-11-03' }),
+    event({ id: 'return', type: 'TERM_BOUNDARY', title: 'Kilmorie Primary School return to school after half-term', startDate: '2026-11-03' }),
+    event({ id: 'club', type: 'CLUB', title: 'Chess club', startDate: '2026-11-04' }),
+  ]
+
+  it('keeps one item per kind per day and leaves out a whole term’s span', () => {
+    expect(headsUpItems(seen).map((e) => e.id)).toEqual(['ht', 'inset', 'reopen'])
+  })
+
+  it('keeps a single-day term boundary and different kinds on the same day', () => {
+    const items = headsUpItems([
+      event({ id: 'inset', type: 'INSET', startDate: '2026-12-18' }),
+      event({ id: 'end', type: 'TERM_BOUNDARY', title: 'Last day of term', startDate: '2026-12-18' }),
+    ])
+    expect(items.map((e) => e.id)).toEqual(['inset', 'end'])
+  })
+})
+
+describe('formatPublished', () => {
+  it('reads a newsletter’s date in London, so a BST midnight is not the day before', () => {
+    expect(formatPublished('2026-10-22T23:00:00Z')).toBe('Fri 23 Oct')
+    expect(formatPublished('2026-10-22T23:00:00Z', 'date')).toBe('23 Oct')
+    expect(formatPublished('2026-10-22T23:00:00Z', 'long')).toBe('Friday 23 October')
   })
 })

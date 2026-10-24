@@ -1,5 +1,5 @@
 import { track } from '../../analytics/analytics'
-import { formatSpan, headsUpLabel, isHeadsUp, questionAbout } from '../calendarModel'
+import { formatSpan, headsUpItems, headsUpLabel, questionAbout } from '../calendarModel'
 import type { CalendarEvent } from '../schoolCalendarApi'
 import type { SchoolCalendarState } from '../useSchoolCalendar'
 
@@ -20,7 +20,7 @@ interface HeadsUpStripProps {
  */
 export function HeadsUpStrip({ calendar, onAsk, compact = false }: HeadsUpStripProps) {
   if (calendar.load.status !== 'ready') return null
-  const items = calendar.load.calendar.events.filter(isHeadsUp)
+  const items = headsUpItems(calendar.load.calendar.events)
   if (items.length === 0) return null
 
   const ask = (event: CalendarEvent) => {

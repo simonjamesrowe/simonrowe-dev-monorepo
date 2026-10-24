@@ -19,7 +19,6 @@ vi.mock('../../src/school/schoolChatService', () => ({
 
 vi.mock('../../src/school/schoolNewsApi', () => ({
   fetchNewsletters: () => new Promise(() => {}),
-  fetchSchoolMessages: () => new Promise(() => {}),
 }))
 
 const fetchSchoolCalendar = vi.fn()

@@ -3,8 +3,6 @@ package com.simonrowe.school.news;
 import com.simonrowe.school.ingest.SchoolLinkFilter;
 import com.simonrowe.school.model.SchoolDocument;
 import com.simonrowe.school.model.SchoolDocumentRepository;
-import com.simonrowe.school.model.SchoolLink;
-import com.simonrowe.school.model.SchoolLinkRepository;
 import com.simonrowe.school.model.SchoolSourceType;
 import com.simonrowe.school.model.Visibility;
 import java.time.Clock;
@@ -16,7 +14,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
@@ -25,12 +22,11 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
- * The school's newsletters and recent emails, as the Term Time page shows them.
+ * The school's newsletters, as the Term Time page shows them, and the job that summarises them.
  *
- * <p><b>Public content only, whoever asks.</b> Both reads are fixed to
- * {@link Visibility#PUBLIC}: the page sends no token, and a card shown to every visitor has no
- * reason to reach anything else. An email reaches the "From the school" card only once someone
- * has approved it, exactly as it reaches the chat.
+ * <p><b>Public content only, whoever asks.</b> The read is fixed to {@link Visibility#PUBLIC}:
+ * the page sends no token, and a card shown to every visitor has no reason to reach anything
+ * else.
  */
 @Service
 public class SchoolNewsService {
@@ -39,9 +35,6 @@ public class SchoolNewsService {
 
   /** How far back the newsletter list reaches: a little over a term. */
   static final Duration NEWSLETTER_WINDOW = Duration.ofDays(120);
-
-  /** How far back the "From the school" card reaches. */
-  static final Duration MESSAGE_WINDOW = Duration.ofDays(30);
 
   /** How many of the newest newsletters are kept summarised. */
   static final int SUMMARISED_NEWSLETTERS = 6;
@@ -56,7 +49,6 @@ public class SchoolNewsService {
   private static final ZoneId SCHOOL_ZONE = ZoneId.of("Europe/London");
 
   private final SchoolDocumentRepository documents;
-  private final SchoolLinkRepository links;
   private final NewsletterSummaryRepository summaries;
   private final SchoolNewsletterSummariser summariser;
   private final SchoolLinkFilter linkFilter;
@@ -64,13 +56,11 @@ public class SchoolNewsService {
 
   public SchoolNewsService(
       final SchoolDocumentRepository documents,
-      final SchoolLinkRepository links,
       final NewsletterSummaryRepository summaries,
       final SchoolNewsletterSummariser summariser,
       final SchoolLinkFilter linkFilter,
       final Clock clock) {
     this.documents = documents;
-    this.links = links;
     this.summaries = summaries;
     this.summariser = summariser;
     this.linkFilter = linkFilter;
@@ -95,6 +85,9 @@ public class SchoolNewsService {
   /**
    * Writes a summary for each recent newsletter that has none, or whose text has changed.
    *
+   * <p>A newsletter Claude Code is still writing is left for the next run and does not count
+   * towards the cap: asking after it is one status call.
+   *
    * @return how many were written
    */
   public int summariseMissing() {
@@ -108,45 +101,15 @@ public class SchoolNewsService {
       if (current(written.get(newsletter.id()), newsletter) != null) {
         continue;
       }
-      final var summary = summariser.summarise(newsletter);
-      if (summary.isPresent()) {
-        summaries.save(summary.get());
-        LOG.info("Summarised newsletter '{}'", newsletter.title());
+      final SchoolNewsletterSummariser.Attempt attempt = summariser.summarise(newsletter);
+      if (attempt.status() == SchoolNewsletterSummariser.Status.WRITTEN) {
+        summaries.save(attempt.summary());
+        LOG.info("Summarised newsletter '{}' with {}", newsletter.title(),
+            attempt.summary().model());
         count++;
       }
     }
     return count;
-  }
-
-  /**
-   * Recent emails from the school, leaving out the ones that only cover a newsletter.
-   *
-   * <p>The Friday email is a sentence and a link to the newsletter, which has its own card, so
-   * listing it here would show the same thing twice under a vaguer title. It is recognised by
-   * the link it carries, not by its subject: the school words the subject differently every
-   * week, and the October online-safety newsletter is a real email that says "newsletter" too.
-   *
-   * @param limit how many to return
-   * @return messages, newest first
-   */
-  public List<Message> recentMessages(final int limit) {
-    final Instant now = Instant.now(clock);
-    final List<SchoolDocument> emails = documents.findPublishedBetween(PUBLIC_ONLY,
-        List.of(SchoolSourceType.EMAIL), now.minus(MESSAGE_WINDOW), now.plus(Duration.ofDays(1)));
-    if (emails.isEmpty()) {
-      return List.of();
-    }
-    final Set<String> covering = links.findBySourceDocumentIdIn(
-            emails.stream().map(SchoolDocument::id).toList()).stream()
-        .filter(link -> linkFilter.isAutoFetchable(link.url()))
-        .map(SchoolLink::sourceDocumentId)
-        .collect(Collectors.toSet());
-    return emails.stream()
-        .filter(email -> !covering.contains(email.id()))
-        .limit(limit)
-        .map(email -> new Message(email.id(), email.title(), email.publishedAt(),
-            email.yearGroups()))
-        .toList();
   }
 
   /**
@@ -206,16 +169,5 @@ public class SchoolNewsService {
    */
   public record Newsletter(
       String id, String title, String url, Instant publishedAt, NewsletterSummary summary) {
-  }
-
-  /**
-   * One email from the school.
-   *
-   * @param id the document id
-   * @param title the email's subject
-   * @param publishedAt when it was sent
-   * @param yearGroups the year groups it concerns, empty for the whole school
-   */
-  public record Message(String id, String title, Instant publishedAt, List<String> yearGroups) {
   }
 }

@@ -281,19 +281,24 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
 
 ## Recent Changes
 - termtime-home-view: **Term Time opens on a home view, and reads every newsletter the school
-  publishes.** A one-line ask bar, a heads-up strip of days that change, then Coming up, the
-  latest newsletter in a 30-second summary, and "From the school" (recent approved emails). The
-  first question moves the chat into the wide column and folds the cards into a rail. The beta
+  publishes.** A one-line ask bar, a heads-up strip of days that change, then Coming up and the
+  latest newsletter in a 30-second summary. (A "From the school" card of recent emails shipped
+  in #281 and was removed the next day.) The first question moves the chat into the wide column and folds the cards into a rail. The beta
   badge and "early version" banner are gone. Load-bearing bits:
   - **Not every newsletter is emailed.** 25 September 2026 was published on the parent portal
     with no email, so Term Time never read it. `SchoolNewsletterPoller` reads the portal's public
     list hourly and fetches any issue not held, through `SchoolLinkFetcher` with a link row that
     has **no source document**. The address must be the emails' `?id=N` form, or every emailed
     issue is stored twice.
-  - **Summaries are written once, never on view** (`SchoolNewsletterSummariser`, chat model,
-    usage kind `SUMMARISE`), stored in `school_newsletter_summaries` against the document's
-    `contentHash`, at most three an hour. The prompt drops every child's name ("stars of the
-    week"). The collection is backed up.
+  - **Summaries are written once, never on view** (`SchoolNewsletterSummariser`), stored in
+    `school_newsletter_summaries` against the document's `contentHash`, by a 5-minute job, at
+    most three a run. The prompt drops every child's name ("stars of the week"). The collection
+    is backed up.
+  - **Claude Code writes them in production**, through software-factory's content-writing queue
+    (`ClaudeCodeNewsletterWriter`), with OpenAI as the same-run fallback.
+    `SCHOOL_NEWSLETTER_SUMMARY_WRITER` is `openai` in `application.yml` and `claude-code` in
+    prod compose, pinned by `NewsletterWriterConfigTest`. The queue returns one text field, so the
+    summary comes back as JSON inside it and is parsed and checked like OpenAI's.
   - **One card per publication date**: the school re-publishes an issue under a new id with
     slightly different text (166 and 167, both 2 October), so the hash cannot dedupe it.
   - **The CoParent utility blob sets `--color-primary: teal` on `:root` for every page** (found,

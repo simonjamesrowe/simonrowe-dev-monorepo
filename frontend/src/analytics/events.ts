@@ -42,7 +42,7 @@ export const EVENTS = {
 
   // Term Time
   'Question Asked': {
-    source: ['input', 'chip', 'calendar', 'link', 'newsletter', 'message'],
+    source: ['input', 'chip', 'calendar', 'link', 'newsletter'],
     yearGroupCount: 'count',
   },
   'Answer Received': { toolCount: 'count', latencyMs: 'duration', failed: 'flag' },

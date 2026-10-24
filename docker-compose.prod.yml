@@ -892,6 +892,10 @@ services:
       # Zero means "answer nothing anonymously", deliberately not "unlimited". An unset budget
       # on an endpoint anyone on the internet can reach must not default to spending.
       SCHOOL_DAILY_TOKEN_BUDGET: ${SCHOOL_DAILY_TOKEN_BUDGET:-0}
+      # Who writes the Term Time newsletter summaries, the same switch as the release notes above:
+      # `claude-code` uses software-factory's content-writing queue with OpenAI as the fallback,
+      # `openai` is OpenAI alone.
+      SCHOOL_NEWSLETTER_SUMMARY_WRITER: ${SCHOOL_NEWSLETTER_SUMMARY_WRITER:-claude-code}
       SCHOOL_GMAIL_CLIENT_ID: ${SCHOOL_GMAIL_CLIENT_ID:-}
       SCHOOL_GMAIL_CLIENT_SECRET: ${SCHOOL_GMAIL_CLIENT_SECRET:-}
       SCHOOL_GMAIL_REFRESH_TOKEN: ${SCHOOL_GMAIL_REFRESH_TOKEN:-}
