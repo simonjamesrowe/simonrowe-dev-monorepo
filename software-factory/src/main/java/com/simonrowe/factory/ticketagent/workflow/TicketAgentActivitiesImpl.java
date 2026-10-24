@@ -19,6 +19,7 @@ import com.simonrowe.factory.ticketagent.config.TicketAgentTaskQueues;
 import com.simonrowe.factory.ticketagent.domain.AttemptRequest;
 import com.simonrowe.factory.ticketagent.domain.AttemptResult;
 import com.simonrowe.factory.ticketagent.domain.ChecksReport;
+import com.simonrowe.factory.ticketagent.domain.ConventionalTitle;
 import com.simonrowe.factory.ticketagent.domain.PullRequestRef;
 import com.simonrowe.factory.ticketagent.domain.PullRequestState;
 import com.simonrowe.factory.ticketagent.domain.SilencingDetector;
@@ -152,7 +153,10 @@ public class TicketAgentActivitiesImpl implements TicketAgentActivities {
               : TicketBrief.repair(
                   request.ticket(), properties.slug(), request.attempt(),
                   properties.maxAttempts(), properties.deniedPaths(), request.failure());
-      AgentEdit edit = engine.attempt(workspace.repository(), brief, heartbeat);
+      AgentEdit answer = engine.attempt(workspace.repository(), brief, heartbeat);
+      // The title becomes the squash commit on main, so its type is enforced here, not asked for.
+      AgentEdit edit = new AgentEdit(answer.changed(), answer.summary(),
+          ConventionalTitle.of(answer.prTitle()), answer.prBody());
       List<String> changed = workspaces.changedPaths(workspace, heartbeat);
       if (!edit.changed() || changed.isEmpty()) {
         return result(AttemptResult.Status.NO_CHANGE, null, edit, changed, List.of(), null);

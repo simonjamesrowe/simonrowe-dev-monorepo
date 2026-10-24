@@ -34,6 +34,9 @@ starting, so Linear stays the one record of what was approved.
    `scripts/**`, `.github/**`, `gradlew`, `gradlew.bat`, `gradle/wrapper/**` and Dockerfiles). A hit
    hands the ticket back and pushes nothing. The first attempt force-pushes (the namespace is the
    factory's); repairs push plainly, so a person's commit on the branch is never overwritten.
+   The pull request title, which becomes the squash commit on `main`, is made conventional in
+   Java (`ConventionalTitle`): a title with no type gets `fix:`. The agent is asked for one, but
+   on 2026-10-24 it titled #287 without.
 4. **Silencing check**: if the diff adds a log-watch mute rule, lowers a logger, disables a test
    or suppresses a warning (`SilencingDetector`), the pull request gets `no-auto-merge`. The ticket
    quotes production log text a visitor can influence, and "mute this" is exactly what a crafted
