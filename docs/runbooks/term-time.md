@@ -1025,17 +1025,18 @@ same shape and the same endpoint.
 ## The page: a home view, then the conversation
 
 The page opens on a **home view**: a one-line question box with suggested questions, a heads-up
-strip of days that change (`HeadsUpStrip`), then three cards: **Coming up** (`UpcomingPanel`),
-the latest **Newsletter** (`NewsletterCard`) and **From the school** (`SchoolMessagesCard`). The
-first question switches it to the **conversation view**: the chat takes the wide column and the
+strip of days that change (`HeadsUpStrip`), then two cards: **Coming up** (`UpcomingPanel`) and
+the latest **Newsletter** (`NewsletterCard`). The first question switches it to the **conversation view**: the chat takes the wide column and the
 same strip and cards fold into a rail beside it (their `compact` variants). "Back to this week"
 returns to the home view and keeps the conversation, which "Back to your conversation" reopens;
 Clear chat ends it and returns home. A `?q=` question opens straight into the conversation. There
 is no beta badge or "early version" banner any more; the footer disclaimer stays.
 
 - **The calendar is fetched once** (`useSchoolCalendar`) and shared by the strip and the card, so
-  the two can never disagree. The newsletters and messages are read once on open
-  (`useSchoolNews`), not per year group.
+  the two can never disagree. The newsletters are read once on open
+  (`useSchoolNewsletters`), not per year group.
+- **A "From the school" card of recent emails shipped in #281 and was removed** the same day:
+  its endpoint went with it. Emails stay reachable through the chat.
 - **Term Time has its own accent colour** (`--school-accent`, `--school-on-accent`). The
   CoParent stylesheet's frozen utility blob sets `--color-primary: teal` on `:root` for every
   page, so the site token is a named colour that `--on-primary` was never chosen against: navy on
@@ -1043,30 +1044,40 @@ is no beta badge or "early version" banner any more; the footer disclaimer stays
 - **Tests that render the Term Time page must mock `school/schoolNewsApi`** as well as
   `school/schoolCalendarApi`.
 
-## Newsletters and "From the school"
+## Newsletters
 
-`GET /api/school/newsletters` and `GET /api/school/messages` (`SchoolNewsController`,
-`SchoolNewsService`). Both read **public documents only**, whoever asks, and neither calls a model.
+`GET /api/school/newsletters` (`SchoolNewsController`, `SchoolNewsService`) reads **public
+documents only**, whoever asks, and calls no model.
 
 - **Newsletters** are the `WEBSITE_PAGE` documents whose address is the portal newsletter path
   (`SchoolLinkFilter.isAutoFetchable`), from the last 120 days, newest first, **one per
   publication date**. The school sometimes publishes an issue twice under two ids (166 and 167
   are both 2 October 2026, the second a fuller re-publish), and the content hash cannot catch it,
   so the longer text is kept.
-- **Each newsletter's summary is written once** (`SchoolNewsletterSummariser`, the chat model,
-  usage kind `SUMMARISE`) and stored in `school_newsletter_summaries`, keyed by the document id
-  and tied to its `contentHash`. A summary whose hash no longer matches is not served, and is
-  rewritten. The hourly newsletter job (below) writes at most three a run for the six newest. The
-  prompt leaves out every child's name, so "stars of the week" and class awards never reach the
-  card. The model's output is checked before it is stored: at most six points, real year groups
-  only, headline and points capped in length.
+- **Each newsletter's summary is written once** (`SchoolNewsletterSummariser`) and stored in
+  `school_newsletter_summaries`, keyed by the document id and tied to its `contentHash`. A
+  summary whose hash no longer matches is not served, and is rewritten. A job every 5 minutes
+  (`school.schedule.newsletter-summaries-ms`, default 300,000) writes at most three a run for the
+  six newest. The prompt leaves out every child's name, so "stars of the week" and class awards
+  never reach the card, and marks the newsletter as data, not instructions. Output is checked
+  before it is stored: at most six points, real year groups only, headline and points capped.
+- **Claude Code writes it in production, OpenAI is the fallback.** `school.newsletters.writer`
+  (`SCHOOL_NEWSLETTER_SUMMARY_WRITER`) is `openai` in `application.yml`, so no test or local run
+  reaches the subscription, and `claude-code` in `docker-compose.prod.yml`
+  (`NewsletterWriterConfigTest` pins both). `claude-code` submits the prompt to
+  software-factory's content-writing queue (`ClaudeCodeNewsletterWriter`, the same shape as the
+  release notes' `ClaudeCodeReleaseWriter`) and collects the result on a later run, which is why
+  summaries have their own 5-minute schedule rather than riding the hourly poll. The queue's only
+  output is one text field, so the prompt asks for the summary as JSON inside it, and the backend
+  parses it (taking the outermost braces, so a stray fence does not lose it) and checks it like
+  OpenAI's. OpenAI writes it in the same run when the queue fails, is unreachable, returns
+  something that is not that JSON, or is still writing past
+  `school.newsletters.claude-code-max-wait` (30 minutes). The stored `model` is `claude-code` or
+  the OpenAI model name, so the logs and the collection say which wrote each one. Allowed on the
+  subscription only because this is the owner's scheduled job: nothing a visitor does starts one.
+  Job ids carry `ClaudeCodeNewsletterWriter.FORMAT_VERSION`: bump it with the prompt.
 - A newsletter with no summary yet still shows, with a link to the school's page. The page
   never waits on a model, and a visitor cannot cause a call.
-- **From the school** is the public `EMAIL` documents of the last 30 days, minus the ones that
-  only cover a newsletter. Those are recognised by carrying an auto-fetchable newsletter link,
-  not by their subject: the school words it differently every week, and the October online-safety
-  newsletter is a real email that also says "newsletter". Only approved emails are public, so
-  the card can be shorter than a parent's inbox.
 - `school_newsletter_summaries` is in the backup and restore. It has no index beyond `_id`, so
   it has no change unit.
 
@@ -1088,6 +1099,12 @@ It is one indexed read of `school_events`, with no model call behind it.
   whatever range is chosen. A day with no school ten days away is what a long list hides, and
   what needs childcare arranging now. A term boundary is labelled "Term dates", not
   "No school", because the last day of term is a school day.
+- **The strip shows one item per kind per day, and no term spans** (`headsUpItems`). On
+  2026-10-24 it showed five boxes for three facts: two sources' wordings of "back on Tuesday
+  3 November" (too few shared words for `EventDuplicates` to merge) and "Autumn term 2, Mon 2 Nov
+  – Fri 18 Dec", a whole term's span. The first item of each kind per start date is kept, in the
+  server's most-authoritative-first order, and a multi-day term boundary is left out: it is
+  context, and the chat still answers about it.
 - **A day's events are ordered by start time** (`EventTimes`), all-day items first and
   unreadable times last. The source's own wording is what is displayed, never the parsed value.
   A start written without am/pm takes it from the end of its range (`3:30 - 4:30pm`), and a bare

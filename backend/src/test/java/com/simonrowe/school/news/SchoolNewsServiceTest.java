@@ -14,15 +14,12 @@ import com.simonrowe.school.SchoolProperties;
 import com.simonrowe.school.ingest.SchoolLinkFilter;
 import com.simonrowe.school.model.SchoolDocument;
 import com.simonrowe.school.model.SchoolDocumentRepository;
-import com.simonrowe.school.model.SchoolLink;
-import com.simonrowe.school.model.SchoolLinkRepository;
 import com.simonrowe.school.model.SchoolSourceType;
 import com.simonrowe.school.model.Visibility;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
-import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -34,10 +31,9 @@ class SchoolNewsServiceTest {
       "https://www.kilmorieschool.co.uk/parentportal/newsletter/?id=";
 
   private final SchoolDocumentRepository documents = mock(SchoolDocumentRepository.class);
-  private final SchoolLinkRepository links = mock(SchoolLinkRepository.class);
   private final NewsletterSummaryRepository summaries = mock(NewsletterSummaryRepository.class);
   private final SchoolNewsletterSummariser summariser = mock(SchoolNewsletterSummariser.class);
-  private final SchoolNewsService service = new SchoolNewsService(documents, links, summaries,
+  private final SchoolNewsService service = new SchoolNewsService(documents, summaries,
       summariser,
       new SchoolLinkFilter(new SchoolProperties(
           true, null, null, null, null, null, null, 0, null, null, null, 0, null, null)),
@@ -53,12 +49,6 @@ class SchoolNewsServiceTest {
     return new SchoolDocument(id, SchoolSourceType.WEBSITE_PAGE, url, "Newsletter " + id, body,
         Instant.parse(date + "T00:00:00Z"), NOW, Visibility.PUBLIC, null, null, null, null,
         false, List.of(), "hash-" + id, null);
-  }
-
-  private static SchoolDocument email(final String id, final String subject) {
-    return new SchoolDocument(id, SchoolSourceType.EMAIL, "msg-" + id, subject, "body",
-        Instant.parse("2026-10-22T16:00:00Z"), NOW, Visibility.PUBLIC, null, null, null, null,
-        false, List.of("Year 6"), "hash-" + id, null);
   }
 
   private void pages(final SchoolDocument... found) {
@@ -123,8 +113,8 @@ class SchoolNewsServiceTest {
         new NewsletterSummary("171", "hash-171", "Done", List.of(), "m", NOW)));
     when(summariser.summarise(any())).thenAnswer(call -> {
       final SchoolDocument document = call.getArgument(0);
-      return Optional.of(new NewsletterSummary(document.id(), document.contentHash(), "New",
-          List.of(), "m", NOW));
+      return SchoolNewsletterSummariser.Attempt.written(new NewsletterSummary(document.id(),
+          document.contentHash(), "New", List.of(), "m", NOW));
     });
 
     assertThat(service.summariseMissing()).isEqualTo(SchoolNewsService.MAX_SUMMARIES_PER_RUN);
@@ -135,32 +125,15 @@ class SchoolNewsServiceTest {
   }
 
   @Test
-  @DisplayName("leaves out the email that only covers a newsletter, recognised by its link")
-  void dropsCoveringEmails() {
-    when(documents.findPublishedBetween(eq(List.of(Visibility.PUBLIC)),
-        eq(List.of(SchoolSourceType.EMAIL)), any(), any())).thenReturn(List.of(
-            email("cover", "Happy Friday - 23rd October Newsletter"),
-            email("safety", "October Online Safety Newsletter"),
-            email("checks", "Reception and Year 6 - Height and Weight")));
-    when(links.findBySourceDocumentIdIn(anyList())).thenReturn(List.of(
-        new SchoolLink("l1", "cover", PORTAL + "171", "Newsletter", NOW,
-            SchoolLink.Status.FETCHED, "171", null),
-        new SchoolLink("l2", "checks", "https://forms.gle/abc", "Consent", NOW,
-            SchoolLink.Status.PENDING, null, null)));
+  @DisplayName("leaves a newsletter Claude Code is still writing for the next run, uncounted")
+  void waitsWithoutCounting() {
+    pages(page("171", PORTAL + "171", "2026-10-23", "a"),
+        page("170", PORTAL + "170", "2026-10-16", "b"));
+    when(summariser.summarise(any())).thenReturn(SchoolNewsletterSummariser.Attempt.waiting());
 
-    assertThat(service.recentMessages(5)).extracting(SchoolNewsService.Message::title)
-        .containsExactly("October Online Safety Newsletter",
-            "Reception and Year 6 - Height and Weight");
-  }
+    assertThat(service.summariseMissing()).isZero();
 
-  @Test
-  @DisplayName("asks for nothing more when there are no recent public emails")
-  void noEmails() {
-    when(documents.findPublishedBetween(any(), eq(List.of(SchoolSourceType.EMAIL)), any(), any()))
-        .thenReturn(List.of());
-
-    assertThat(service.recentMessages(5)).isEmpty();
-
-    verify(links, never()).findBySourceDocumentIdIn(anyList());
+    verify(summariser, times(2)).summarise(any());
+    verify(summaries, never()).save(any());
   }
 }

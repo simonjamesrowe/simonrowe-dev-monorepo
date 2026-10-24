@@ -2,8 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { NewsletterCard } from '../../src/school/components/NewsletterCard'
-import { SchoolMessagesCard } from '../../src/school/components/SchoolMessagesCard'
-import type { Newsletter, SchoolMessage } from '../../src/school/schoolNewsApi'
+import type { Newsletter } from '../../src/school/schoolNewsApi'
 
 // 23:00 UTC on the 22nd is midnight on the 23rd in London: the date the newsletter carries.
 const LATEST: Newsletter = {
@@ -85,41 +84,5 @@ describe('the newsletter card', () => {
     render(<NewsletterCard state={{ status: 'ready', items: [] }} onAsk={vi.fn()} />)
 
     expect(screen.getByText('No newsletters yet this term.')).toBeInTheDocument()
-  })
-})
-
-const MESSAGES: SchoolMessage[] = [
-  {
-    id: 'm1',
-    title: 'Reception and Year 6 - Height and Weight',
-    publishedAt: '2026-10-22T17:11:29Z',
-    yearGroups: ['Reception', 'Year 6'],
-  },
-  { id: 'm2', title: 'Ellie Reeves Art Competition', publishedAt: '2026-10-23T15:07:00Z', yearGroups: [] },
-]
-
-describe('the From the school card', () => {
-  it('lists each email with who it is for and when it came', () => {
-    render(<SchoolMessagesCard state={{ status: 'ready', items: MESSAGES }} onAsk={vi.fn()} />)
-
-    expect(screen.getByText('Reception, Year 6 · Thu 22 Oct')).toBeInTheDocument()
-    expect(screen.getByText('All years · Fri 23 Oct')).toBeInTheDocument()
-  })
-
-  it('asks the chat about an email when it is clicked', () => {
-    const onAsk = vi.fn()
-    render(<SchoolMessagesCard state={{ status: 'ready', items: MESSAGES }} onAsk={onAsk} />)
-
-    fireEvent.click(screen.getByText('Ellie Reeves Art Competition'))
-
-    expect(onAsk).toHaveBeenCalledWith(
-      'What did the school\'s email "Ellie Reeves Art Competition" on Friday 23 October say?',
-    )
-  })
-
-  it('says when nothing new has come', () => {
-    render(<SchoolMessagesCard state={{ status: 'ready', items: [] }} onAsk={vi.fn()} />)
-
-    expect(screen.getByText('Nothing new from the school in the last month.')).toBeInTheDocument()
   })
 })

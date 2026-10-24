@@ -19,13 +19,12 @@ import { AskBar } from './components/AskBar'
 import { HeadsUpStrip } from './components/HeadsUpStrip'
 import { HowItWorks } from './components/HowItWorks'
 import { NewsletterCard } from './components/NewsletterCard'
-import { SchoolMessagesCard } from './components/SchoolMessagesCard'
 import { UpcomingPanel } from './components/UpcomingPanel'
 import { YearSelector } from './components/YearSelector'
 import * as schoolChat from './schoolChatService'
 import type { SchoolConnectionState } from './schoolChatService'
 import { useSchoolCalendar } from './useSchoolCalendar'
-import { useSchoolNews } from './useSchoolNews'
+import { useSchoolNewsletters } from './useSchoolNews'
 
 const YEAR_STORAGE_KEY = 'term-time-year-groups'
 const SCHOOL_URL = 'https://www.kilmorieschool.co.uk'
@@ -46,10 +45,10 @@ const SITE_STATUS_POLL_MS = 10_000
 type PageView = 'home' | 'conversation'
 
 /**
- * Where a question came from, for analytics: typed, a suggestion chip, the calendar, `?q=`, the
- * newsletter card or the "From the school" card.
+ * Where a question came from, for analytics: typed, a suggestion chip, the calendar, `?q=` or the
+ * newsletter card.
  */
-type QuestionSource = 'input' | 'chip' | 'calendar' | 'link' | 'newsletter' | 'message'
+type QuestionSource = 'input' | 'chip' | 'calendar' | 'link' | 'newsletter'
 
 /** The question in flight, for the analytics event its answer closes. Never the question's text. */
 interface PendingAnswer {
@@ -181,7 +180,7 @@ export default function App() {
   // address handed over a question, whose answer is what the visitor came for.
   const [view, setView] = useState<PageView>(initialQuestion ? 'conversation' : 'home')
   const calendar = useSchoolCalendar(yearGroups)
-  const news = useSchoolNews()
+  const newsletters = useSchoolNewsletters()
   const initialQuestionSentRef = useRef(false)
   const sessionIdRef = useRef<string>(newSessionId())
   const endRef = useRef<HTMLDivElement>(null)
@@ -377,7 +376,6 @@ export default function App() {
   )
   const askAboutEvent = useMemo(() => askFrom('calendar'), [askFrom])
   const askAboutNewsletter = useMemo(() => askFrom('newsletter'), [askFrom])
-  const askAboutMessage = useMemo(() => askFrom('message'), [askFrom])
 
   // Sent without waiting for the socket: the transport holds one message until the connection
   // it is already opening is up. Deferred a tick and cancelled on cleanup because a development
@@ -451,8 +449,7 @@ export default function App() {
           <HeadsUpStrip calendar={calendar} onAsk={askAboutEvent} />
           <div className="school-home__cards">
             <UpcomingPanel calendar={calendar} onAsk={askAboutEvent} />
-            <NewsletterCard state={news.newsletters} onAsk={askAboutNewsletter} />
-            <SchoolMessagesCard state={news.messages} onAsk={askAboutMessage} />
+            <NewsletterCard state={newsletters} onAsk={askAboutNewsletter} />
           </div>
         </main>
       ) : (
@@ -518,8 +515,7 @@ export default function App() {
           <aside className="school-convo__rail" aria-label="What is on at school">
             <HeadsUpStrip calendar={calendar} onAsk={askAboutEvent} compact />
             <UpcomingPanel calendar={calendar} onAsk={askAboutEvent} compact />
-            <NewsletterCard state={news.newsletters} onAsk={askAboutNewsletter} compact />
-            <SchoolMessagesCard state={news.messages} onAsk={askAboutMessage} compact />
+            <NewsletterCard state={newsletters} onAsk={askAboutNewsletter} compact />
           </aside>
         </main>
       )}

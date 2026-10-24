@@ -55,10 +55,8 @@ class SchoolNewsControllerTest {
   @DisplayName("caps the limit a visitor can ask for")
   void capsTheLimit() {
     new SchoolNewsController(news, ENABLED).newsletters(500);
-    new SchoolNewsController(news, ENABLED).messages(500);
 
     verify(news).newsletters(SchoolNewsController.MAX_NEWSLETTERS);
-    verify(news).recentMessages(SchoolNewsController.MAX_MESSAGES);
   }
 
   @Test
@@ -67,7 +65,6 @@ class SchoolNewsControllerTest {
     final SchoolNewsController controller = new SchoolNewsController(news, DISABLED);
 
     assertThat(controller.newsletters(null).getStatusCode().value()).isEqualTo(503);
-    assertThat(controller.messages(null).getStatusCode().value()).isEqualTo(503);
     verifyNoInteractions(news);
   }
 }

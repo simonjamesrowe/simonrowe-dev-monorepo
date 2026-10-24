@@ -27,6 +27,31 @@ export function isHeadsUp(event: CalendarEvent): boolean {
 }
 
 /**
+ * The days that change, for the heads-up strip: one item per kind per day, and no term spans.
+ *
+ * Sources describe the same day in different words: on 2026-10-24 the strip showed "School
+ * reopens after half-term" and "Kilmorie Primary School return to school after half-term" side
+ * by side for Tuesday 3 November, which the server's duplicate merging does not catch because the
+ * titles share too few words. Rather than chase every wording, the strip keeps the first item of
+ * each kind for each start date, which the server has already ordered most authoritative first.
+ *
+ * A term boundary that runs over several days is a term's whole span ("Autumn term 2, Mon 2 Nov
+ * – Fri 18 Dec"). That is context, not a day that changes, and the days it starts and ends are
+ * already the ones that matter, so the strip leaves it out. The chat can still answer about it.
+ */
+export function headsUpItems(events: CalendarEvent[]): CalendarEvent[] {
+  const seen = new Set<string>()
+  return events.filter((event) => {
+    if (!isHeadsUp(event)) return false
+    if (event.type === 'TERM_BOUNDARY' && event.endDate !== event.startDate) return false
+    const key = `${event.type}|${event.startDate}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+/**
  * The strip's label for an event. A term boundary is not "no school": the last day of term is a
  * school day, often with an early finish, so it gets its own word rather than a wrong one.
  */

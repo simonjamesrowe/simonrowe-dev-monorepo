@@ -749,6 +749,15 @@ school:
   # out by a resource handler with no authorisation — these are tier-checked by
   # SchoolAttachmentController instead.
   attachment-path: ${SCHOOL_ATTACHMENT_PATH:school-attachments/}
+  # Who writes the newsletter card's summaries. `claude-code` submits each to software-factory's
+  # content-writing queue and falls back to OpenAI (chat-model) when that fails, is unreachable,
+  # returns unusable JSON or is still writing past claude-code-max-wait; `openai` is OpenAI
+  # alone. The default here is openai so no test ever reaches the subscription; production sets
+  # claude-code in docker-compose.prod.yml. Owner-scheduled background work only: a summary is
+  # written on a schedule and stored, and nothing a visitor does starts one.
+  newsletters:
+    writer: ${SCHOOL_NEWSLETTER_SUMMARY_WRITER:openai}
+    claude-code-max-wait: ${SCHOOL_NEWSLETTER_SUMMARY_CLAUDE_CODE_MAX_WAIT:30m}
   # Minted by scripts/termtime-gmail-auth.py. All three empty means Gmail ingestion simply does
   # not run - the public tier is unaffected. A password change on the Google account revokes any
   # refresh token carrying Gmail scopes, silently, so expect to re-mint occasionally.

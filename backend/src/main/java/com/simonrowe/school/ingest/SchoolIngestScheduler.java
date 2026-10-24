@@ -38,6 +38,8 @@ public class SchoolIngestScheduler {
   private static final String GMAIL_INTERVAL = "${school.schedule.gmail-ms:1800000}";
   // One request for the portal's newsletter list, plus a fetch for any issue not yet held.
   private static final String NEWSLETTER_INTERVAL = "${school.schedule.newsletters-ms:3600000}";
+  private static final String SUMMARY_INTERVAL =
+      "${school.schedule.newsletter-summaries-ms:300000}";
   private static final String STARTUP_DELAY = "120000";
   private static final String STARTUP_DELAY_WEBSITE = "240000";
   private static final String STARTUP_DELAY_GMAIL = "360000";
@@ -113,14 +115,7 @@ public class SchoolIngestScheduler {
     }
   }
 
-  /**
-   * Reads any newsletter the school has published that Term Time does not hold, then writes the
-   * page's summaries for any that lack one.
-   *
-   * <p>Summarising runs whether or not the poll found anything, because the email path also
-   * brings newsletters in, and a restore or an edited newsletter leaves one without a current
-   * summary. The two are caught separately so a failed poll still lets summaries catch up.
-   */
+  /** Reads any newsletter the school has published that Term Time does not hold yet. */
   @Scheduled(
       initialDelayString = STARTUP_DELAY_NEWSLETTERS, fixedDelayString = NEWSLETTER_INTERVAL)
   public void ingestNewsletters() {
@@ -129,6 +124,20 @@ public class SchoolIngestScheduler {
     } catch (RuntimeException e) {
       LOG.warn("Newsletter poll failed: {}", e.getMessage());
     }
+  }
+
+  /**
+   * Writes the page's summary for any recent newsletter without a current one.
+   *
+   * <p>Its own, shorter schedule rather than a step after the poll. With the Claude Code writer
+   * a summary is submitted on one run and collected on a later one, and on the hourly poll that
+   * would leave a newsletter without a summary for an hour after Claude Code had finished. Each
+   * run that finds nothing to do costs one Mongo read. It also catches newsletters the email
+   * path brings in, and ones left without a current summary by a restore or an edit.
+   */
+  @Scheduled(
+      initialDelayString = STARTUP_DELAY_NEWSLETTERS, fixedDelayString = SUMMARY_INTERVAL)
+  public void summariseNewsletters() {
     try {
       newsService.summariseMissing();
     } catch (RuntimeException e) {

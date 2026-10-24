@@ -32,7 +32,6 @@ vi.mock('../../src/school/schoolCalendarApi', () => ({
 const fetchNewsletters = vi.fn()
 vi.mock('../../src/school/schoolNewsApi', () => ({
   fetchNewsletters: (...a: unknown[]) => fetchNewsletters(...a),
-  fetchSchoolMessages: () => Promise.resolve([]),
 }))
 
 describe('the home view and the conversation', () => {
@@ -60,6 +59,7 @@ describe('the home view and the conversation', () => {
     expect(screen.queryByText(/early version/)).toBeNull()
     expect(screen.queryByText('Beta')).toBeNull()
     expect(screen.queryByRole('region', { name: 'Conversation' })).toBeNull()
+    expect(screen.queryByText('From the school')).toBeNull()
   })
 
   it('moves to the conversation when a question is asked, and back again without losing it', async () => {

@@ -12125,7 +12125,7 @@ body[data-narration-bar] .app-layout__main {
 
 .school-home__cards {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
   gap: 1.25rem;
   align-items: start;
 }
@@ -12199,7 +12199,7 @@ body[data-narration-bar] .app-layout__main {
   outline-offset: 1px;
 }
 
-/* Cards: the shared frame of Coming up, the newsletter and From the school. */
+/* Cards: the shared frame of Coming up and the newsletter. */
 
 .school-card,
 .school-upcoming {
@@ -12397,69 +12397,6 @@ body[data-narration-bar] .app-layout__main {
 .school-newsletter__issue:focus-visible {
   outline: 2px solid var(--school-accent);
   outline-offset: 1px;
-}
-
-/* From the school. */
-
-.school-messages__list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.school-messages__list li + li {
-  border-top: 1px solid var(--color-border);
-}
-
-.school-messages__item {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 0.1rem 0.5rem;
-  width: 100%;
-  padding: 0.6rem 0.4rem;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--color-text);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.school-messages__item:hover,
-.school-messages__item:focus-visible {
-  background: var(--surface-container-high);
-}
-
-.school-messages__item:focus-visible {
-  outline: 2px solid var(--school-accent);
-  outline-offset: 1px;
-}
-
-.school-messages__title {
-  font-size: 0.88rem;
-  font-weight: 500;
-}
-
-.school-messages__meta {
-  grid-column: 1;
-  font-size: 0.76rem;
-  color: var(--color-text-muted);
-}
-
-.school-messages__ask {
-  grid-column: 2;
-  grid-row: 1 / span 2;
-  align-self: center;
-  display: inline-flex;
-  color: var(--upcoming-violet);
-  opacity: 0;
-  transition: opacity var(--transition-fast);
-}
-
-.school-messages__item:hover .school-messages__ask,
-.school-messages__item:focus-visible .school-messages__ask {
-  opacity: 1;
 }
 
 /* Conversation view: the chat takes the wide column and the cards fold into a rail. */
@@ -12853,8 +12790,7 @@ body[data-narration-bar] .app-layout__main {
 }
 
 @media (hover: none) {
-  .school-upcoming__ask,
-  .school-messages__ask {
+  .school-upcoming__ask {
     opacity: 0.7;
   }
 }
@@ -12927,14 +12863,13 @@ body[data-narration-bar] .app-layout__main {
   white-space: nowrap;
 }
 
-@media (max-width: 68rem) {
+@media (max-width: 56rem) {
+  /* One column, newsletter first: it is the card that changes every week. */
   .school-home__cards {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
   }
 
-  /* The newsletter is the widest card; on two columns it gets a row of its own. */
   .school-home__cards .school-newsletter {
-    grid-column: 1 / -1;
     grid-row: 1;
   }
 }
@@ -12975,10 +12910,6 @@ body[data-narration-bar] .app-layout__main {
     flex-wrap: nowrap;
     overflow-x: auto;
     padding-bottom: 0.2rem;
-  }
-
-  .school-home__cards {
-    grid-template-columns: minmax(0, 1fr);
   }
 
   .school-page__chat .chat-panel__messages {
