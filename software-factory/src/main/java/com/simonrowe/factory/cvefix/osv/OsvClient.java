@@ -136,7 +136,11 @@ public class OsvClient {
         continue;
       }
       for (JsonNode range : affected.path("ranges")) {
-        if (!"ECOSYSTEM".equals(range.path("type").asText(""))) {
+        // Maven advisories use ECOSYSTEM ranges; GitHub's npm advisories use SEMVER only. Reading
+        // only ECOSYSTEM made every npm advisory look unfixed, so no npm repair was ever planned
+        // (zod 4.3.6 on 2026-10-24). GIT ranges carry commits, not versions, and stay skipped.
+        String type = range.path("type").asText("");
+        if (!"ECOSYSTEM".equals(type) && !"SEMVER".equals(type)) {
           continue;
         }
         MavenVersion introduced = null;

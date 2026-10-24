@@ -103,19 +103,29 @@ class OsvClientTest {
         .isNull();
   }
 
+  /**
+   * The shape OSV really returns for an npm package: SEMVER ranges only, copied from its answer
+   * for zod 4.3.6. An earlier fixture carried an ECOSYSTEM range too, which no npm advisory has,
+   * so the test passed while every real npm advisory read as unfixed.
+   */
   @Test
   void asksAboutAnNpmPackageInItsOwnEcosystem() {
     responses.add(page("""
-        {"id":"GHSA-6g55-p6wh-862q","affected":[
-          {"package":{"ecosystem":"Maven","name":"postcss"},
-           "ranges":[{"type":"ECOSYSTEM","events":[{"introduced":"0"},{"fixed":"9.9.9"}]}]},
-          {"package":{"ecosystem":"npm","name":"postcss"},
-           "ranges":[{"type":"SEMVER","events":[{"introduced":"0"},{"fixed":"8.5.1"}]},
-                     {"type":"ECOSYSTEM","events":[{"introduced":"0"},{"fixed":"8.5.12"}]}]}]}\
+        {"id":"GHSA-mrhx-c7xc-m3w5","affected":[
+          {"package":{"ecosystem":"npm","name":"zod"},
+           "ranges":[{"type":"SEMVER","events":[{"introduced":"0"},{"fixed":"4.6.6"}]}]}]}\
         """, ""));
 
-    assertThat(client.advisories(OsvClient.NPM, "postcss", "8.5.6"))
-        .containsExactly(new OsvClient.Advisory("GHSA-6g55-p6wh-862q", "8.5.12"));
-    assertThat(requests.get(0)).contains("\"ecosystem\":\"npm\"", "\"name\":\"postcss\"");
+    assertThat(client.advisories(OsvClient.NPM, "zod", "4.3.6"))
+        .containsExactly(new OsvClient.Advisory("GHSA-mrhx-c7xc-m3w5", "4.6.6"));
+    assertThat(requests.get(0)).contains("\"ecosystem\":\"npm\"", "\"name\":\"zod\"");
+  }
+
+  @Test
+  void gitRangesCarryCommitsAndAreSkipped() throws Exception {
+    assertThat(OsvClient.fixedVersion(mapper.readTree("""
+        {"id":"GHSA-a","affected":[{"package":{"ecosystem":"npm","name":"zod"},
+          "ranges":[{"type":"GIT","events":[{"introduced":"0"},{"fixed":"abc123"}]}]}]}"""),
+        OsvClient.NPM, "zod", MavenVersion.of("4.3.6"))).isNull();
   }
 }
