@@ -12,11 +12,12 @@ import {
   SkipForward,
   TrainFront,
 } from 'lucide-react'
-import { useEffect, useState, type Ref } from 'react'
+import { useEffect, useRef, useState, type Ref } from 'react'
 import { Link } from 'react-router-dom'
 
 import { formatClock, formatDate, toTrack } from './playlistFormat'
 import { ReadAlong } from './ReadAlong'
+import { useAdminRole } from '../../auth/useAdminRole'
 import { useAuth } from '../../auth/useAuth'
 import { itemKey, upNextOf, usePlaylistSnapshot } from '../../hooks/playlistStore'
 import { usePlaylistActions } from '../../hooks/usePlaylistActions'
@@ -25,6 +26,8 @@ import { fetchBlogById } from '../../services/blogApi'
 import { narrationMediaUrl } from '../narration/narrationMedia'
 import { PLAYBACK_SPEEDS } from '../narration/playbackSpeeds'
 import { useNarrationAudio } from '../narration/useNarrationAudio'
+import { SnippetLayer } from '../snippets/SnippetLayer'
+import { trackSource } from '../snippets/snippetSource'
 
 const SKIP_BACK_SECONDS = 15
 const SKIP_FORWARD_SECONDS = 30
@@ -57,9 +60,13 @@ export function NowPlayingPanel({ variant, onClose, headingRef }: NowPlayingPane
     togglePlay, seek, setRate, next, previous, skipBy, setJourney, playQueue,
   } = useNarrationAudio()
   const { isAuthenticated } = useAuth()
+  const isAdmin = useAdminRole()
+  const readRef = useRef<HTMLDivElement>(null)
   const { data } = usePlaylistSnapshot()
   const { toggleFavourite } = usePlaylistActions()
-  const [text, setText] = useState<string | null>(null)
+  // Kept with the item it belongs to, so the render where the track has just changed never
+  // pairs the new item with the old text (a snippet would be checked against the wrong one).
+  const [loadedText, setLoadedText] = useState<{ key: string; body: string } | null>(null)
   const [reading, setReading] = useState(readAlongPreferred)
 
   const entry = track
@@ -71,8 +78,9 @@ export function NowPlayingPanel({ variant, onClose, headingRef }: NowPlayingPane
   // Read along: fetch the text being heard, a summary or a post. Both are public, and cheap.
   const contentType = track?.contentType
   const contentId = track?.contentId
+  const textKey = `${contentType}:${contentId}`
+  const text = loadedText?.key === textKey ? loadedText.body : null
   useEffect(() => {
-    setText(null)
     if (!contentType || !contentId) return undefined
     const controller = new AbortController()
     const load = contentType === 'BLOG'
@@ -81,7 +89,7 @@ export function NowPlayingPanel({ variant, onClose, headingRef }: NowPlayingPane
         .then((response) => (response.state === 'READY' ? response.body : null))
     load
       .then((body) => {
-        if (!controller.signal.aborted && body) setText(body)
+        if (!controller.signal.aborted && body) setLoadedText({ key: `${contentType}:${contentId}`, body })
       })
       .catch(() => {
         // The read-along is a nicety. The audio plays without it.
@@ -278,7 +286,20 @@ export function NowPlayingPanel({ variant, onClose, headingRef }: NowPlayingPane
                     ? 'Read along'
                     : track.contentType === 'BLOG' ? 'The post' : 'The summary'}
                 </h3>
-                <ReadAlong markdown={text} timingsUrl={track.timingsUrl} />
+                <ReadAlong markdown={text} textRef={readRef} timingsUrl={track.timingsUrl} />
+                {/* Snippets are kept from the text being heard, as from the summary drawer or
+                    the post. Only on the wide card: the phone sheet has no room for the list. */}
+                {isAdmin && (
+                  <SnippetLayer
+                    body={text}
+                    isFavourite={entry?.favourite ?? true}
+                    onFavourite={() => {
+                      if (entry && entry.favourite === false) void toggleFavourite(entry)
+                    }}
+                    proseRef={readRef}
+                    source={trackSource(track, entry?.publishedAt ?? null)}
+                  />
+                )}
               </>
             )}
             {track.external

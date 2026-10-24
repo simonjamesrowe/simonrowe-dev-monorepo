@@ -49,6 +49,16 @@ function renderAt(position: number, timingsUrl: string | null = TIMINGS_URL) {
 
 const word = (text: string) => screen.getByText(text, { selector: '.read-along__word' })
 
+/** Selects a word as a reader would. jsdom keeps a selection but never fires the event. */
+function selectWord(text: string) {
+  const range = document.createRange()
+  range.selectNodeContents(word(text))
+  const selection = document.getSelection()!
+  selection.removeAllRanges()
+  selection.addRange(range)
+  act(() => { document.dispatchEvent(new Event('selectionchange')) })
+}
+
 describe('ReadAlong', () => {
   beforeEach(() => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
@@ -113,6 +123,41 @@ describe('ReadAlong', () => {
     await userEvent.click(word('Grafana'))
 
     expect(audio.seek).toHaveBeenCalledWith(6.4)
+  })
+
+  it('leaves the audio where it is when a click ends a selection', async () => {
+    const { audio } = renderAt(0)
+    await waitFor(() => expect(word('Grafana')).toHaveClass('read-along__word--timed'))
+    selectWord('Grafana')
+
+    fireEvent.click(word('Grafana'))
+
+    expect(audio.seek).not.toHaveBeenCalled()
+  })
+
+  it('holds the text still while some of it is selected, and follows again after', async () => {
+    const scrollTo = vi.fn()
+    const original = HTMLElement.prototype.scrollTo
+    HTMLElement.prototype.scrollTo = scrollTo
+    try {
+      const { moveTo } = renderAt(0)
+      await waitFor(() => expect(word('Grafana')).toHaveClass('read-along__word--timed'))
+      selectWord('Grafana')
+
+      moveTo(3.0)
+      expect(word('follow')).toHaveClass('read-along__word--current')
+      expect(scrollTo).not.toHaveBeenCalled()
+
+      act(() => {
+        document.getSelection()!.removeAllRanges()
+        document.dispatchEvent(new Event('selectionchange'))
+      })
+      moveTo(7.0)
+      expect(scrollTo).toHaveBeenCalled()
+    } finally {
+      HTMLElement.prototype.scrollTo = original
+      document.getSelection()!.removeAllRanges()
+    }
   })
 
   it('stops following while the reader scrolls, and offers the way back', async () => {
