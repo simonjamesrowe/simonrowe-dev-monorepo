@@ -39,6 +39,8 @@ class GitHubCommitHistoryTest {
 
   private HttpServer server;
   private final List<String> ifNoneMatch = new CopyOnWriteArrayList<>();
+  private final List<String> rawPaths = new CopyOnWriteArrayList<>();
+  private final List<String> rawQueries = new CopyOnWriteArrayList<>();
   private volatile int listingStatus = 200;
 
   @BeforeEach
@@ -54,6 +56,10 @@ class GitHubCommitHistoryTest {
   }
 
   private void handle(final HttpExchange exchange) throws IOException {
+    // The raw form, as GitHub receives it. HttpServer matches contexts on the decoded path, so
+    // a %2F-encoded repository reached this handler looking correct and the test still passed.
+    rawPaths.add(exchange.getRequestURI().getRawPath());
+    rawQueries.add(exchange.getRequestURI().getRawQuery());
     String path = exchange.getRequestURI().getPath();
     if (path.endsWith("/commits")) {
       String validator = exchange.getRequestHeaders().getFirst("If-None-Match");
@@ -84,9 +90,45 @@ class GitHubCommitHistoryTest {
   }
 
   private GitHubCommitHistory history() {
+    return history(REPO, 100);
+  }
+
+  private GitHubCommitHistory history(final String repository, final int depth) {
     return new GitHubCommitHistory(
-        "http://127.0.0.1:" + server.getAddress().getPort(), REPO, "main", 50,
+        "http://127.0.0.1:" + server.getAddress().getPort(), repository, "main", depth,
         Duration.ofSeconds(2));
+  }
+
+  @Test
+  void sendsTheRepositoryAsTwoPathSegmentsNotAnEncodedSlash() {
+    // GitHub answers /repos/owner%2Fname/... with a 404, which is how the changelog stopped
+    // at #210 for three weeks.
+    history().recent();
+    history().filesChanged(SHA);
+
+    assertThat(rawPaths).containsExactly(
+        "/repos/" + REPO + "/commits",
+        "/repos/" + REPO + "/commits/" + SHA);
+  }
+
+  @Test
+  void asksForTheWholeDepthUpToGitHubsCeiling() {
+    history(REPO, 100).recent();
+    history(REPO, 500).recent();
+    history(REPO, 0).recent();
+
+    assertThat(rawQueries).containsExactly(
+        "sha=main&per_page=100", "sha=main&per_page=100", "sha=main&per_page=1");
+  }
+
+  @Test
+  void refusesRepositoriesThatAreNotOwnerSlashName() {
+    for (String bad : new String[] {
+        null, "", "simonjamesrowe", "/name", "owner/", "owner/name/extra"}) {
+      assertThatThrownBy(() -> history(bad, 100))
+          .as("repository %s", bad)
+          .isInstanceOf(IllegalArgumentException.class);
+    }
   }
 
   @Test

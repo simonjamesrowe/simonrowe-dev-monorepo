@@ -51,7 +51,7 @@ directory for this feature.
 | frontend SHA / build time | `VITE_GIT_SHA` / `VITE_BUILD_TIME` build args, baked into the bundle by `publish.yml` |
 | software-factory / deployer version | their own `GET /api/version` on port **8090**, fetched by `FactoryVersionClient` |
 | third-party tags | `ProdImageCatalog` parses `docker-compose.prod.yml`, shipped into the backend image as a `processResources` resource |
-| changelog commits | `GitHubCommitHistory` reads `main`'s last 50 commits from the GitHub REST API (public repo, no credential) |
+| changelog commits | `GitHubCommitHistory` reads `main`'s last 100 commits (GitHub's `per_page` ceiling) from the GitHub REST API (public repo, no credential) |
 | release records in Mongo | `ReleaseRecorder`, polling every 5 minutes (20s after startup) — not a Mongock change unit (see Gotchas) |
 | release notes | `ReleaseSummarySweep`, every 2 minutes, 3 per tick, Embabel `Ai` |
 
@@ -103,10 +103,21 @@ implementation as dead weight the page never rendered.
   does not count against the limit, so an unchanged branch costs nothing. Files cost one request
   per commit, only for commits not yet stored, capped at 20 a poll
   (`platform.releases.history.max-file-lookups`), so a restore into an empty collection spreads
-  its 50-commit backfill over three polls. A failed file lookup ends the poll without storing
+  its 100-commit backfill over five polls. A failed file lookup ends the poll without storing
   that commit, because a record is never revisited and its release note is written from the
   files. `platform.releases.history.enabled: false` in `application-test.yml` keeps every test
   off the network.
+- **The repository goes into the URL as two variables, `{owner}/{name}`, never one.** RestClient
+  encodes a URI variable strictly, so a single `{repository}` became `simonjamesrowe%2F…`, and
+  GitHub 404s that. Every poll failed from #211 (2026-10-06) until the fix, and the changelog
+  stopped at #210 while `/status` looked healthy: the only trace was a WARN every five minutes,
+  `Could not read release history: GitHub commit listing returned 404`. Look for that line in
+  Loki first whenever the newest release is older than the backend's own commit.
+  `GitHubCommitHistoryTest` asserts the **raw** request path, because the JDK `HttpServer` fake
+  matches on the decoded one and passed the broken form.
+- **The poll reaches back 100 commits, so that is how long it can stay broken before merges
+  are lost for good.** The outage above left 77 merges unrecorded; at the old depth of 50 the
+  oldest 27 would never have appeared.
 - **The changelog is paged and searched on the server**: `GET /api/platform/releases?page=&size=&type=&q=`
   returns a `ReleasePage` (`items`, `page`, `size`, `totalItems`, `totalPages`, `totalReleases`,
   `typeCounts`). Everything stored is reachable; the page used to fetch the newest 20 and filter
@@ -143,7 +154,7 @@ implementation as dead weight the page never rendered.
   `findAndModify` claim step rather than a status value nothing sets: a crash mid-call should
   leave the row retryable, not stuck.
 - **`platform_releases` is in the backup and restore lists** and must stay there — it holds
-  paid-for LLM output, and the GitHub poll only reaches back 50 commits, so nothing older could
+  paid-for LLM output, and the GitHub poll only reaches back 100 commits, so nothing older could
   ever be re-created after a restore without it. It is in
   `BackupService.BACKUP_COLLECTIONS` and `RestoreService.IMPORT_ORDER_INDEPENDENT`.
 - **Release records are written by `ReleaseRecorder` on startup, not by a Mongock change
