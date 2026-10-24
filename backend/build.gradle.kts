@@ -239,7 +239,7 @@ dependencies {
         implementation("at.yawk.lz4:lz4-java:1.11.4")
         // GHSA-6fmv-xxpf-w3cw — maven-artifact 3.6.1 requests the vulnerable 3.2.0,
         // and reaches runtimeClasspath through mongock-runner-core.
-        implementation("org.codehaus.plexus:plexus-utils:3.6.1")
+        implementation("org.codehaus.plexus:plexus-utils:3.6.0")
     }
 
     implementation(libs.spring.boot.starter.webmvc)
