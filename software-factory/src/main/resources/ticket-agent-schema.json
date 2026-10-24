@@ -3,7 +3,7 @@
   "properties": {
     "changed": {"type": "boolean"},
     "summary": {"type": "string"},
-    "prTitle": {"type": "string"},
+    "prTitle": {"type": "string", "description": "A conventional-commit title in the imperative, e.g. \"fix: guard the exporter against an empty batch\". Type first (fix, feat, chore, docs, refactor, test), lower case after the colon, under 72 characters."},
     "prBody": {"type": "string"}
   },
   "required": ["changed", "summary", "prTitle", "prBody"],

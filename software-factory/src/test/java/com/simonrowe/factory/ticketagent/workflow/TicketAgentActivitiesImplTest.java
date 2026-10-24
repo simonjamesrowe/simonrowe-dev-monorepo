@@ -125,6 +125,25 @@ class TicketAgentActivitiesImplTest {
     verify(engine).attempt(eq(checkout), contains("attempt 1 of 3"), any());
   }
 
+  /** The title becomes the squash commit on main, so a missing type is added, not trusted. */
+  @Test
+  void agentTitleWithoutTypeBecomesConventional() {
+    when(engine.attempt(eq(checkout), anyString(), any())).thenReturn(new AgentEdit(true,
+        "Bumped it.", "Bump plexus-utils to 3.6.1 (GHSA-6fmv-xxpf-w3cw)", "Body"));
+    when(workspaces.changedPaths(workspace, NO_HEARTBEAT))
+        .thenReturn(List.of("backend/build.gradle.kts"));
+    when(workspaces.stagedDiff(workspace, NO_HEARTBEAT)).thenReturn("");
+    when(workspaces.commitAndPush(any(), anyString(), anyString(), anyString(), anyString(),
+        any(), anyBoolean(), any())).thenReturn("sha4");
+
+    AttemptResult result = attempt(1, false);
+
+    assertThat(result.prTitle()).isEqualTo("fix: bump plexus-utils to 3.6.1 (GHSA-6fmv-xxpf-w3cw)");
+    verify(workspaces).commitAndPush(eq(workspace), eq("agent/sim-107"),
+        eq("fix: bump plexus-utils to 3.6.1 (GHSA-6fmv-xxpf-w3cw)"), anyString(), anyString(),
+        eq(7L), eq(true), any());
+  }
+
   @Test
   void repairClonesTheBranchCarriesTheFailureAndNeverForces() {
     agentChanges(List.of("backend/src/main/java/A.java"));
