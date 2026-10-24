@@ -662,8 +662,11 @@ platform:
       enabled: ${PLATFORM_RELEASE_HISTORY_ENABLED:true}
       repository: simonjamesrowe/simonrowe-dev-monorepo
       branch: main
+      # How far back each poll looks: GitHub's per_page ceiling. A merge older than this is
+      # never recorded, so it is also how long the poll can be broken before history is lost.
+      depth: 100
       poll-interval: PT5M
-      # A restore into an empty collection backfills 50 commits over three polls, not one.
+      # A restore into an empty collection backfills 100 commits over five polls, not one.
       max-file-lookups: 20
   # The other first-party JVMs, asked over the Docker network. Neither is routed by nginx.
   # Note the port: software-factory serves on 8090, not 8080.

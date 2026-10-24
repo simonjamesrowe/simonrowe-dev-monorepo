@@ -27,6 +27,11 @@ import org.springframework.web.client.RestClientException;
  * {@code 304 Not Modified} against the limit, so polling an unchanged branch is free. Files cost
  * one request per commit and are fetched only for commits not yet stored, capped per poll by
  * {@link ReleaseRecorder}.
+ *
+ * <p><b>The owner and the name are two URI variables, never one.</b> RestClient encodes a URI
+ * variable's value strictly, so {@code {repository}} expanded to {@code simonjamesrowe%2F...},
+ * and GitHub answers that path with a 404. That is how the changelog stopped at #210: every
+ * poll from the day this class shipped failed, with a WARN the page itself never showed.
  */
 @Component
 public class GitHubCommitHistory implements CommitHistory {
@@ -36,8 +41,12 @@ public class GitHubCommitHistory implements CommitHistory {
   private static final String API_VERSION = "2022-11-28";
   private static final String USER_AGENT = "simonrowe-dev-backend";
 
+  /** GitHub's ceiling on {@code per_page}; a larger value is silently treated as this. */
+  static final int MAX_DEPTH = 100;
+
   private final RestClient client;
-  private final String repository;
+  private final String owner;
+  private final String name;
   private final String branch;
   private final int depth;
   private final AtomicReference<CachedListing> listing = new AtomicReference<>(null);
@@ -48,8 +57,9 @@ public class GitHubCommitHistory implements CommitHistory {
    * @param baseUrl the GitHub API base URL
    * @param repository {@code owner/name} of the repository whose history is the changelog
    * @param branch the branch to read
-   * @param depth how many commits to list
+   * @param depth how many commits to list, clamped to between 1 and {@link #MAX_DEPTH}
    * @param timeout connect and read timeout
+   * @throws IllegalArgumentException when {@code repository} is not {@code owner/name}
    */
   public GitHubCommitHistory(
       @Value("${platform.releases.history.api-base-url:https://api.github.com}")
@@ -57,7 +67,7 @@ public class GitHubCommitHistory implements CommitHistory {
       @Value("${platform.releases.history.repository:simonjamesrowe/simonrowe-dev-monorepo}")
       final String repository,
       @Value("${platform.releases.history.branch:main}") final String branch,
-      @Value("${platform.releases.history.depth:50}") final int depth,
+      @Value("${platform.releases.history.depth:100}") final int depth,
       @Value("${platform.releases.history.timeout:10s}") final Duration timeout) {
     this.client = RestClient.builder()
         .baseUrl(baseUrl)
@@ -69,17 +79,23 @@ public class GitHubCommitHistory implements CommitHistory {
             .readTimeout(timeout)
             .buildRequestFactory())
         .build();
-    this.repository = repository;
+    int slash = repository == null ? -1 : repository.indexOf('/');
+    if (slash <= 0 || slash != repository.lastIndexOf('/') || slash == repository.length() - 1) {
+      throw new IllegalArgumentException(
+          "platform.releases.history.repository must be owner/name, was: " + repository);
+    }
+    this.owner = repository.substring(0, slash);
+    this.name = repository.substring(slash + 1);
     this.branch = branch;
-    this.depth = depth;
+    this.depth = Math.clamp(depth, 1, MAX_DEPTH);
   }
 
   @Override
   public List<MainCommit> recent() {
     CachedListing cached = listing.get();
     CachedListing fetched = client.get()
-        .uri("/repos/{repository}/commits?sha={branch}&per_page={depth}",
-            repository, branch, depth)
+        .uri("/repos/{owner}/{name}/commits?sha={branch}&per_page={depth}",
+            owner, name, branch, depth)
         .headers(headers -> {
           if (cached != null && cached.etag() != null) {
             headers.setIfNoneMatch(cached.etag());
@@ -103,7 +119,7 @@ public class GitHubCommitHistory implements CommitHistory {
   @Override
   public List<String> filesChanged(final String sha) {
     CommitDetail detail = client.get()
-        .uri("/repos/{repository}/commits/{sha}", repository, sha)
+        .uri("/repos/{owner}/{name}/commits/{sha}", owner, name, sha)
         .retrieve()
         .body(CommitDetail.class);
     // Kept even though RestClient documents a non-null body for a 200: a future client version,
