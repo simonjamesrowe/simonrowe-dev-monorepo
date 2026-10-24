@@ -52,6 +52,7 @@ public class GitHubCredentials {
    * a different level than the others.
    */
   private static final String WRITE = "write";
+  private static final String READ = "read";
 
   /**
    * Permissions no credentialed path can work without, so a missing grant must refuse to mint.
@@ -75,12 +76,17 @@ public class GitHubCredentials {
    * needs a token too. That asymmetry is the whole reason these are held apart from {@link
    * #REQUIRED_PERMISSIONS} and filtered against the installation's real grant before the mint.
    *
-   * <p>{@code actions: read} lets the ticket agent read a failed CI job's log, which GitHub serves
-   * only with that permission even on a public repository. Without it the agent's repair brief
-   * names the failed job and step but not the error, which is a weaker brief, not an outage.
+   * <p>{@code actions} at {@code read} lets the ticket agent read a failed CI job's log, which
+   * GitHub serves only with that permission even on a public repository; without it the repair
+   * brief names the failed job and step but not the error. At {@code write} it also lets the agent
+   * start the npm lockfile workflow for an npm vulnerability repair; without that, npm repair
+   * tickets are handed back to a person.
+   *
+   * <p>Each is asked for at the level wanted, or at {@code read} when that is all the installation
+   * grants, so a grant short of {@code actions: write} still keeps the job logs.
    */
   private static final Map<String, String> OPTIONAL_PERMISSIONS =
-      Map.of("checks", WRITE, "actions", "read");
+      Map.of("checks", WRITE, "actions", WRITE);
 
   /** Ranks GitHub's access levels, so a granted {@code write} satisfies a needed {@code read}. */
   private static final Map<String, Integer> LEVEL_RANK =
@@ -386,6 +392,16 @@ public class GitHubCredentials {
       String level = OPTIONAL_PERMISSIONS.get(name);
       if (granted != null && satisfies(granted.get(name), level)) {
         permissions.put(name, level);
+      } else if (granted != null && satisfies(granted.get(name), READ)) {
+        permissions.put(name, READ);
+        LOGGER.warn(
+            """
+            GitHub App installation {} grants {} only at read, not {}; continuing at read. \
+            The capability that needs {} is unavailable until the grant is accepted.""",
+            installationId,
+            name,
+            level,
+            level);
       } else {
         // Not an error: the capability behind it degrades on its own, and saying so once per mint
         // is what turns "code review stopped gating anything" into a one-line diagnosis.

@@ -321,4 +321,21 @@ class TicketAgentGitHubHttpTest {
     assertThat(bodies.get(0)).contains("disablePullRequestAutoMerge").contains("PR_271");
     assertThat(bodies.get(1)).contains("convertPullRequestToDraft");
   }
+
+  @Test
+  void readsTheBaseCommit() {
+    reply("GET " + REPO + "/pulls/271", 200, "{\"base\":{\"sha\":\"base1\"}}");
+
+    assertThat(gitHub.baseSha(271, 7L)).isEqualTo("base1");
+  }
+
+  @Test
+  void readsTheLockfileRawAtACommit() {
+    reply("GET " + REPO + "/contents/frontend/package-lock.json?ref=sha1", 200,
+        "{\"lockfileVersion\": 3}");
+
+    assertThat(gitHub.lockfileAt("sha1", 7L)).isEqualTo("{\"lockfileVersion\": 3}");
+    assertThat(gitHub.lockfileAt("missing", 7L)).isNull();
+    assertThat(gitHub.lockfileAt("", 7L)).isNull();
+  }
 }

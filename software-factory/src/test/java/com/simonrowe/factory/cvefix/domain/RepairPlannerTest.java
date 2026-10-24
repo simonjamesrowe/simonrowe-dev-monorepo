@@ -43,9 +43,49 @@ class RepairPlannerTest {
     assertThat(RepairPlanner.plan(tomcat, List.of())).isEmpty();
     // Already at or past the fix.
     assertThat(RepairPlanner.plan(tomcat, List.of(new Advisory("GHSA-a", "11.0.25")))).isEmpty();
-    // Not Maven.
-    assertThat(RepairPlanner.plan(component("pkg:npm/vite@6.0.0", "6.0.0"),
-        List.of(new Advisory("GHSA-a", "6.0.1")))).isEmpty();
+    // Neither Maven nor npm.
+    assertThat(RepairPlanner.plan(component("pkg:pypi/requests@2.0.0", "2.0.0"),
+        List.of(new Advisory("GHSA-a", "2.0.1")))).isEmpty();
+  }
+
+  @Test
+  void plansAnNpmPackageAsTheFactorysLockfileRepair() {
+    RepairPlan plan = RepairPlanner.plan(component("pkg:npm/postcss@8.5.6", "8.5.6"), List.of(
+        new Advisory("GHSA-a", "8.5.10"), new Advisory("GHSA-b", "8.5.23"))).orElseThrow();
+
+    assertThat(plan.npm()).isTrue();
+    assertThat(plan.ecosystem()).isEqualTo("npm");
+    assertThat(plan.coordinate()).isEqualTo("postcss");
+    assertThat(plan.targetVersion()).isEqualTo("8.5.23");
+  }
+
+  @Test
+  void npmFixMustBeSameMajorRelease() {
+    ComponentFindings nanoid = component("pkg:npm/nanoid@3.3.11", "3.3.11");
+    assertThat(RepairPlanner.plan(nanoid, List.of(new Advisory("GHSA-a", "5.1.6")))).isEmpty();
+    assertThat(RepairPlanner.plan(nanoid, List.of(new Advisory("GHSA-a", "3.3.18-beta.1"))))
+        .isEmpty();
+  }
+
+  @Test
+  void readsNpmNamesScopeIncluded() {
+    assertThat(RepairPlanner.npmName("pkg:npm/postcss@8.5.6")).contains("postcss");
+    assertThat(RepairPlanner.npmName("pkg:npm/%40babel/core@7.0.0")).contains("@babel/core");
+    assertThat(RepairPlanner.npmName("pkg:npm/Upper@1.0.0")).isEmpty();
+    assertThat(RepairPlanner.npmName("pkg:maven/g/a@1")).isEmpty();
+    assertThat(RepairPlanner.npmName("pkg:npm/" + "a".repeat(100_000) + "@1")).isEmpty();
+    assertThat(RepairPlanner.osvPackage("pkg:npm/postcss@8.5.6"))
+        .contains(List.of("npm", "postcss"));
+    assertThat(RepairPlanner.osvPackage(PURL))
+        .contains(List.of("Maven", "org.apache.tomcat.embed:tomcat-embed-core"));
+  }
+
+  /** A plan recorded before npm repairs existed reads back as Maven. */
+  @Test
+  void planWithoutEcosystemIsMaven() {
+    RepairPlan old = new RepairPlan("p", PURL, "g:a", "1.0.0", "1.0.1", List.of("X"), "HIGH");
+    assertThat(old.ecosystem()).isEqualTo("Maven");
+    assertThat(old.npm()).isFalse();
   }
 
   /** The brief reaches the agent unread, so only pattern-shaped values may be in it. */

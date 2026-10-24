@@ -199,6 +199,8 @@ public class ReviewActivitiesImpl implements ReviewActivities {
         () -> autoMergeGateway.listFiles(pullRequest, state.changedFiles()),
         GuidancePaths.forRepository(
             pullRequest.owner(), pullRequest.repository(), feedbackProperties.agentSetupRepo()),
-        path -> autoMergeGateway.fileAt(pullRequest, path, pullRequest.headSha()));
+        path -> autoMergeGateway.fileAt(pullRequest, path, pullRequest.headSha()),
+        pullRequest.baseSha(),
+        ref -> autoMergeGateway.lockfileAt(pullRequest, ref));
   }
 }

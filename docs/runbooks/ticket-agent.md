@@ -66,7 +66,8 @@ On a ticket labelled `factory:cvefix` (the scan's repair tickets, `cvefix.md` "R
 and `DependencyPins` finds nothing but version changes, it leaves `no-auto-merge` off and notes
 why in the PR body. The reviewer re-checks the same diff before it arms (`pr-governance.md`, rule
 8), so the agent's answer only stops it vetoing a merge the reviewer's rules allow. Anything more
-than a version move, any silencing, and any npm manifest still gets `no-auto-merge`. The activity
+than a version move, any silencing, and any `package.json` change still gets `no-auto-merge`.
+The npm lockfile is judged by `NpmLockPins` (see "npm repairs" below). The activity
 is new, behind `Workflow.getVersion("vulnerability-merge-policy")`; runs started before it keep
 calling `markSilencing`.
 
@@ -78,11 +79,51 @@ prose at all: only advisory ids, a Maven coordinate and two versions, each patte
 (`RepairPlanner`). The merge label protects the merge decision; it does not prevent that earlier
 CI execution.
 
-**Known npm gap:** `package-lock.json` needs regenerating, including integrity hashes, after an npm
-bump. The agent has no npm. A `package.json`-only bump fails `npm ci`, and retries cannot regenerate
-the lockfile, so npm CVEs are handed back after the repair budget. A future workflow on `agent/**`
-branches could regenerate it. Backend CVE changes in `gradle/libs.versions.toml` or
-`backend/build.gradle.kts`'s `constraints {}` need no lockfile and can complete this loop.
+## npm repairs
+
+An npm vulnerability repair needs `frontend/package-lock.json` regenerated, integrity hashes and
+all, and the agent has no npm and no network. So a `factory:cvefix` ticket titled
+`Bump npm package <name> to <version> (…)` skips the agent entirely
+(`TicketAgentActivitiesImpl.npmAttempt`, `NpmLockfileRepair`):
+
+1. Clone `main`. If every copy of the package is already at the fixed release, hand back: there is
+   nothing to change.
+2. Start `.github/workflows/npm-lockfile-repair.yml` on **`main`** (never a branch, so the workflow
+   that runs is the one the ruleset protects), with a request id and `name@version`. It has
+   `contents: read`, no secret, takes its inputs only through `env`, and runs
+   `npm update <name> --package-lock-only --ignore-scripts`: no package code runs and nothing is
+   installed. It uploads the lockfile and a `result.json` saying whether every copy reached the
+   fix, as a one-day artifact.
+3. Find the run by its name (`npm lockfile repair <request id>`), poll it (10s, up to 15 minutes),
+   download the artifact (the redirect is followed only to GitHub's artifact storage, without the
+   token) and read exactly two entries from it.
+4. Check before pushing, never on the workflow's word alone: the report must be for this request
+   and say `ok`; `NpmLockPins.check` against the cloned lockfile (nothing added or removed, every
+   moved entry goes up within its major to a release, from the registry's own tarball URL, with a
+   SHA-512 integrity, no other field changed, at most 25 entries); and `NpmLockPins.below` must find
+   no copy of the package under the fixed release.
+5. Push the lockfile alone to `agent/<ticket>` and open the pull request. From there it is the
+   ordinary loop: CI (`npm ci` verifies every integrity hash against the registry), the reviewer,
+   auto-merge, deploy, log scan.
+
+`npm update postcss` also moves postcss's own dependencies within their ranges (on 2026-10-24 it
+moved nanoid and source-map-js too), so a pull request can list several packages. That is why the
+check caps the count instead of allowing only the named package.
+
+**One attempt.** Regenerating gives the same lockfile, so a red CI on it is handed back as stuck
+rather than retried. A fix outside a dependent's declared range cannot be reached by `npm update`;
+the workflow reports it and the ticket comes back to a person, as does a `package.json` change.
+Two npm repairs in flight at once can conflict in the lockfile only when they move the same entry
+to different versions; a conflicting pull request runs no CI and is handed back after the checks
+wait.
+
+**It needs the GitHub App's `actions: write`** to start the workflow (`GitHubCredentials` asks for
+it as an optional permission, and falls back to `read`, which still serves job logs). Without it
+every npm repair is handed back saying so. Dry runs start the workflow too (it writes nothing) and
+post the would-be lockfile diff. Settings: `factory.ticket-agent.npm.*` (`NpmRepairProperties`).
+
+Backend CVE changes in `gradle/libs.versions.toml` or `backend/build.gradle.kts`'s
+`constraints {}` need no lockfile and go through the agent.
 
 ## Dry runs
 
@@ -107,10 +148,12 @@ workflow id (`ticket-agent-dry-run-SIM-107`), so they never block a real run.
 
 ## One-time setup
 
-1. **Grant the GitHub App `Actions: read`** and accept it on the installation. It is an
-   *optional* permission (`GitHubCredentials.OPTIONAL_PERMISSIONS`), so without it nothing breaks:
-   the repair brief names the failed job and step but has no log, and says so. GitHub serves job
-   logs only with this permission, even on a public repository.
+1. **Grant the GitHub App `Actions: read and write`** and accept it on the installation. It is
+   an *optional* permission (`GitHubCredentials.OPTIONAL_PERMISSIONS`), asked for at `write` and
+   at `read` when only that is granted, so a missing grant never stops a token minting. At `read`
+   the repair brief carries the failed job's log (GitHub serves job logs only with it, even on a
+   public repository); at `write` the factory can also start the npm lockfile workflow ("npm
+   repairs"). Without `write`, npm repair tickets are handed back saying so.
 2. The App must be subscribed to `workflow_run` (it already is, for auto-deploy) and
    `pull_request`.
 3. Nothing to create in Linear: `factory:agent` and `agent:stuck` are created on first use

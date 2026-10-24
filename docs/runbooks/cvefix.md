@@ -115,9 +115,11 @@ container with a missing poller cannot execute the scan.
 
 With `factory.cvefix.auto-repair.enabled` (`FACTORY_CVEFIX_AUTO_REPAIR_ENABLED`, default `true`
 on `software-factory` in compose, `false` in `application.yml`), each scan also files one repair
-ticket per backend Maven component it can fix without a person, labelled `factory:cvefix` and
-`factory:agent`. The ticket agent's intake picks it up, the agent bumps the version, CI and the
-reviewer check it, and a version-only change merges and deploys itself. The post-deploy log scan
+ticket per backend Maven component or frontend npm package it can fix without a person, labelled
+`factory:cvefix` and `factory:agent`. The ticket agent's intake picks it up; for Maven the agent
+bumps the version, for npm GitHub Actions regenerates the lockfile (no agent involved, see
+"npm repairs" below). CI and the reviewer check it, and a version-only change merges and deploys
+itself. The post-deploy log scan
 then watches what shipped. The whole loop, with nobody in it:
 
 ```
@@ -128,15 +130,19 @@ Dependency-Track ─▶ scan ─▶ repair ticket ─▶ ticket agent ─▶ PR 
 A component gets a repair ticket only when every check below passes (`RepairPlanner`). Anything
 else stays in the consolidated report for a person, as before:
 
-- It is in `factory.cvefix.auto-repair.projects` (`simonrowe-dev/backend` only) and is a Maven
-  PURL. npm is left out: the agent cannot regenerate `package-lock.json`.
-- OSV (`api.osv.dev/v1/query`, by coordinate and version) knows its advisories, and every one has
-  a fixed release. Dependency-Track has no fixed-version field, and the agent has no network, so
+- It is in `factory.cvefix.auto-repair.projects` (`simonrowe-dev/backend` and
+  `simonrowe-dev/frontend`) and is a Maven or npm PURL. The image projects stay out: base-OS
+  packages are not in any manifest here.
+- OSV (`api.osv.dev/v1/query`, by ecosystem, name and version) knows its advisories, and every one
+  has a fixed release. Dependency-Track has no fixed-version field, and the agent has no network, so
   the target version has to arrive in the ticket.
 - The target is the highest of those fixes, newer than the current version, and in the **same
   major version**. A major bump is an API change and a person's call.
-- Every value in the brief is pattern-shaped: advisory ids, the coordinate, two versions. No
-  advisory prose reaches the agent, because no person reads the ticket before it acts.
+- For npm, the fix is a plain release (`1.2.3`, no pre-release), because the lockfile check
+  refuses pre-releases.
+- Every value in the brief is pattern-shaped: advisory ids, the coordinate or package name, two
+  versions. No advisory prose reaches the agent, because no person reads the ticket before it
+  acts.
 
 Each ticket is keyed on the component **at its current version** and filed under `REFRESH`: an open
 ticket is rewritten quietly each night. `factory:agent` goes on a brand-new ticket only, never on a
@@ -145,9 +151,14 @@ files a linked ticket **without** the agent label, for a person, rather than loo
 fix that does not work. Cancel a repair ticket to stop it for good; remove `factory:agent` to keep
 it but take it off the agent.
 
-What the agent may change, and what merges itself: `ticket-agent.md` ("Dependency edits") and
-`pr-governance.md` (auto-merge rule 8). In short, only version strings in
-`gradle/libs.versions.toml`, root `build.gradle.kts` `ext["…"]` overrides and `backend` constraints.
+What the agent may change, and what merges itself: `ticket-agent.md` ("Dependency edits" and
+"npm repairs") and `pr-governance.md` (auto-merge rule 8). In short, only version strings in
+`gradle/libs.versions.toml`, root `build.gradle.kts` `ext["…"]` overrides and `backend` constraints,
+or a regenerated `frontend/package-lock.json` that only moves existing packages up.
+
+An npm ticket's title is the contract: `Bump npm package <name> to <version> (<advisories>)`
+(`NpmRepairTitle`, used by both sides). The ticket agent takes the npm path only for a
+`factory:cvefix` ticket whose title parses; a hand-written npm ticket goes to the agent as before.
 
 **The intake schedule must be running.** `ticket-agent-intake` is created paused. Until an
 operator resumes it from the console, repair tickets wait in Linear with the label on.

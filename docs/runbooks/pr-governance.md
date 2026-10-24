@@ -258,8 +258,15 @@ It arms only if **every** rule passes. The first rule to fail is the reason give
    directly inside `constraints {}`, checked against the file at the reviewed commit). Any other
    path still takes the path rules, so a bump plus a compose change stays manual. The ticket agent
    labels every other dependency edit `no-auto-merge`, so in practice this is only the
-   vulnerability scan's repair tickets (`cvefix.md`, "Repair tickets"). npm manifests are never
-   pin files: the agent cannot regenerate `package-lock.json`.
+   vulnerability scan's repair tickets (`cvefix.md`, "Repair tickets").
+   **`frontend/package-lock.json` from the App is judged the same way, by `NpmLockPins`.** The
+   reviewer reads the whole lockfile at the base and at the reviewed commit (raw, so the contents
+   API's 1 MB base64 limit never applies; GitHub omits the patch for a diff this size) and arms
+   only when nothing was added or removed and every moved package went up within its major to the
+   npm registry's own tarball with a SHA-512 integrity, at most 25 of them. `package.json` is never
+   judged this way: it takes the path rules and needs a person. Whether a check runs is decided by
+   the **paths** that changed, not by which patches GitHub supplied, so a pin file or lockfile
+   GitHub did not describe is refused rather than skipped.
 
 Until 2026-10, `agent-feedback` was simply refused here. Every one of the ~23 guidance pull
 requests up to then was merged by hand unchanged, so they now merge themselves, and

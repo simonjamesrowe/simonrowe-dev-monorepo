@@ -1,6 +1,7 @@
 package com.simonrowe.factory.codereview.domain;
 
 import com.simonrowe.factory.git.DependencyPins;
+import com.simonrowe.factory.git.NpmLockPins;
 import com.simonrowe.factory.git.PathGlobs;
 import java.util.List;
 import java.util.Objects;
@@ -119,6 +120,36 @@ public final class AutoMergePolicy {
       final Supplier<ChangedFiles> files,
       final List<String> guidancePaths,
       final UnaryOperator<String> headContent) {
+    return decide(
+        enabled, state, report, reviewedHeadSha, files, guidancePaths, headContent, null,
+        ref -> null);
+  }
+
+  /**
+   * Applies the rules, with a way to read the npm lockfile at a commit as well.
+   *
+   * @param enabled {@code factory.codereview.auto-merge.enabled}
+   * @param state the pull request as GitHub reports it now
+   * @param report the review of {@code reviewedHeadSha}
+   * @param reviewedHeadSha the commit the review was of
+   * @param files fetched only if every earlier rule passes
+   * @param guidancePaths the globs a guidance pull request against this repository may touch
+   * @param headContent a file's text at {@code reviewedHeadSha}, or null when unreadable; asked
+   *     only when a factory pull request adds a dependency constraint
+   * @param baseSha the pull request's base commit
+   * @param lockfileAt {@link NpmLockPins#LOCKFILE}'s text at a commit, or null when unreadable;
+   *     asked only when a factory pull request changes it, for the base and the reviewed head
+   */
+  public static MergeDecision decide(
+      final boolean enabled,
+      final AutoMergeState state,
+      final ReviewReport report,
+      final String reviewedHeadSha,
+      final Supplier<ChangedFiles> files,
+      final List<String> guidancePaths,
+      final UnaryOperator<String> headContent,
+      final String baseSha,
+      final UnaryOperator<String> lockfileAt) {
     if (!enabled) {
       return MergeDecision.off();
     }
@@ -163,7 +194,8 @@ public final class AutoMergePolicy {
     }
     MergeDisposition.Classification classification = MergeDisposition.classify(changed.paths());
     if (classification.disposition() == MergeDisposition.MANUAL && state.authorIsThisApp()) {
-      Optional<MergeDecision> pins = pinDecision(changed, headContent);
+      Optional<MergeDecision> pins =
+          pinDecision(changed, headContent, lockfileAt, baseSha, reviewedHeadSha);
       if (pins.isPresent()) {
         return pins.get();
       }
@@ -206,8 +238,8 @@ public final class AutoMergePolicy {
   }
 
   /**
-   * The factory's own CVE repair: build files that only move versions, plus nothing a person must
-   * merge.
+   * The factory's own CVE repair: build files or the npm lockfile that only move versions, plus
+   * nothing a person must merge.
    *
    * <p>Only for this App's pull requests, which the ticket agent opens, and which it labels
    * {@code no-auto-merge} unless the ticket is a vulnerability repair. So a person's dependency
@@ -218,9 +250,15 @@ public final class AutoMergePolicy {
    * @return the decision, or empty when this rule does not apply and the ordinary reason stands
    */
   private static Optional<MergeDecision> pinDecision(
-      final ChangedFiles changed, final UnaryOperator<String> headContent) {
+      final ChangedFiles changed,
+      final UnaryOperator<String> headContent,
+      final UnaryOperator<String> lockfileAt,
+      final String baseSha,
+      final String headSha) {
     List<String> others =
-        changed.paths().stream().filter(path -> !DependencyPins.isPinFile(path)).toList();
+        changed.paths().stream()
+            .filter(path -> !DependencyPins.isPinFile(path) && !NpmLockPins.isLockfile(path))
+            .toList();
     if (others.size() == changed.paths().size()) {
       return Optional.empty();
     }
@@ -236,12 +274,57 @@ public final class AutoMergePolicy {
             .filter(diff -> DependencyPins.isPinFile(diff.path())
                 || DependencyPins.isPinFile(diff.previousPath()))
             .toList();
-    DependencyPins.Verdict verdict = DependencyPins.check(pinDiffs, headContent);
-    return Optional.of(
-        verdict.versionsOnly()
-            ? MergeDecision.eligible()
-            : MergeDecision.ineligible(
-                "the dependency change is more than a version bump: " + verdict.reason()));
+    // Decided by which paths changed, never by which patches GitHub supplied: a pin file whose
+    // patch was omitted must still be checked, and DependencyPins refuses an empty list.
+    if (changed.paths().stream().anyMatch(DependencyPins::isPinFile)) {
+      DependencyPins.Verdict verdict = DependencyPins.check(pinDiffs, headContent);
+      if (!verdict.versionsOnly()) {
+        return Optional.of(MergeDecision.ineligible(
+            "the dependency change is more than a version bump: " + verdict.reason()));
+      }
+    }
+    List<DependencyPins.FileDiff> lockDiffs =
+        changed.diffs().stream()
+            .filter(diff -> NpmLockPins.isLockfile(diff.path())
+                || NpmLockPins.isLockfile(diff.previousPath()))
+            .toList();
+    if (changed.paths().stream().anyMatch(NpmLockPins::isLockfile)) {
+      Optional<String> refused = lockfileProblem(lockDiffs, lockfileAt, baseSha, headSha);
+      if (refused.isPresent()) {
+        return Optional.of(MergeDecision.ineligible(
+            "the lockfile change is more than a version bump: " + refused.get()));
+      }
+    }
+    return Optional.of(MergeDecision.eligible());
+  }
+
+  /**
+   * Why a lockfile change is refused, or empty when it only moves packages up.
+   *
+   * <p>Compared as whole files at the base and the reviewed head, never from GitHub's patch, which
+   * it omits for a diff this size. A base that has moved on since the branch was cut shows the
+   * other change reversed, which is refused: safe, and the branch conflicts anyway.
+   */
+  private static Optional<String> lockfileProblem(
+      final List<DependencyPins.FileDiff> lockDiffs,
+      final UnaryOperator<String> lockfileAt,
+      final String baseSha,
+      final String headSha) {
+    if (lockDiffs.size() != 1) {
+      return Optional.of("GitHub listed `%s` %d times".formatted(NpmLockPins.LOCKFILE,
+          lockDiffs.size()));
+    }
+    DependencyPins.FileDiff diff = lockDiffs.get(0);
+    if (!"modified".equals(diff.status())
+        || (diff.previousPath() != null && !diff.previousPath().isEmpty())) {
+      return Optional.of("`%s` is %s, not modified".formatted(NpmLockPins.LOCKFILE, diff.status()));
+    }
+    if (baseSha == null || baseSha.isBlank()) {
+      return Optional.of("the pull request's base commit is unknown");
+    }
+    NpmLockPins.Verdict verdict =
+        NpmLockPins.check(lockfileAt.apply(baseSha), lockfileAt.apply(headSha));
+    return verdict.versionsOnly() ? Optional.empty() : Optional.of(verdict.reason());
   }
 
   private static String shortSha(final String sha) {

@@ -75,14 +75,15 @@ public class CveFixActivitiesImpl implements CveFixActivities {
       if (!repairProperties.projects().contains(component.project())) {
         continue;
       }
-      Optional<String> coordinate = RepairPlanner.coordinate(component.purl());
-      if (coordinate.isEmpty()) {
+      Optional<List<String>> pkg = RepairPlanner.osvPackage(component.purl());
+      if (pkg.isEmpty()) {
         continue;
       }
       try {
         RepairPlanner.plan(
                 component,
-                osvClient.advisories(coordinate.get(), component.componentVersion()))
+                osvClient.advisories(
+                    pkg.get().get(0), pkg.get().get(1), component.componentVersion()))
             .ifPresent(plans::add);
       } catch (IllegalStateException exception) {
         LOGGER.warn("Could not ask OSV about {}; leaving it for a person", component.purl(),

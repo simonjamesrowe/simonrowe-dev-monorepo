@@ -1,0 +1,126 @@
+name: npm lockfile repair
+run-name: npm lockfile repair ${{ inputs.request_id }}
+
+# Started by the software factory's ticket agent for an npm vulnerability repair ticket, always on
+# main, so the definition that runs is the one the ruleset protects. It regenerates
+# frontend/package-lock.json and uploads it as an artifact. It pushes nothing and holds no secret:
+# the factory downloads the lockfile, checks it (NpmLockPins: only the ticket's package moved, to a
+# newer registry release in the same major, nothing added or removed) and pushes it itself.
+# See docs/runbooks/ticket-agent.md ("npm repairs").
+#
+# `npm update` moves a package only within the ranges its dependents already declare, so a fix
+# outside those ranges is reported (ok: false in result.json) rather than forced.
+
+on:
+  workflow_dispatch:
+    inputs:
+      request_id:
+        description: The factory's id for this request, a UUID; the run's name carries it
+        required: true
+        type: string
+      packages:
+        description: Space-separated name@fixedVersion pairs, e.g. postcss@8.5.10
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  regenerate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # Inputs reach the shell only through env, never as ${{ }} inside a script, and are checked
+      # against the same shapes the factory checks before it sends them.
+      - name: Check the inputs
+        env:
+          REQUEST_ID: ${{ inputs.request_id }}
+          PACKAGES: ${{ inputs.packages }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$REQUEST_ID" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
+            echo "request_id is not a UUID" >&2
+            exit 1
+          fi
+          count=0
+          for pair in $PACKAGES; do
+            if [[ ! "$pair" =~ ^(@[a-z0-9~-][a-z0-9._~-]{0,100}/)?[a-z0-9~-][a-z0-9._~-]{0,100}@[0-9]{1,9}\.[0-9]{1,9}\.[0-9]{1,9}$ ]]; then
+              echo "not a name@version pair: $pair" >&2
+              exit 1
+            fi
+            count=$((count + 1))
+          done
+          if [ "$count" -lt 1 ] || [ "$count" -gt 20 ]; then
+            echo "expected 1 to 20 packages, got $count" >&2
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # --package-lock-only resolves without installing, and --ignore-scripts means no package's
+      # code runs here at all.
+      - name: Update the lockfile
+        working-directory: frontend
+        env:
+          PACKAGES: ${{ inputs.packages }}
+        run: |
+          set -euo pipefail
+          names=()
+          for pair in $PACKAGES; do
+            names+=("${pair%@*}")
+          done
+          npm update "${names[@]}" --package-lock-only --ignore-scripts --no-audit --no-fund
+
+      - name: Check every copy reached its fixed version
+        env:
+          REQUEST_ID: ${{ inputs.request_id }}
+          PACKAGES: ${{ inputs.packages }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          mkdir out
+          node <<'EOF'
+          const fs = require('fs');
+          const lock = JSON.parse(fs.readFileSync('frontend/package-lock.json', 'utf8'));
+          const numbers = (v) => v.split(/[-+]/)[0].split('.').map(Number);
+          const atLeast = (version, fixed) => {
+            const [a, b] = [numbers(version), numbers(fixed)];
+            for (let i = 0; i < 3; i++) {
+              if (a[i] !== b[i]) return a[i] > b[i];
+            }
+            return !version.includes('-');
+          };
+          const packages = process.env.PACKAGES.split(/\s+/).filter(Boolean).map((pair) => {
+            const at = pair.lastIndexOf('@');
+            const name = pair.slice(0, at);
+            const fixed = pair.slice(at + 1);
+            const versions = Object.entries(lock.packages)
+              .filter(([key]) => key === `node_modules/${name}` || key.endsWith(`/node_modules/${name}`))
+              .map(([, entry]) => entry.version);
+            const ok = versions.length > 0 && versions.every((v) => atLeast(v, fixed));
+            return { name, fixed, versions, ok };
+          });
+          const result = {
+            requestId: process.env.REQUEST_ID,
+            headSha: process.env.HEAD_SHA,
+            ok: packages.every((p) => p.ok),
+            packages,
+          };
+          fs.writeFileSync('out/result.json', JSON.stringify(result, null, 2));
+          fs.copyFileSync('frontend/package-lock.json', 'out/package-lock.json');
+          console.log(JSON.stringify(result, null, 2));
+          EOF
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: npm-lockfile-repair
+          path: out/
+          retention-days: 1
+          if-no-files-found: error

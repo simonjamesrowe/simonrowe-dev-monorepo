@@ -150,10 +150,12 @@ public class TicketAgentWorkflowImpl implements TicketAgentWorkflow {
             return new TicketAgentResult(
                 identifier, TicketAgentOutcome.DRY_RUN, attempt, null, current.detail());
           }
+          // Plain strings, so changing them is replay-safe: Temporal does not compare an
+          // activity's arguments on replay. The npm repair path reaches here too, without an agent.
           return handBack(ticket, pullRequest, attempt,
               (attempt == 1
-                  ? "The agent decided no change to the repository is warranted: %s"
-                  : "The agent could not find a fix for what failed: %s")
+                  ? "No change was pushed: %s"
+                  : "No fix was pushed for what failed: %s")
                   .formatted(result.summary()),
               attempt > 1);
         }

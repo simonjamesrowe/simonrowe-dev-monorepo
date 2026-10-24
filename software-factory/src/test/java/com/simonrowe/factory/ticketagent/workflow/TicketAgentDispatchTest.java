@@ -15,6 +15,7 @@ import com.simonrowe.factory.ticketagent.api.TicketAgentAccepted;
 import com.simonrowe.factory.ticketagent.api.TicketAgentService;
 import com.simonrowe.factory.ticketagent.domain.TicketAgentRequest;
 import com.simonrowe.factory.ticketagent.github.TicketAgentGitHub;
+import com.simonrowe.factory.ticketagent.npm.NpmLockfileRepair;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -29,7 +30,8 @@ class TicketAgentDispatchTest {
   private final TicketAgentActivitiesImpl activities =
       new TicketAgentActivitiesImpl(
           TicketAgentTestProperties.of(true), linear, mock(TicketAgentGitHub.class),
-          mock(TicketAgentEngine.class), mock(RepositoryWorkspaceFactory.class), service);
+          mock(TicketAgentEngine.class), mock(RepositoryWorkspaceFactory.class), service,
+          mock(NpmLockfileRepair.class));
 
   private static LinearTicket ticket(
       final String identifier, final String state, final int priority, final long created,

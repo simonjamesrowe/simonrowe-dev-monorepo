@@ -1,5 +1,6 @@
 package com.simonrowe.factory.cvefix.workflow;
 
+import com.simonrowe.factory.cvefix.domain.NpmRepairTitle;
 import com.simonrowe.factory.cvefix.domain.RepairPlan;
 import java.util.List;
 
@@ -28,6 +29,9 @@ final class CveRepairTicket {
   }
 
   static String title(final RepairPlan plan) {
+    if (plan.npm()) {
+      return NpmRepairTitle.format(plan.coordinate(), plan.targetVersion(), plan.advisoryIds());
+    }
     List<String> ids = plan.advisoryIds();
     String advisories = ids.size() <= MAX_TITLE_IDS
         ? String.join(", ", ids)
@@ -36,6 +40,47 @@ final class CveRepairTicket {
   }
 
   static String body(final RepairPlan plan) {
+    return plan.npm() ? npmBody(plan) : mavenBody(plan);
+  }
+
+  /**
+   * An npm repair is made by the factory, not written by the agent: GitHub Actions regenerates
+   * {@code frontend/package-lock.json}, and the factory checks the result before pushing it. The
+   * body says so, because a person reading the ticket would otherwise expect an agent's diff.
+   */
+  private static String npmBody(final RepairPlan plan) {
+    return """
+        The vulnerability scan found %d advisor%s against npm package `%s` %s in `%s`. OSV \
+        lists **%s** as the first release that fixes all of them.
+
+        **Change:** update `%s` to `%s` or later in `frontend/package-lock.json`, within the \
+        version ranges the packages that depend on it already allow.
+
+        No agent edits anything for this ticket. The factory runs \
+        `npm update %s --package-lock-only --ignore-scripts` in GitHub Actions, then checks the \
+        new lockfile before pushing it: nothing added or removed, only this package moved, to a \
+        newer release in the same major version, from the npm registry. If a dependent's range \
+        does not allow the fix, the ticket comes back to a person.
+
+        Advisories: %s
+
+        Filed by the nightly vulnerability scan. Once CI and the code review pass, this merges \
+        and deploys without a person.
+        """
+        .formatted(
+            plan.advisoryIds().size(),
+            plan.advisoryIds().size() == 1 ? "y" : "ies",
+            plan.coordinate(),
+            plan.currentVersion(),
+            plan.project(),
+            plan.targetVersion(),
+            plan.coordinate(),
+            plan.targetVersion(),
+            plan.coordinate(),
+            String.join(", ", plan.advisoryIds()));
+  }
+
+  private static String mavenBody(final RepairPlan plan) {
     return """
         The vulnerability scan found %d advisor%s against `%s` %s in `%s`. OSV lists \
         **%s** as the first release that fixes all of them.

@@ -222,9 +222,11 @@ factory:
       timeout: ${FACTORY_TICKET_AGENT_TIMEOUT:30m}
   cvefix:
     enabled: ${FACTORY_CVEFIX_ENABLED:false}
-    # Repair tickets: one per backend Maven component with a fixed release in the same major
-    # version, labelled for the ticket agent so it picks them up with no person approving. A
-    # version-only change then merges itself once CI and the review pass (DependencyPins).
+    # Repair tickets: one per backend Maven component or frontend npm package with a fixed
+    # release in the same major version, labelled for the ticket agent so it picks them up with no
+    # person approving. A version-only change then merges itself once CI and the review pass
+    # (DependencyPins for Gradle, NpmLockPins for the npm lockfile, which GitHub Actions
+    # regenerates: see factory.ticket-agent.npm).
     auto-repair:
       enabled: ${FACTORY_CVEFIX_AUTO_REPAIR_ENABLED:false}
       agent-label: ${FACTORY_TICKET_AGENT_LABEL:factory:agent}
@@ -232,6 +234,7 @@ factory:
       request-timeout: 20s
       projects:
         - simonrowe-dev/backend
+        - simonrowe-dev/frontend
     owner: simonjamesrowe
     repository: simonrowe-dev-monorepo
     branch: chore/dependency-cve-fixes

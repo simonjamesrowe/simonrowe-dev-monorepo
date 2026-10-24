@@ -64,7 +64,7 @@ class TicketAgentWorkerRegistrationTest {
   /** A real component scan of the ticket agent package, with external collaborators mocked. */
   @Configuration
   @ComponentScan("com.simonrowe.factory.ticketagent")
-  @EnableConfigurationProperties(TicketAgentProperties.class)
+  @EnableConfigurationProperties({TicketAgentProperties.class, NpmRepairProperties.class})
   static class ScannedTicketAgentPackage {
 
     @Bean

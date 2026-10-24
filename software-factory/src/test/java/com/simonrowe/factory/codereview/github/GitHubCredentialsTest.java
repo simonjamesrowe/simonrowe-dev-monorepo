@@ -210,6 +210,84 @@ class GitHubCredentialsTest {
   }
 
   /**
+   * An optional permission granted below the level wanted is asked for at read, not dropped.
+   *
+   * <p>{@code actions} is wanted at write, to start the npm lockfile workflow. An installation
+   * that grants only read must still get read, or the ticket agent loses the CI job logs it
+   * already reads, and asking for write would 422 the whole token.
+   */
+  @Test
+  void asksForReadWhenOnlyReadIsGranted(@TempDir final Path directory) throws Exception {
+    KeyPair keyPair = KeyPairGenerator.getInstance("RSA").generateKeyPair();
+    Path privateKey = writePrivateKey(directory, keyPair);
+    AtomicReference<String> requestBody = new AtomicReference<>();
+    HttpServer server =
+        tokenServer(
+            new AtomicInteger(),
+            new AtomicReference<>(),
+            requestBody,
+            """
+            {"actions":"read","checks":"write","contents":"write","issues":"write",\
+            "metadata":"read","pull_requests":"write"}""");
+
+    try {
+      GitHubCredentials credentials =
+          new GitHubCredentials(
+              properties(
+                  "http://127.0.0.1:" + server.getAddress().getPort(),
+                  "",
+                  "Iv1.test-client",
+                  privateKey.toString()),
+              objectMapper,
+              HttpClient.newHttpClient(),
+              Clock.fixed(NOW, ZoneOffset.UTC));
+
+      assertThat(credentials.accessToken(123L)).isEqualTo("installation-token");
+
+      JsonNode permissions = objectMapper.readTree(requestBody.get()).path("permissions");
+      assertThat(permissions.path("actions").asText()).isEqualTo("read");
+      assertThat(permissions.path("checks").asText()).isEqualTo("write");
+    } finally {
+      server.stop(0);
+    }
+  }
+
+  @Test
+  void asksForActionsWriteWhenGranted(@TempDir final Path directory) throws Exception {
+    KeyPair keyPair = KeyPairGenerator.getInstance("RSA").generateKeyPair();
+    Path privateKey = writePrivateKey(directory, keyPair);
+    AtomicReference<String> requestBody = new AtomicReference<>();
+    HttpServer server =
+        tokenServer(
+            new AtomicInteger(),
+            new AtomicReference<>(),
+            requestBody,
+            """
+            {"actions":"write","checks":"write","contents":"write","issues":"write",\
+            "metadata":"read","pull_requests":"write"}""");
+
+    try {
+      GitHubCredentials credentials =
+          new GitHubCredentials(
+              properties(
+                  "http://127.0.0.1:" + server.getAddress().getPort(),
+                  "",
+                  "Iv1.test-client",
+                  privateKey.toString()),
+              objectMapper,
+              HttpClient.newHttpClient(),
+              Clock.fixed(NOW, ZoneOffset.UTC));
+
+      credentials.accessToken(123L);
+
+      assertThat(objectMapper.readTree(requestBody.get()).path("permissions").path("actions")
+          .asText()).isEqualTo("write");
+    } finally {
+      server.stop(0);
+    }
+  }
+
+  /**
    * A missing required permission still refuses to mint, but says which one.
    *
    * <p>GitHub's own 422 says only "the permissions requested are not granted to this

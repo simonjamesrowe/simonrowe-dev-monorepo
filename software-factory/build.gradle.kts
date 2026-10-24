@@ -84,6 +84,15 @@ normalization {
     }
 }
 
+// NpmRepairWorkflowContractTest reads this workflow from the repo root. Gradle cannot see that,
+// so without the declaration a change to the workflow alone is served the cached test result and
+// the contract it pins is never checked (found by mutating the workflow: the test stayed green).
+tasks.test {
+    inputs.file(rootProject.file(".github/workflows/npm-lockfile-repair.yml"))
+        .withPropertyName("npmLockfileRepairWorkflow")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+}
+
 // Report only — deliberately NO jacocoTestCoverageVerification and NO tasks.check
 // wiring, unlike backend. This module's coverage has never been measured; inventing
 // a floor before measuring it either fails the build on day one or sets the floor

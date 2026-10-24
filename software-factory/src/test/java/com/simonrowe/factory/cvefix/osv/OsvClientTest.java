@@ -102,4 +102,20 @@ class OsvClientTest {
         "[{\"introduced\":\"9.0.0\"},{\"fixed\":\"9.0.90\"}]")), COORDINATE, current))
         .isNull();
   }
+
+  @Test
+  void asksAboutAnNpmPackageInItsOwnEcosystem() {
+    responses.add(page("""
+        {"id":"GHSA-6g55-p6wh-862q","affected":[
+          {"package":{"ecosystem":"Maven","name":"postcss"},
+           "ranges":[{"type":"ECOSYSTEM","events":[{"introduced":"0"},{"fixed":"9.9.9"}]}]},
+          {"package":{"ecosystem":"npm","name":"postcss"},
+           "ranges":[{"type":"SEMVER","events":[{"introduced":"0"},{"fixed":"8.5.1"}]},
+                     {"type":"ECOSYSTEM","events":[{"introduced":"0"},{"fixed":"8.5.12"}]}]}]}\
+        """, ""));
+
+    assertThat(client.advisories(OsvClient.NPM, "postcss", "8.5.6"))
+        .containsExactly(new OsvClient.Advisory("GHSA-6g55-p6wh-862q", "8.5.12"));
+    assertThat(requests.get(0)).contains("\"ecosystem\":\"npm\"", "\"name\":\"postcss\"");
+  }
 }
