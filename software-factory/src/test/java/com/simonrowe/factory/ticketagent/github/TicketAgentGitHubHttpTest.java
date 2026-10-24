@@ -330,7 +330,7 @@ class TicketAgentGitHubHttpTest {
   }
 
   @Test
-  void readsTheLockfileRawAtACommit() {
+  void readsTheLockfileRawAtCommit() {
     reply("GET " + REPO + "/contents/frontend/package-lock.json?ref=sha1", 200,
         "{\"lockfileVersion\": 3}");
 
