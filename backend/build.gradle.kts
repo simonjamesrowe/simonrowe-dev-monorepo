@@ -240,6 +240,9 @@ dependencies {
         // GHSA-6fmv-xxpf-w3cw — maven-artifact 3.6.1 requests the vulnerable 3.2.0,
         // and reaches runtimeClasspath through mongock-runner-core.
         implementation("org.codehaus.plexus:plexus-utils:3.6.1")
+        // GHSA-xxph-c9ww-hj94 — google-api-client and friends pull in the vulnerable
+        // 33.4.0-android.
+        implementation("com.google.guava:guava:33.7.2")
     }
 
     implementation(libs.spring.boot.starter.webmvc)
