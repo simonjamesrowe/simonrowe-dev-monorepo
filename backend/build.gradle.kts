@@ -237,6 +237,9 @@ dependencies {
         // GHSA-xx22-p4ch-683r, GHSA-mcr4-qmvw-px4g, GHSA-4v53-57pg-c464, GHSA-6cx8-rjf8-pr8g,
         // GHSA-gm45-99xc-r7wv, GHSA-343h-94h5-c4wr — pulled in by kafka-clients via spring-kafka.
         implementation("at.yawk.lz4:lz4-java:1.11.4")
+        // GHSA-gwq9-9ffj-mvrv, GHSA-q233-g92q-qxp6, GHSA-xqrx-qh46-34m7 — pulled in by
+        // kafka-clients via spring-kafka, same route as lz4-java above.
+        implementation("org.xerial.snappy:snappy-java:1.1.10.9")
         // GHSA-6fmv-xxpf-w3cw — maven-artifact 3.6.1 requests the vulnerable 3.2.0,
         // and reaches runtimeClasspath through mongock-runner-core.
         implementation("org.codehaus.plexus:plexus-utils:3.6.1")
