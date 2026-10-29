@@ -242,7 +242,7 @@ dependencies {
         implementation("org.codehaus.plexus:plexus-utils:3.6.1")
         // GHSA-xxph-c9ww-hj94 — google-api-client and friends pull in the vulnerable
         // 33.4.0-android.
-        implementation("com.google.guava:guava:33.7.2")
+        implementation("com.google.guava:guava:33.7.2-android")
     }
 
     implementation(libs.spring.boot.starter.webmvc)
