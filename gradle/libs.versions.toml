@@ -2,7 +2,10 @@
 springBoot = "4.1.1"
 springDependencyManagement = "1.1.7"
 graalvmNative = "0.11.3"
-opentelemetryInstrumentation = "2.30.0"
+# GHSA-ccrj-gw8r-854m: tracks the opentelemetry.version override in the root
+# build.gradle.kts, which forces OpenTelemetry core to 1.67.0 — this must stay the
+# instrumentation release built against that same core line.
+opentelemetryInstrumentation = "2.33.0"
 checkstyle = "10.21.4"
 jacoco = "0.8.15"
 cyclonedx = "3.4.1"
