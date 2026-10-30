@@ -205,9 +205,14 @@ subprojects {
     // -----------------------------------------------------------------------
 
     // GHSA-rcgg-9c38-7xpx, fixed in 1.62.0, which is exactly what Boot 4.1.1
-    // manages. Kept above it at 1.64.0 so both modules stay on one OpenTelemetry
-    // version alongside the separately-pinned opentelemetry-spring-boot-starter.
-    ext["opentelemetry.version"] = "1.64.0"
+    // manages. Kept above it at 1.67.0 (GHSA-ccrj-gw8r-854m). This forces every
+    // io.opentelemetry module the BOM manages, including the ones
+    // opentelemetry-spring-boot-starter carries transitively, so the starter's own
+    // version (gradle/libs.versions.toml, opentelemetryInstrumentation) must move in
+    // lockstep to the release built against this same core line — otherwise the
+    // starter's autoconfiguration classes are forced onto a core it was not
+    // compiled against and the Spring context fails to start.
+    ext["opentelemetry.version"] = "1.67.0"
 
     // SIM-10: three CRITICAL Tomcat advisories, all fixed in 11.0.25 — Boot 4.1.1
     // manages 11.0.24 and there is no 4.1.2 to upgrade to yet. One property covers
