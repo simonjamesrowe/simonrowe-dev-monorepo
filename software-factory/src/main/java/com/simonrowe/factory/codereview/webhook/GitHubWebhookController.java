@@ -52,10 +52,11 @@ public class GitHubWebhookController {
   private final LinearProperties linearProperties;
 
   /**
-   * An {@link ObjectProvider} because {@code DeployWorkflowService} is gated on {@code
-   * factory.deploy.trigger-enabled} and is therefore absent by default. A hard dependency would
-   * make this controller — and with it the code-review webhook — fail to start whenever deploy
-   * triggering is off, which is the opposite of the independence the two flags exist to give.
+   * An {@link ObjectProvider} so a context without {@code DeployWorkflowService} still starts the
+   * code-review webhook. The service is an unconditional bean today (it also serves the
+   * token-protected manual redeploy, pinned by {@code DeployWorkerRegistrationTest}), so the
+   * webhook path is switched by {@code factory.deploy.trigger-enabled}, checked in {@code
+   * handleWorkflowRun}, not by the bean's absence.
    */
   private final ObjectProvider<DeployWorkflowService> deployWorkflowService;
   private final TicketAgentProperties ticketAgentProperties;
