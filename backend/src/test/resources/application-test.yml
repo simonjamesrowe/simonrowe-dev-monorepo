@@ -79,6 +79,10 @@ rate-limit:
     requests-per-minute: 10000
   summary:
     requests-per-minute: 10000
+aggregation:
+  # No test may reach r.jina.ai: ReaderFallbackClientTest points a real client at a stub server.
+  reader-fallback:
+    enabled: false
 platform:
   releases:
     summaries:

@@ -18,6 +18,10 @@ import org.springframework.stereotype.Component;
  * on-demand article summariser needed exactly the same cascade. The length floors below
  * encode hard-won knowledge about paywall and consent-wall interstitials; copying them
  * into a second class would fork that knowledge.
+ *
+ * <p>When the page will not serve a usable body to the scraper (openai.com puts every article
+ * behind a bot challenge), the {@link ReaderFallbackClient} is asked before the stored text,
+ * because for an RSS source the stored text is only the feed's one-line description.
  */
 @Component
 public class ArticleSourceTextProvider {
@@ -50,16 +54,20 @@ public class ArticleSourceTextProvider {
   public static final int HARD_MIN_SOURCE_CHARS = 200;
 
   private final SitemapHtmlScraper scraper;
+  private final ReaderFallbackClient readerFallback;
 
-  public ArticleSourceTextProvider(final SitemapHtmlScraper scraper) {
+  public ArticleSourceTextProvider(
+      final SitemapHtmlScraper scraper,
+      final ReaderFallbackClient readerFallback) {
     this.scraper = scraper;
+    this.readerFallback = readerFallback;
   }
 
   /**
    * Picks the best available source text: the fresh scrape if it clears
-   * {@link #MIN_USABLE_SOURCE_CHARS}, else the stored {@code fullContent} if
-   * that clears it, else whichever of the three available sources (scrape,
-   * stored content, stored summary) is longest — which may still be below
+   * {@link #MIN_USABLE_SOURCE_CHARS}, else the reader fallback's text if that clears it,
+   * else the stored {@code fullContent} if that clears it, else whichever of the four
+   * (scrape, reader, stored content, stored summary) is longest — which may still be below
    * {@link #HARD_MIN_SOURCE_CHARS}, in which case the caller is expected to
    * decline to call the model.
    *
@@ -74,14 +82,21 @@ public class ArticleSourceTextProvider {
     if (clearsFloor(scrapedText, MIN_USABLE_SOURCE_CHARS)) {
       return truncate(scrapedText);
     }
+    String readerText = readerFallback.read(article.originalUrl()).orElse(null);
+    if (clearsFloor(readerText, MIN_USABLE_SOURCE_CHARS)) {
+      LOG.info("""
+          Scrape returned nothing usable for '{}', \
+          read it through the reader fallback instead""", article.title());
+      return truncate(readerText);
+    }
     LOG.info("""
-        Scrape returned nothing usable for '{}', \
+        Scrape and reader returned nothing usable for '{}', \
         falling back to stored content""", article.title());
     String fullContent = article.fullContent();
     if (clearsFloor(fullContent, MIN_USABLE_SOURCE_CHARS)) {
       return truncate(fullContent);
     }
-    return truncate(longestOf(scrapedText, fullContent, article.summary()));
+    return truncate(longestOf(scrapedText, readerText, fullContent, article.summary()));
   }
 
   /** Whether the text is long enough to be worth sending to a model at all. */

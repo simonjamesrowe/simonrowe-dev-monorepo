@@ -2,11 +2,14 @@ package com.simonrowe.aggregation;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.simonrowe.agents.scrapers.ScrapedContent;
 import com.simonrowe.agents.scrapers.SitemapHtmlScraper;
 import java.time.Instant;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,13 +31,16 @@ class ArticleSourceTextProviderTest {
   private static final String LONG_SCRAPE = "Freshly scraped body text. ".repeat(25);
   private static final String LONG_STORED = "Stored full content. ".repeat(35);
 
+  private static final String LONG_READER = "Body text as the reader rendered it. ".repeat(20);
+
   @Mock private SitemapHtmlScraper scraper;
+  @Mock private ReaderFallbackClient readerFallback;
 
   private ArticleSourceTextProvider provider;
 
   @BeforeEach
   void setUp() {
-    provider = new ArticleSourceTextProvider(scraper);
+    provider = new ArticleSourceTextProvider(scraper, readerFallback);
   }
 
   @Test
@@ -44,6 +50,49 @@ class ArticleSourceTextProviderTest {
     String text = provider.sourceTextFor(article(LONG_STORED, "Stored summary."));
 
     assertThat(text).isEqualTo(LONG_SCRAPE);
+  }
+
+  @Test
+  void usableScrapeNeverAsksTheReader() {
+    stubScrape(LONG_SCRAPE);
+
+    provider.sourceTextFor(article(LONG_STORED, "Stored summary."));
+
+    verify(readerFallback, never()).read(anyString());
+  }
+
+  /** openai.com: the page is a 403 bot challenge and the stored text is the RSS blurb. */
+  @Test
+  void refusedScrapeIsReadThroughTheReaderBeforeTheStoredFeedText() {
+    when(scraper.scrapeArticlePagePublic(anyString())).thenReturn(null);
+    when(readerFallback.read(URL)).thenReturn(Optional.of(LONG_READER));
+
+    String text = provider.sourceTextFor(article(
+        "How OpenAI built Pando, a Git-compatible backend.", "Stored summary."));
+
+    assertThat(text).isEqualTo(LONG_READER);
+  }
+
+  /** A reader that only got the publisher's challenge page must not beat the stored body. */
+  @Test
+  void thinReaderResultFallsThroughToStoredFullContent() {
+    when(scraper.scrapeArticlePagePublic(anyString())).thenReturn(null);
+    when(readerFallback.read(URL)).thenReturn(Optional.of("Just a moment..."));
+
+    String text = provider.sourceTextFor(article(LONG_STORED, "Stored summary."));
+
+    assertThat(text).isEqualTo(LONG_STORED);
+  }
+
+  @Test
+  void whenEverythingIsUnderTheFloorThinReaderResultCanStillBeTheLongest() {
+    stubScrape("Short scrape.");
+    String reader = "A reader result that is short but longer than everything else here.";
+    when(readerFallback.read(URL)).thenReturn(Optional.of(reader));
+
+    String text = provider.sourceTextFor(article("Stored.", "Summary."));
+
+    assertThat(text).isEqualTo(reader);
   }
 
   @Test

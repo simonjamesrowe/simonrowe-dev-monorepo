@@ -611,6 +611,15 @@ aggregation:
     # to conclude the generating process died and reclaim it.
     generation-timeout: 3m
     max-source-chars: 12000
+  # Asked for an article's text only when a direct scrape comes back thin, before falling back
+  # to the stored feed text. openai.com answers every article page with a 403 bot challenge,
+  # so without this its articles are summarised from a one-line RSS description, or not at all.
+  # See ReaderFallbackClient.
+  reader-fallback:
+    enabled: ${ARTICLE_READER_FALLBACK_ENABLED:true}
+    base-url: ${ARTICLE_READER_FALLBACK_URL:https://r.jina.ai/}
+    api-key: ${JINA_API_KEY:}
+    timeout: 30s
 
 backup:
   # Application data: MongoDB, uploaded media, Elasticsearch embeddings.

@@ -17,6 +17,7 @@ import com.simonrowe.agents.scrapers.ScrapedContent;
 import com.simonrowe.agents.scrapers.SitemapHtmlScraper;
 import com.simonrowe.aggregation.AggregatedArticle;
 import com.simonrowe.aggregation.ArticleSourceTextProvider;
+import com.simonrowe.aggregation.ReaderFallbackClient;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,6 +40,8 @@ class ArticleSectionWriterTest {
       "Freshly scraped body text. ".repeat(20);
 
   @Mock private SitemapHtmlScraper scraper;
+  // Unstubbed: answers empty, so the cascade falls back to stored text as it always has.
+  @Mock private ReaderFallbackClient readerFallback;
   @Mock private Ai ai;
 
   private PromptRunner promptRunner;
@@ -61,7 +64,7 @@ class ArticleSectionWriterTest {
     // A real ArticleSourceTextProvider over the mocked scraper: the source-text
     // cascade is exercised for real, so every assertion below still covers it.
     writer = new ArticleSectionWriter(
-        new ArticleSourceTextProvider(scraper), ai, MODEL);
+        new ArticleSourceTextProvider(scraper, readerFallback), ai, MODEL);
   }
 
   private static ArgumentCaptor<List<Message>> promptCaptor() {

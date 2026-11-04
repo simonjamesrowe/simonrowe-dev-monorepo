@@ -16,6 +16,7 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.jsoup.HttpStatusException;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -463,9 +464,19 @@ public class SitemapHtmlScraper {
     return results;
   }
 
+  /**
+   * Scrapes one article page, or returns null.
+   *
+   * <p>A page the publisher refuses (openai.com answers every article with a 403 bot
+   * challenge) is logged with its status and no stack trace: it is an answer from the
+   * publisher, not a fault here, and callers have their own fallback for it.
+   */
   public ScrapedContent scrapeArticlePagePublic(String url) {
     try {
       return scrapeArticlePage(url);
+    } catch (HttpStatusException e) {
+      log.info("Article page refused with HTTP {}: {}", e.getStatusCode(), url);
+      return null;
     } catch (Exception e) {
       log.warn("Failed to scrape article page: {}", url, e);
       return null;
