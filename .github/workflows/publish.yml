@@ -37,6 +37,7 @@ jobs:
       backend: ${{ steps.areas.outputs.image_backend }}
       frontend: ${{ steps.areas.outputs.image_frontend }}
       factory: ${{ steps.areas.outputs.image_factory }}
+      reader: ${{ steps.areas.outputs.image_reader }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -232,6 +233,46 @@ jobs:
             GIT_SHA=${{ github.sha }}
             GIT_COMMIT_TIME=${{ steps.commit-meta.outputs.time }}
             GIT_COMMIT_SUBJECT=${{ steps.commit-meta.outputs.subject }}
+
+  # The page-reader: Node, Playwright's headless Chromium, and a Temporal activity worker. Built
+  # on an arm64 runner because the Pi is arm64, exactly as the software-factory image is. It
+  # carries no build metadata yet, so the status page lists it as a floating `latest` image.
+  publish-page-reader:
+    name: Publish Page Reader Image
+    runs-on: ubuntu-24.04-arm
+    needs: changes
+    env:
+      IMAGE: ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-page-reader
+      CHANGED: ${{ needs.changes.result != 'success' || needs.changes.outputs.reader == 'true' }}
+    if: ${{ !cancelled() }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Re-tag the previous commit's image
+        id: retag
+        if: env.CHANGED != 'true'
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: scripts/ci/retag-image.sh "$IMAGE" "$BEFORE" "$AFTER" | tee -a "$GITHUB_OUTPUT"
+
+      - name: Build and push page-reader image
+        if: env.CHANGED == 'true' || steps.retag.outputs.retagged != 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.page-reader
+          push: true
+          tags: |
+            ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-page-reader:latest
+            ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-page-reader:${{ github.sha }}
 
   sbom:
     name: Publish SBOMs to Dependency-Track

@@ -91,6 +91,10 @@ tasks.test {
     inputs.file(rootProject.file(".github/workflows/npm-lockfile-repair.yml"))
         .withPropertyName("npmLockfileRepairWorkflow")
         .withPathSensitivity(PathSensitivity.RELATIVE)
+    // PageReadActivitiesContractTest reads the page-reader's Node source, for the same reason.
+    inputs.dir(rootProject.file("page-reader/src"))
+        .withPropertyName("pageReaderSource")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
 }
 
 // Report only — deliberately NO jacocoTestCoverageVerification and NO tasks.check

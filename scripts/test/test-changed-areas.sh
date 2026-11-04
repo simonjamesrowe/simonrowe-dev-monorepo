@@ -12,7 +12,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 AREAS_SCRIPT="$PROJECT_DIR/scripts/changed-areas.sh"
 
-ALL="backend frontend factory shell image_backend image_frontend image_factory"
+ALL="backend frontend factory shell image_backend image_frontend image_factory reader image_reader"
 
 checks=0
 failures=0
@@ -89,9 +89,13 @@ expect "the frontend Dockerfile rebuilds only that image" "shell image_frontend"
 expect "the factory Dockerfile is built in CI too" "factory shell image_factory" \
   Dockerfile.software-factory
 expect ".dockerignore shapes every image" \
-  "factory shell image_backend image_frontend image_factory" .dockerignore
+  "factory shell image_backend image_frontend image_factory reader image_reader" .dockerignore
 
 echo "  the default is everything"
+expect "page-reader source runs its tests, the contract test and rebuilds its image" \
+  "factory reader image_reader" page-reader/src/readPage.ts page-reader/package.json
+expect "the page-reader Dockerfile rebuilds only that image" "reader image_reader" \
+  Dockerfile.page-reader
 expect "a workflow change exercises everything" "$ALL" .github/workflows/ci.yml
 expect "a new top-level directory" "$ALL" infra/terraform/main.tf
 expect "a new root file" "$ALL" Makefile

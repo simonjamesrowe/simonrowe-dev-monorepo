@@ -1,0 +1,27 @@
+{
+  "name": "page-reader",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Reads article pages that refuse plain scrapers, in a headless browser, as a Temporal activity worker.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "start": "node dist/worker.js"
+  },
+  "dependencies": {
+    "@mozilla/readability": "^0.6.0",
+    "@temporalio/activity": "^1.25.0",
+    "@temporalio/worker": "^1.25.0",
+    "playwright-core": "^1.64.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "typescript": "~5.7.3",
+    "vitest": "^3.2.7"
+  }
+}

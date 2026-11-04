@@ -280,6 +280,26 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- page-reader: **Articles that refuse the scrapers are read in a self-hosted headless browser**,
+  before Jina Reader (#298) and the stored feed blurb. openai.com answers every article with a
+  `403` Cloudflare challenge; headless Chromium passes it at once **as long as its user agent
+  does not say `HeadlessChrome`** (that was the whole difference, checked 2026-11-04). New
+  `page-reader/` (Node 22, Playwright, an activity-only Temporal worker on queue `page-reader`),
+  orchestrated by software-factory's `PageReadWorkflow` (queue `page-read`) behind token-protected
+  `POST /api/page-reads`, called by the backend's `PageReaderClient`. Load-bearing bits:
+  - **Playwright's request interception never sees redirect hops**, so it cannot keep a page
+    off the stack. Every browser connection goes through an egress proxy in the container that
+    refuses non-public addresses (every resolved address, pinned) and ports other than 80/443;
+    the container's only network is shared with `temporal` alone. `readPage.test.ts` proves a
+    redirect to a forbidden address is refused, and fails if loopback bypasses the proxy.
+  - **The activity name is `readPage`, set explicitly** (`@ActivityMethod(name = ...)`): Java's
+    default would be `ReadPage`, and an activity type nobody polls fails nothing, it just waits.
+    `PageReadActivitiesContractTest` reads the Node source to pin queue, name, outcomes and
+    fields; `page-reader/src` is a declared input of software-factory's test task.
+  - **No poller means an immediate 503**, not a 100s wait, so a stopped container only costs a
+    round trip before the backend falls back to Jina.
+  - **The first deploy is held back** (new service, and `temporal` joins a new network). Rollout
+    steps, including recreating the deployer last, are in `docs/runbooks/page-reader.md`.
 - npm-cve-repair: **Frontend npm vulnerabilities now repair themselves too, with no agent writing
   anything.** The scan files `Bump npm package <name> to <version> (…)` tickets for
   `simonrowe-dev/frontend` (`RepairPlanner`, OSV in the `npm` ecosystem). The ticket agent

@@ -185,6 +185,13 @@ services:
       - "127.0.0.1:7233:7233"
     volumes:
       - ./config/temporal/dynamicconfig:/etc/temporal/config/dynamicconfig:ro
+    # `default` is every other service's network; naming any network drops the implicit one, so
+    # it is listed. `page-reader` is the page-reader's only network, and Temporal is the only
+    # other thing on it: a page the headless browser opens can reach nothing else in the stack
+    # even if its egress proxy failed open.
+    networks:
+      - default
+      - page-reader
     healthcheck:
       test: ["CMD", "nc", "-z", "localhost", "7233"]
       interval: 10s
@@ -331,6 +338,9 @@ services:
       # the reviewer, so the backend always falls back to OpenAI. Deliberately NOT on
       # `deployer`: WritingComposeTest fails the build if any FACTORY_WRITING_* appears there.
       FACTORY_WRITING_ENABLED: ${FACTORY_WRITING_ENABLED:-true}
+      # Accepts the backend's page reads (POST /api/page-reads) and runs PageReadWorkflow. The
+      # browser itself is the page-reader service below; this container never launches one.
+      FACTORY_PAGEREAD_ENABLED: ${FACTORY_PAGEREAD_ENABLED:-true}
       FACTORY_WRITING_MODEL: ${FACTORY_WRITING_MODEL:-haiku}
       # The ticket agent: picks up Linear tickets labelled `factory:agent`, makes the change with
       # file tools only and opens a pull request; CI's workflow_run webhook drives up to three
@@ -559,7 +569,7 @@ services:
       # If you ever add `env_file: .env` to this service, this reasoning breaks.
       FACTORY_DEPLOY_SYNC_CONFIG: ${FACTORY_DEPLOY_SYNC_CONFIG:-true}
       FACTORY_DEPLOY_ROLLBACK_ENABLED: ${FACTORY_DEPLOY_ROLLBACK_ENABLED:-true}
-      FACTORY_DEPLOY_SERVICES: ${FACTORY_DEPLOY_SERVICES:-backend,frontend,software-factory}
+      FACTORY_DEPLOY_SERVICES: ${FACTORY_DEPLOY_SERVICES:-backend,frontend,software-factory,page-reader}
       # An allowlist, not a denylist: a service added to this file next year is held for a
       # human by default rather than silently recreated by the first deploy that touches
       # it. The absentees are absent for concrete reasons - recreating
@@ -589,7 +599,7 @@ services:
       # To settle it properly: recreate pinggy by hand while watching its log for
       # "A tunnel with the same token is already active". If a clean recreate reconnects,
       # add pinggy here and cite that observation.
-      FACTORY_DEPLOY_RECREATABLE: ${FACTORY_DEPLOY_RECREATABLE:-backend,frontend,software-factory,nginx,alloy,searxng,temporal-ui,dependencytrack-frontend,trivy-server}
+      FACTORY_DEPLOY_RECREATABLE: ${FACTORY_DEPLOY_RECREATABLE:-backend,frontend,software-factory,page-reader,nginx,alloy,searxng,temporal-ui,dependencytrack-frontend,trivy-server}
       # All three are the HOST path, not a container-private one, and the mount below puts
       # the deploy directory at that same path inside this container. See the volume for
       # why anything else cannot work.
@@ -1612,6 +1622,53 @@ services:
   # apiserver on it would trade a soft failure for a hard startup dependency - on the one
   # container in this file that is NOT in FACTORY_DEPLOY_RECREATABLE (its KEK makes
   # recreation risky), i.e. the worst possible place to add a new boot gate.
+  # Reads article pages that refuse plain scrapers (openai.com's Cloudflare challenge) in
+  # headless Chromium, as a Temporal activity worker on the `page-reader` queue. The workflow is
+  # software-factory's PageReadWorkflow; this only drives the browser. See
+  # docs/runbooks/page-reader.md.
+  page-reader:
+    image: ${PAGE_READER_IMAGE:-ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-page-reader:latest}
+    # `missing`, like the other first-party images: monitor-prod.sh's bare `up -d` must never
+    # pull a newer image while healing something else, or it would undo a rollback.
+    pull_policy: missing
+    restart: unless-stopped
+    depends_on:
+      temporal:
+        condition: service_healthy
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_NAMESPACE: default
+      # Chromium writes its profile and crash state under HOME; the root filesystem is
+      # read-only, so HOME is the tmpfs.
+      HOME: /tmp
+    # Its own network, shared with Temporal alone (see `temporal` above). Every connection the
+    # browser makes also goes through an egress proxy inside the container that refuses any
+    # private, loopback or link-local destination at connect time, redirects included.
+    networks:
+      - page-reader
+    # Chromium runs without its own sandbox here (Playwright's default in a container), so the
+    # container is the sandbox: no capabilities, no privilege escalation, a read-only root.
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=512m
+    # One browser at a time, closed after every read. NOT measured on the Pi yet; Chromium's
+    # headless shell needs a few hundred MB per page. Inert until the memory cgroup is enabled
+    # (scripts/enable-memory-cgroup.sh), like every limit in this file.
+    mem_limit: 1g
+    mem_reservation: 128m
+    healthcheck:
+      # The worker's own state, served on loopback. UP means it is polling Temporal; it says
+      # nothing about whether a given site will let it in.
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8090/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
   trivy-server:
     image: aquasec/trivy:0.74.0
     restart: unless-stopped
@@ -1658,6 +1715,11 @@ services:
       # the Pi. Free once warm - the first successful probe ends the start period early,
       # and the volume above means only the very first boot pays it.
       start_period: 900s
+
+networks:
+  # The page-reader's network: Temporal is the only other member. Not `internal`, because the
+  # browser must reach the internet; what it must not reach is everything else in this file.
+  page-reader:
 
 volumes:
   mongodb-data:
