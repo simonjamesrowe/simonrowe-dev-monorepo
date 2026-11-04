@@ -124,7 +124,7 @@ class FavouriteArticleMcpToolsTest {
   @DisplayName("the vector query is filtered to the hearted articles' chunks by exact id")
   void filtersTheQueryToHeartedArticles() {
     heart("a", "2026-10-01T00:00:00Z");
-    givenStore();
+    given(favouriteRepository.findByType(FavouriteType.NEWS)).willReturn(favourites);
     given(vectorStore.similaritySearch(any(SearchRequest.class))).willReturn(List.of());
     given(summaryService.findForAll(anyCollection())).willReturn(Map.of());
 
@@ -229,6 +229,23 @@ class FavouriteArticleMcpToolsTest {
 
     assertThat(articles(tools.searchFavouriteArticles(null, 1)))
         .extracting(a -> a.get("id")).containsExactly("ok");
+  }
+
+  @Test
+  @DisplayName("listing reads articles in windows sized by the limit, not the whole list")
+  @SuppressWarnings("unchecked")
+  void listingReadsArticlesInWindowsOfTheLimit() {
+    IntStream.range(0, 30).forEach(i -> heart("id" + i,
+        Instant.parse("2026-10-01T00:00:00Z").plusSeconds(i).toString()));
+    givenStore();
+    given(summaryService.findForAll(anyCollection())).willReturn(Map.of());
+
+    assertThat(articles(tools.searchFavouriteArticles("", 2)))
+        .extracting(a -> a.get("id")).containsExactly("id29", "id28");
+
+    final ArgumentCaptor<Iterable<String>> ids = ArgumentCaptor.forClass(Iterable.class);
+    verify(articleRepository).findAllById(ids.capture());
+    assertThat(ids.getValue()).containsExactly("id29", "id28", "id27", "id26");
   }
 
   @Test

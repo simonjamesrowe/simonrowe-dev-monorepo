@@ -5,6 +5,7 @@ import com.simonrowe.aggregation.AggregatedArticleRepository;
 import com.simonrowe.favourites.Favourite;
 import com.simonrowe.favourites.FavouriteRepository;
 import com.simonrowe.favourites.FavouriteType;
+import com.simonrowe.shortlink.ShortLinkContentType;
 import com.simonrowe.shortlink.ShortLinkProperties;
 import com.simonrowe.summary.ArticleSummary;
 import com.simonrowe.summary.ArticleSummaryService;
@@ -136,13 +137,8 @@ public class FavouriteArticleMcpTools {
       }
     }
 
-    final List<String> candidateIds = ranked.stream().map(Ranked::articleId).toList();
     final Map<String, AggregatedArticle> articles = new LinkedHashMap<>();
-    articleRepository.findAllById(candidateIds).forEach(a -> articles.put(a.id(), a));
-    final List<Ranked> shown = ranked.stream()
-        .filter(r -> articles.containsKey(r.articleId()) && articles.get(r.articleId()).visible())
-        .limit(wanted)
-        .toList();
+    final List<Ranked> shown = firstVisible(ranked, wanted, articles);
     final Map<String, ArticleSummary> summaries = summaryService.findForAll(
         shown.stream().map(Ranked::articleId).toList());
 
@@ -192,6 +188,30 @@ public class FavouriteArticleMcpTools {
     return ranked;
   }
 
+  /**
+   * The first {@code wanted} candidates whose article still exists and is visible, in rank
+   * order, loading articles a window at a time so the reads grow with the limit rather than
+   * with the whole favourites list. A window is twice the limit, so the usual case is one read
+   * and a few hidden or deleted articles still leave the limit filled.
+   */
+  private List<Ranked> firstVisible(final List<Ranked> ranked, final int wanted,
+      final Map<String, AggregatedArticle> loaded) {
+    final List<Ranked> shown = new ArrayList<>();
+    final int window = wanted * 2;
+    for (int from = 0; from < ranked.size() && shown.size() < wanted; from += window) {
+      final List<Ranked> page = ranked.subList(from, Math.min(from + window, ranked.size()));
+      articleRepository.findAllById(page.stream().map(Ranked::articleId).toList())
+          .forEach(article -> loaded.put(article.id(), article));
+      for (Ranked candidate : page) {
+        final AggregatedArticle article = loaded.get(candidate.articleId());
+        if (shown.size() < wanted && article != null && article.visible()) {
+          shown.add(candidate);
+        }
+      }
+    }
+    return shown;
+  }
+
   private Map<String, Object> toResult(final Ranked ranked, final AggregatedArticle article,
       final Favourite favourite, final ArticleSummary summary) {
     final boolean summarised = summary != null && summary.status() == SummaryStatus.READY
@@ -209,7 +229,8 @@ public class FavouriteArticleMcpTools {
       map.put("relevance", Math.round(ranked.score() * 1000) / 1000.0);
     }
     map.put("articleUrl", article.originalUrl());
-    map.put("summaryUrl", siteProperties.baseUrl() + "/news-events?article=" + article.id());
+    map.put("summaryUrl",
+        siteProperties.absolute(ShortLinkContentType.ARTICLE.destinationPath(article.id())));
     map.put("summaryKind", summarised ? AI_SUMMARY : FEED_BLURB);
     map.put("summary", summarised ? summary.body() : article.summary());
     return map;
