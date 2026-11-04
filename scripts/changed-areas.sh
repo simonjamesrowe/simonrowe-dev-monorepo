@@ -20,6 +20,9 @@
 #   image_backend=true|false    Publish: rebuild the backend image
 #   image_frontend=true|false   Publish: rebuild the frontend image
 #   image_factory=true|false    Publish: rebuild the software-factory image
+#   reader=true|false           CI: the page-reader's Node tests and image build (they run in
+#                               the Software Factory job, so no new required check)
+#   image_reader=true|false     Publish: rebuild the page-reader image
 #   reason=<one line>           why, for the job log
 #
 # THE DEFAULT IS EVERYTHING. A path no rule recognises turns every area on, as does a base
@@ -35,12 +38,14 @@
 #     both Java test suites, so it rebuilds the backend.
 #   - config/nginx/ is read by software-factory's FactoryPublicSurfaceTest.
 #   - scripts/classify-change.sh and its fixtures are read by MergeDispositionTest.
+#   - page-reader/ is read by software-factory's PageReadActivitiesContractTest, which holds
+#     the Node activity to the Java workflow's names.
 #   - the shell tests read files from almost everywhere (nginx confs, the compose file, both
 #     Dockerfiles, the workflows, the backend's logback config), so they run for any change
 #     that is not documentation. They take about 25 seconds.
 set -euo pipefail
 
-AREAS=(backend frontend factory shell image_backend image_frontend image_factory)
+AREAS=(backend frontend factory shell image_backend image_frontend image_factory reader image_reader)
 
 # One variable per area (on_backend, ...) rather than an associative array, which the bash 3.2
 # that macOS ships does not have.
@@ -86,8 +91,10 @@ classify() {
       turn_on shell image_frontend ;;
     Dockerfile.software-factory)
       turn_on factory shell image_factory ;;
+    Dockerfile.page-reader)
+      turn_on reader image_reader ;;
     .dockerignore)
-      turn_on factory shell image_backend image_frontend image_factory ;;
+      turn_on factory shell image_backend image_frontend image_factory reader image_reader ;;
     *) return 1 ;;
   esac
 }
@@ -100,6 +107,8 @@ classify_nested() {
       turn_on frontend shell image_frontend ;;
     software-factory/*)
       turn_on factory shell image_factory ;;
+    page-reader/*)
+      turn_on factory reader image_reader ;;
     gradle/*|config/checkstyle/*)
       turn_on backend factory shell image_backend image_factory ;;
     config/nginx/*)

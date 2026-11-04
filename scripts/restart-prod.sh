@@ -47,7 +47,7 @@ VERIFY_POLL="${VERIFY_POLL:-10}"
 # container that is mid-orchestration is how the backend's old redeploy path went
 # wrong, and it needed an ephemeral helper container to work around it. The
 # deployer excludes itself and is updated by hand.
-SERVICES="${SERVICES:-backend frontend software-factory}"
+SERVICES="${SERVICES:-backend frontend software-factory page-reader}"
 
 # The tag `pull` fetches and then re-tags to :latest. The deployer passes the head
 # sha so an exact commit is deployed rather than whatever :latest points at when
@@ -539,7 +539,7 @@ best_effort_prune() {
 # Services the automation is allowed to recreate. An allowlist, not a denylist:
 # a service added to the compose file next year is held for a human by default
 # rather than silently recreated by the first deploy that touches it.
-RECREATABLE="${RECREATABLE:-backend frontend software-factory nginx alloy searxng temporal-ui dependencytrack-frontend}"
+RECREATABLE="${RECREATABLE:-backend frontend software-factory page-reader nginx alloy searxng temporal-ui dependencytrack-frontend}"
 
 # Pinned in configuration rather than read from the checkout's own remote, so a
 # tampered remote cannot redirect the fetch this phase validates against. The

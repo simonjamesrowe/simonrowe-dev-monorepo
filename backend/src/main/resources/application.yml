@@ -611,6 +611,12 @@ aggregation:
     # to conclude the generating process died and reclaim it.
     generation-timeout: 3m
     max-source-chars: 12000
+  # The self-hosted headless browser (page-reader container, via software-factory), asked first
+  # when a direct scrape comes back thin. The factory answers 503 at once while it is off or no
+  # page-reader is polling, so leaving this on costs nothing then. See PageReaderClient.
+  page-reader:
+    enabled: ${ARTICLE_PAGE_READER_ENABLED:true}
+    timeout: 110s
   # Asked for an article's text only when a direct scrape comes back thin, before falling back
   # to the stored feed text. openai.com answers every article page with a 403 bot challenge,
   # so without this its articles are summarised from a one-line RSS description, or not at all.

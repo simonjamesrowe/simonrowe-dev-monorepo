@@ -43,7 +43,8 @@ class FactoryWorkflowWorkersTest {
           "com.simonrowe.factory.logwatch.workflow",
           "com.simonrowe.factory.staticanalysis.workflow",
           "com.simonrowe.factory.writing.workflow",
-          "com.simonrowe.factory.ticketagent.workflow");
+          "com.simonrowe.factory.ticketagent.workflow",
+          "com.simonrowe.factory.pageread.workflow");
 
   private static final Set<String> DEPLOYER_PACKAGES =
       Set.of(

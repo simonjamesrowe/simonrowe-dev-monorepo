@@ -48,6 +48,7 @@ jobs:
       frontend: ${{ steps.areas.outputs.frontend }}
       factory: ${{ steps.areas.outputs.factory }}
       shell: ${{ steps.areas.outputs.shell }}
+      reader: ${{ steps.areas.outputs.reader }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -67,7 +68,7 @@ jobs:
           if [ "$EVENT" = "pull_request" ]; then
             scripts/changed-areas.sh "$BASE_SHA" "$HEAD_SHA" | tee -a "$GITHUB_OUTPUT"
           else
-            printf '%s\n' backend=true frontend=true factory=true shell=true \
+            printf '%s\n' backend=true frontend=true factory=true shell=true reader=true \
               "reason=a push to main builds everything" | tee -a "$GITHUB_OUTPUT"
           fi
 
@@ -184,10 +185,13 @@ jobs:
     # ubuntu-22.04 for the same reason as the backend job (mongod on kernel 7.0).
     runs-on: ubuntu-22.04
     needs: changes
-    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.factory == 'true' || needs.changes.outputs.shell == 'true') }}
+    # The page-reader (Node) runs here too rather than as a job of its own: a new job would be
+    # a new check, and an absent required check blocks merges for ever.
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.factory == 'true' || needs.changes.outputs.shell == 'true' || needs.changes.outputs.reader == 'true') }}
     env:
       RUN_FACTORY: ${{ needs.changes.result != 'success' || needs.changes.outputs.factory == 'true' }}
       RUN_SHELL: ${{ needs.changes.result != 'success' || needs.changes.outputs.shell == 'true' }}
+      RUN_READER: ${{ needs.changes.result != 'success' || needs.changes.outputs.reader == 'true' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -238,6 +242,34 @@ jobs:
       - name: Run deploy shell tests
         if: env.RUN_SHELL == 'true'
         run: ./scripts/test/run-tests.sh
+
+      - name: Set up Node.js for the page-reader
+        if: env.RUN_READER == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: page-reader/package-lock.json
+
+      - name: Install page-reader dependencies and its browser
+        if: env.RUN_READER == 'true'
+        working-directory: page-reader
+        # The headless shell only: readPage.test.ts drives a real Chromium behind the egress
+        # proxy, which is the one way to test that a redirect to a forbidden address is refused.
+        run: |
+          npm ci
+          node node_modules/playwright-core/cli.js install --with-deps --only-shell chromium
+
+      - name: Typecheck and test the page-reader
+        if: env.RUN_READER == 'true'
+        working-directory: page-reader
+        run: |
+          npm run typecheck
+          npm test
+
+      - name: Build page-reader container
+        if: env.RUN_READER == 'true'
+        run: docker build -f Dockerfile.page-reader -t page-reader:test .
 
   # Static analysis for all three modules in one project. See
   # docs/runbooks/static-analysis.md.

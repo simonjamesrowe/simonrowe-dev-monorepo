@@ -33,14 +33,18 @@ class ArticleSourceTextProviderTest {
 
   private static final String LONG_READER = "Body text as the reader rendered it. ".repeat(20);
 
+  private static final String LONG_BROWSER =
+      "Body text as the headless browser read it. ".repeat(20);
+
   @Mock private SitemapHtmlScraper scraper;
+  @Mock private PageReaderClient pageReader;
   @Mock private ReaderFallbackClient readerFallback;
 
   private ArticleSourceTextProvider provider;
 
   @BeforeEach
   void setUp() {
-    provider = new ArticleSourceTextProvider(scraper, readerFallback);
+    provider = new ArticleSourceTextProvider(scraper, pageReader, readerFallback);
   }
 
   @Test
@@ -58,7 +62,29 @@ class ArticleSourceTextProviderTest {
 
     provider.sourceTextFor(article(LONG_STORED, "Stored summary."));
 
+    verify(pageReader, never()).read(anyString());
     verify(readerFallback, never()).read(anyString());
+  }
+
+  /** The self-hosted browser is asked first, so the third party only sees what it missed. */
+  @Test
+  void refusedScrapeIsReadInThePageReaderWithoutAskingJina() {
+    when(scraper.scrapeArticlePagePublic(anyString())).thenReturn(null);
+    when(pageReader.read(URL)).thenReturn(Optional.of(LONG_BROWSER));
+
+    String text = provider.sourceTextFor(article("RSS blurb.", "Stored summary."));
+
+    assertThat(text).isEqualTo(LONG_BROWSER);
+    verify(readerFallback, never()).read(anyString());
+  }
+
+  @Test
+  void thinPageReaderResultFallsThroughToJina() {
+    when(scraper.scrapeArticlePagePublic(anyString())).thenReturn(null);
+    when(pageReader.read(URL)).thenReturn(Optional.of("Just a moment..."));
+    when(readerFallback.read(URL)).thenReturn(Optional.of(LONG_READER));
+
+    assertThat(provider.sourceTextFor(article("RSS blurb.", "Summary."))).isEqualTo(LONG_READER);
   }
 
   /** openai.com: the page is a 403 bot challenge and the stored text is the RSS blurb. */

@@ -64,6 +64,10 @@ spring:
         # factory.writing.enabled, true on software-factory only: it runs Claude Code on Simon's
         # subscription and has no business in the container holding the Docker socket.
         - com.simonrowe.factory.writing.workflow
+        # Only the workflow lives here. Its one activity, readPage, runs in the page-reader
+        # container (Node and Playwright), which polls the page-reader queue; no Java class
+        # implements it, so there is no activity gate in this JVM to keep the browser out of.
+        - com.simonrowe.factory.pageread.workflow
         # The activity gate is TicketAgentActivitiesImpl's @ConditionalOnProperty on
         # factory.ticket-agent.enabled, true on software-factory only: it clones, runs an agent and
         # pushes, none of which belongs in the container holding the Docker socket.
@@ -181,6 +185,13 @@ factory:
   # an OpenAI fallback. Off here; production sets it on software-factory only. The deployer must
   # never carry it (WritingComposeTest). See "Content writing queue" in
   # docs/runbooks/software-factory.md.
+  # Reads an article page in the page-reader's headless browser, for the backend's summaries.
+  # The workflow runs here; the browser runs in the page-reader container.
+  pageread:
+    enabled: ${FACTORY_PAGEREAD_ENABLED:false}
+    # The backend's client waits longer than this (see ReaderFallbackProperties' neighbour,
+    # PageReaderProperties), so a slow read answers RUNNING rather than timing the backend out.
+    wait-for: ${FACTORY_PAGEREAD_WAIT:100s}
   writing:
     enabled: ${FACTORY_WRITING_ENABLED:false}
     command: ${CLAUDE_COMMAND:claude}
@@ -308,12 +319,12 @@ factory:
     # it. The repository is public, so the fetch needs no credential and no write access.
     repo-url: ${FACTORY_DEPLOY_REPO_URL:https://github.com/simonjamesrowe/simonrowe-dev-monorepo.git}
     # The images to pull. Tunable without a rebuild, like FACTORY_MAX_CHANGED_FILES.
-    services: ${FACTORY_DEPLOY_SERVICES:backend,frontend,software-factory}
+    services: ${FACTORY_DEPLOY_SERVICES:backend,frontend,software-factory,page-reader}
     # An allowlist of services the automation may recreate, not a denylist of ones it may not:
     # a service added to compose next year is held for a human by default. `deployer` is
     # deliberately absent — it excludes itself. Widening this is a config change, not a code
     # change.
-    recreatable: ${FACTORY_DEPLOY_RECREATABLE:backend,frontend,software-factory,nginx,alloy,searxng,temporal-ui,dependencytrack-frontend}
+    recreatable: ${FACTORY_DEPLOY_RECREATABLE:backend,frontend,software-factory,page-reader,nginx,alloy,searxng,temporal-ui,dependencytrack-frontend}
     # An escape hatch for the case where rollback itself is the problem.
     rollback-enabled: ${FACTORY_DEPLOY_ROLLBACK_ENABLED:true}
     # Turns the git fast-forward off without disabling the whole deployer, leaving images-only

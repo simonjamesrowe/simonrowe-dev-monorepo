@@ -1,0 +1,33 @@
+# The page reader: a Temporal activity worker that reads article pages in headless Chromium.
+# See page-reader/src/worker.ts and docs/runbooks/page-reader.md.
+#
+# Debian rather than Alpine: Temporal's native bridge ships glibc builds only, and Playwright
+# supports Chromium on Debian 12. Only the headless shell is installed (no full Chrome, no
+# Firefox or WebKit), which keeps the image to roughly a third of Playwright's own.
+
+FROM node:22-bookworm-slim AS build
+WORKDIR /app
+COPY page-reader/package.json page-reader/package-lock.json ./
+RUN npm ci
+COPY page-reader/tsconfig.json ./
+COPY page-reader/src ./src
+# Temporal's native bridge ships a build for every platform (about 140 MB); keep this one's.
+RUN npm run build && npm prune --omit=dev \
+    && find node_modules/@temporalio/core-bridge/releases -mindepth 1 -maxdepth 1 \
+         ! -name "$(uname -m)-unknown-linux-gnu" -exec rm -rf {} +
+
+FROM node:22-bookworm-slim
+ENV NODE_ENV=production \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+WORKDIR /app
+COPY --from=build /app/package.json ./
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/dist ./dist
+# --with-deps installs Chromium's system libraries with apt, so it runs before USER.
+RUN node node_modules/playwright-core/cli.js install --with-deps --only-shell chromium \
+    && rm -rf /var/lib/apt/lists/* /tmp/*
+# The unprivileged user the node image ships. Chromium runs without its own sandbox
+# (Playwright's default in a container), so the container is the sandbox: non-root, no
+# capabilities, and an egress proxy in front of every connection it makes.
+USER node
+CMD ["node", "dist/worker.js"]

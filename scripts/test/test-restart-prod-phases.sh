@@ -71,13 +71,14 @@ echo "  pull"
 state="$TMP/state-pull"
 out="$(run_phase "$state" pull)"
 check "pull records one rollback line per service" \
-  "[[ \$(grep -c . '$state/rollback-images') -eq 3 ]]"
+  "[[ \$(grep -c . '$state/rollback-images') -eq 4 ]]"
 check "pull records backend" "grep -q '^backend' '$state/rollback-images'"
+check "pull records page-reader" "grep -q '^page-reader' '$state/rollback-images'"
 check "pull never records deployer" "! grep -q 'deployer' '$state/rollback-images'"
 check "pull with the default tag emits no docker tag" \
   "! grep -q 'DRY-RUN: docker tag' <<<\"\$out\""
 check "pull emits a docker pull per service" \
-  "[[ \$(grep -c 'DRY-RUN: docker pull' <<<\"\$out\") -eq 3 ]]"
+  "[[ \$(grep -c 'DRY-RUN: docker pull' <<<\"\$out\") -eq 4 ]]"
 
 # The regression this guards: an append would make a retried pull record the
 # freshly-pulled image as the rollback target, so rollback would restore the
@@ -105,7 +106,7 @@ echo "  recreate"
 state="$TMP/state-recreate"
 out="$(run_phase "$state" recreate)"
 check "recreate uses --no-deps --pull never per service" \
-  "[[ \$(grep -c 'up -d --no-deps --pull never' <<<\"\$out\") -eq 3 ]]"
+  "[[ \$(grep -c 'up -d --no-deps --pull never' <<<\"\$out\") -eq 4 ]]"
 check "recreate never touches deployer" "! grep -q 'never deployer' <<<\"\$out\""
 check "recreate restarts nginx" "grep -q 'restart nginx' <<<\"\$out\""
 # The reconcile must name its services rather than running a bare `up -d`. A bare
