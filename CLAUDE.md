@@ -280,6 +280,19 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- favourite-articles-mcp-tool: **The public `/mcp` gains `searchFavouriteArticles`**, a
+  read-only vector search over the news articles Simon has hearted, for a local research agent
+  (Claude Code) to cite from. No token: favourites, summaries and articles are already public.
+  Each hit returns the AI summary (or the feed blurb, labelled `summaryKind`), the publisher's
+  `articleUrl` and the site's `summaryUrl`; never `fullContent`. Load-bearing bits:
+  - **Registered in `McpServerConfig` only, not given to the site chat** (`ChatConfig` passes
+    `ProfileMcpTools` alone), so whole summaries never land in a visitor's chat context.
+  - **The filter is `sourceId.keyword in [news_<id>…]`**, the keyword sub-field Elasticsearch
+    maps dynamically. `FavouriteArticleMcpToolsIntegrationTest` makes the closest chunk an
+    unhearted article, so a wrong field fails it (mutation-checked). Ids go in batches of 500
+    to stay under Elasticsearch's clause cap.
+  - The citation guidance in every result says an `ai-summary` is model-written, not the
+    author's words, matching how snippets cite summaries.
 - page-reader: **Articles that refuse the scrapers are read in a self-hosted headless browser**,
   before Jina Reader (#298) and the stored feed blurb. openai.com answers every article with a
   `403` Cloudflare challenge; headless Chromium passes it at once **as long as its user agent
