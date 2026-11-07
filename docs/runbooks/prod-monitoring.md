@@ -23,13 +23,31 @@ the first one that acts.
 | --- | --- | --- |
 | 1. Site | Does `https://www.simonrowe.dev` answer? | After 3 consecutive failures, restart `pinggy` (see below), then `docker compose up -d` to reconcile the whole stack |
 | 2. Container health | Does every container report `running` + `healthy`? | After 3 consecutive ticks `unhealthy`, restart **that** service. Containers in `created`/`exited` trigger a stack reconcile instead |
-| 3. Endpoint | Does each public hostname actually serve? | After 3 consecutive bad responses, restart the single service behind it |
+| 3. Endpoint | Does each public hostname actually serve? | After 3 consecutive ticks with any of a service's hostnames failing, restart that service. A service whose container is still `starting` is not judged (see below) |
 | 4. DNS | Can each internet-facing container resolve an external name while the host can? | After 3 consecutive failures, restart **that** service (see below) |
 
 Backoff: the whole-stack path allows 3 reconciles per 10 minutes; each service
 (including `pinggy`) allows 2 restarts per 30 minutes. On exhaustion it logs
 `CRIT ... Needs a human.` and stops trying — grep for `CRIT` when something has
 been down a while.
+
+### Why layer 3 leaves a starting container alone (2026-11-07)
+
+After the SSD swap the Pi cold-started every container at once, with a load average
+of about 30. The backend was still inside its healthcheck's `start_period` when
+`api.simonrowe.dev` had failed three ticks running, and layer 3 restarted it at
+10:36 and again at 10:38, each time sending a nearly-booted JVM back to the start.
+Layer 3 now skips any service layer 2 saw as `starting`, and its count for that
+service starts again from zero. That cannot hide a stuck container: once
+`start_period` ends, failing probes make it `unhealthy`, and layer 2 restarts it.
+
+Finding that showed a second fault. Layer 3 used to share layer 2's
+`.failures` counter, which layer 2 zeroes every tick a container is `healthy`. So
+a healthy container whose hostname failed never got past 1/3, and the only thing
+layer 3 could still restart was a `starting` container. It now keeps its own
+`.endpoint-failures`, counted once per service per tick: `frontend` serves three
+hostnames, and counting each would restart it on its first bad tick.
+`scripts/test/test-monitor-prod-starting.sh` covers both.
 
 ### Why layer 2 has to exist
 
@@ -306,7 +324,7 @@ In `STATE_DIR`:
 
 - `failure_count` — consecutive layer-1 failures, reset on success or reconcile
 - `restart_timestamps` — epoch times of recent whole-stack reconciles, pruned each run
-- `svc_<service>.failures` / `.dns-failures` / `.restarts` — per-service failure counters (layers 2-3 and layer 4) and restart history
+- `svc_<service>.failures` / `.endpoint-failures` / `.dns-failures` / `.restarts` — per-service failure counters (layer 2, layer 3, layer 4) and restart history
 - `disk_prune_warn.last` / `disk_prune_crit.last` — epoch time of the last disk-check prune at each level (the rate limit)
 
 They live in `/tmp`, so a reboot clears them. That is the wanted behaviour: after
