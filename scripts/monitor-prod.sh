@@ -648,6 +648,9 @@ set_failure_count 0
 # ---------------------------------------------------------------------------
 
 needs_reconcile=false
+# Services whose container is still inside its healthcheck's start_period.
+# Layer 3 does not judge their hostnames: see the comment there.
+starting_services=" "
 while IFS='|' read -r svc state health; do
   [[ -z "$svc" ]] && continue
   # A completed one-shot is expected to be `exited`; never remediate it.
@@ -663,6 +666,7 @@ while IFS='|' read -r svc state health; do
           ;;
         starting)
           # Still inside start_period - not a failure yet.
+          starting_services+="$svc "
           ;;
         unhealthy)
           f=$(svc_get_failures "$svc")
@@ -711,8 +715,33 @@ fi
 # next cron tick, regardless of what the container healthchecks claimed.
 # ---------------------------------------------------------------------------
 
+# Its failure counter is its own (`.endpoint-failures`). It used to share
+# `.failures` with layer 2, which zeroes that counter every tick a container is
+# `healthy`, so a healthy container whose hostname failed never got past 1/3: the
+# one case this layer exists for. The only containers it could still restart were
+# those Docker reported `starting`, which is the case it must leave alone (below).
+endpoint_failures_file() {
+  echo "$(svc_state_file "$1").endpoint-failures"
+}
+
+# First pass: probe every hostname. A service fails this tick if any of its
+# hostnames fails; frontend serves three, and one bad tick must count once, not
+# three times, or it would be restarted on its first failure.
+failed_services=" "
+failure_reasons=""
 for entry in "${ENDPOINTS[@]}"; do
   IFS='|' read -r svc url expected <<< "$entry"
+
+  # A container still inside its start_period is not yet expected to serve, so
+  # its hostname failing says nothing. On 2026-11-07 a cold boot of the whole
+  # stack took the backend past three ticks, and this layer restarted it twice
+  # mid-boot, each time sending it back to the start. Docker ends `starting`
+  # itself: once start_period is over, a failing probe makes the container
+  # `unhealthy`, which layer 2 handles.
+  if [[ "$starting_services" == *" $svc "* ]]; then
+    log "INFO" "$svc: still starting, not judging $url yet"
+    continue
+  fi
 
   # curl already prints `000` on a connection/timeout failure *and* exits non-zero,
   # so a `|| echo 000` fallback would concatenate into a bogus "000000". Swallow the
@@ -720,18 +749,34 @@ for entry in "${ENDPOINTS[@]}"; do
   code=$(curl -s -o /dev/null -w '%{http_code}' -m 15 "$url" 2>/dev/null) || true
   [[ -z "$code" ]] && code="000"
 
-  if [[ ",$expected," == *",$code,"* ]]; then
-    svc_set_failures "$svc" 0
+  [[ ",$expected," == *",$code,"* ]] && continue
+
+  log "WARN" "$svc: $url returned $code (want $expected)"
+  if [[ "$failed_services" != *" $svc "* ]]; then
+    failed_services+="$svc "
+    failure_reasons+="$svc|$url returned $code"$'\n'
+  fi
+done
+
+# Second pass: one count per service per tick. A starting service starts again
+# from zero, because failures from before its restart describe a process that is
+# gone.
+for svc in $(printf '%s\n' "${ENDPOINTS[@]}" | cut -d'|' -f1 | awk '!seen[$0]++'); do
+  file="$(endpoint_failures_file "$svc")"
+  if [[ "$failed_services" != *" $svc "* ]]; then
+    echo 0 > "$file"
     continue
   fi
-
-  f=$(svc_get_failures "$svc")
+  f=$(cat "$file" 2>/dev/null || echo 0)
   (( f++ )) || true
-  svc_set_failures "$svc" "$f"
-  log "WARN" "$svc: $url returned $code (want $expected) ($f/$SERVICE_FAILURE_THRESHOLD)"
-
+  echo "$f" > "$file"
+  reason=$(grep "^$svc|" <<< "$failure_reasons" | head -1 | cut -d'|' -f2-)
+  log "WARN" "$svc: hostname failing ($f/$SERVICE_FAILURE_THRESHOLD): $reason"
   if (( f >= SERVICE_FAILURE_THRESHOLD )); then
-    svc_restart "$svc" "$url returned $code" || true
+    # Reset whether or not the restart was issued: a backed-off service must not
+    # retry on every following tick.
+    svc_restart "$svc" "$reason" || true
+    echo 0 > "$file"
   fi
 done
 
@@ -759,8 +804,8 @@ done
 # containers would achieve nothing, and wifi-watchdog.sh owns that problem.
 #
 # Its failure counter is separate from the endpoint layer's (`.dns-failures`,
-# not `.failures`): layer 3 resets a service's counter every tick its hostname
-# serves, and a service whose hostname serves while its outbound DNS is dead is
+# not `.endpoint-failures`): layer 3 resets a service's counter every tick its
+# hostname serves, and a service whose hostname serves while its outbound DNS is dead is
 # exactly the case this layer exists for. The restart budget IS shared, through
 # svc_restart, so the two layers together cannot restart one service more than
 # SERVICE_MAX_RESTARTS times per window.
