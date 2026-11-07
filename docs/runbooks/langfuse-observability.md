@@ -73,10 +73,48 @@ model price in Langfuse (Settings → Models) if you want the **cost** figure po
    It queries the Langfuse public API with the project keys and confirms a matching trace
    exists. Read-only.
 
+## Retention and ClickHouse's disk budget
+
+Langfuse's own data-retention setting is Enterprise-only, so retention is set underneath it.
+On 2026-11-07 the ClickHouse volume held 27GB and Langfuse's data was about 340MB of it. The
+rest was ClickHouse logging itself into system tables with no TTL: `text_log` 9.6GB,
+`trace_log` 6.8GB, `asynchronous_metric_log` 2.7GB, `metric_log` 2.1GB, `part_log` 2.0GB,
+plus a `trace`-level server log (9.9GB of container stdout). Writing all that kept ClickHouse
+near 100% CPU on the Pi. Two pieces now bound it:
+
+- **`config/clickhouse/backup-disk.xml`** (the one file already mounted into `config.d`, so the
+  service's compose hash does not change and no deploy is held back) sets the server log to
+  `warning`, removes the six system tables Langfuse's scaling guide says it never reads, and
+  gives the remaining query/part logs a 14-day TTL.
+- **`scripts/langfuse-retention.sh`** puts a TTL on `traces`, `observations` and `scores`
+  (part-only, so expired months are dropped whole rather than rewritten), a row TTL on
+  `event_log` and `blob_storage_file_log`, a MinIO lifecycle rule expiring `events/` (never
+  `media/`), and drops the system tables the overlay stopped writing, including the `<name>_N`
+  copies ClickHouse leaves when a system table's definition changes. `RETENTION_DAYS` defaults
+  to 30. Datasets are not touched.
+
+Apply both on the Pi, from the deploy directory. The overlay is a single-file bind mount, so
+the running container keeps the old file until it is recreated:
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --force-recreate --no-deps langfuse-clickhouse
+./scripts/langfuse-retention.sh --dry-run
+./scripts/langfuse-retention.sh
+```
+
+The script ends by checking that ClickHouse no longer writes the removed tables, and exits
+non-zero if it does: that means the container is still on the old overlay. A TTL is part of
+the table definition, so this is once per data directory; a platform restore brings it back.
+
+Verified against `clickhouse-server:26.7.1.1315` with Langfuse 3.212.0's migrations: the
+overlay loads, parts 40 and 90 days old were emptied by the `ALTER` while today's stayed, the
+`_0` leftovers appeared after a flush and were dropped, and a second run changed nothing.
+**Never put `--` inside the overlay's XML comment**: XML forbids it and ClickHouse will not
+start. `scripts/test/test-langfuse-retention.sh` parses the file for that reason.
+
 ## Purging trace data
 
-Langfuse data-retention policies are enterprise-gated, so there is no scheduled deletion. To
-wipe a project's traces, delete the project in the UI and let the bootstrap recreate it — the
+To wipe a project's traces at once rather than waiting for the TTL, delete the project in the UI and let the bootstrap recreate it — the
 idempotent `LANGFUSE_INIT_*` block restores the org, project, admin membership and the **same
 fixed project keys**, so Alloy's OTLP basic auth keeps matching with no key copying.
 
