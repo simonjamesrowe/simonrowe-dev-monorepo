@@ -163,8 +163,9 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   above 85% disk. Both use `scripts/lib/image-prune.sh`. `docker image prune --filter until=`
   reads the image's **build** time, and bootBuildImage stamps 1980 unless `createdDate` is set
   (it now is). Never prune containers or volumes on this host: the `exited` datastores are what
-  recovery `docker start`s. The next unbounded grower is the `langfuse-clickhouse-data` volume
-  (17.68GB, no TTL on traces). Recovery order: `docs/runbooks/prod-monitoring.md` ("Disk full").
+  recovery `docker start`s. The `langfuse-clickhouse-data` volume was the next grower (27GB,
+  almost all ClickHouse's own system logs) until `langfuse-retention` bounded it. Recovery order:
+  `docs/runbooks/prod-monitoring.md` ("Disk full").
 - **A `healthy` container is not proof a service is serving.** On 2026-08-14 a host reboot
   cold-started all 21 containers at once and two came back broken *and invisible* for 10 days:
   `dependencytrack-apiserver` reported `healthy` while its API port was dead (its healthcheck
@@ -280,6 +281,28 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- langfuse-retention: **ClickHouse's own diagnostics were 26GB of the Pi's disk; Langfuse's data
+  was 340MB.** Measured 2026-11-07, the day after the Pi's USB SSD stopped accepting writes
+  (`emergency_ro`; see `docs/runbooks/prod-monitoring.md`, "Filesystem gone read-only"):
+  `system.text_log` 9.6GB, `trace_log` 6.8GB, `asynchronous_metric_log` 2.7GB, `metric_log`
+  2.1GB, `part_log` 2.0GB, none with a TTL, plus a `trace`-level server log, all keeping
+  ClickHouse near 100% CPU. Load-bearing bits:
+  - **The overlay is `config/clickhouse/backup-disk.xml`, the file already mounted.** A second
+    mount would change `langfuse-clickhouse`'s compose hash, and it is not in
+    `FACTORY_DEPLOY_RECREATABLE`, so every deploy would be held back. It sets the log level to
+    `warning`, removes the six tables Langfuse's scaling guide names, and gives the query/part
+    logs 14 days. **No `--` inside its XML comment**: XML forbids it and ClickHouse will not
+    start; `test-langfuse-retention.sh` parses the file.
+  - **`scripts/langfuse-retention.sh` runs once per data directory**, by hand, after
+    `up -d --force-recreate --no-deps langfuse-clickhouse` (single-file mount, old inode).
+    Langfuse's retention setting is Enterprise-only, so it sets ClickHouse TTLs directly:
+    part-only (`ttl_only_drop_parts`, `materialize_ttl_recalculate_only`) on the monthly
+    partitioned `traces`/`observations`/`scores`, so nothing is rewritten; a row TTL on the
+    unpartitioned `event_log`/`blob_storage_file_log`; a MinIO lifecycle on `events/` only
+    (never `media/`). It drops the removed tables and the `<name>_N` copies a system table
+    definition change leaves, and exits non-zero if ClickHouse still writes a removed table.
+  - Verified on `clickhouse-server:26.7.1.1315` with Langfuse 3.212.0's migrations.
+  See `docs/runbooks/langfuse-observability.md` ("Retention and ClickHouse's disk budget").
 - favourite-articles-mcp-tool: **The public `/mcp` gains `searchFavouriteArticles`**, a
   read-only vector search over the news articles Simon has hearted, for a local research agent
   (Claude Code) to cite from. No token: favourites, summaries and articles are already public.
@@ -1319,8 +1342,8 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
     `docker` resolves to the stub. Mutation-checked: pruning on a failed `verify-public`, ignoring
     `rollback-taken`, dropping the grace or the rate limit, and making a prune failure fatal each
     fail it.
-  - **Not fixed:** the `langfuse-clickhouse-data` volume (17.68GB on 2026-09-28) grows without
-    bound, since Langfuse traces have no TTL. It is the next thing that will fill this disk.
+  - **Not fixed here:** the `langfuse-clickhouse-data` volume (17.68GB on 2026-09-28) grew
+    without bound. Fixed later by `langfuse-retention`.
   See `docs/runbooks/prod-monitoring.md` ("Disk full") and `docs/runbooks/deploy.md`
   ("Image cleanup").
 - factory-auto-merge: **The reviewer now arms auto-merge; GitHub performs the merge.** Until now
@@ -3004,9 +3027,9 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   ownership, so the file must be chowned to 101:101 or the restore fails
   `CANNOT_OPEN_FILE` with no hint that ownership is the cause. The two backups **can
   now overlap** (no shared mutex); the 22:00/02:00 gap is kept for I/O contention, not
-  exclusion. Deploying recreates `langfuse-clickhouse` and `deployer`. ClickHouse
-  archive size is **unbounded and still unmeasured** (no TTL on trace tables); measure
-  before trusting the Drive quota. See `docs/runbooks/platform-backup-restore.md`.
+  exclusion. Deploying recreates `langfuse-clickhouse` and `deployer`. The ClickHouse
+  archive is the `default` database only, about 340MB on 2026-11-07, and bounded since
+  `langfuse-retention` put a TTL on the trace tables. See `docs/runbooks/platform-backup-restore.md`.
 - 036-auto-deploy-rollout-fixes: Turning auto-deploy on for the first time (2026-08-27)
   found that **the `deployer` could not perform a single deploy step**, for nine separate
   reasons, none of which any test could catch — they are all properties of running

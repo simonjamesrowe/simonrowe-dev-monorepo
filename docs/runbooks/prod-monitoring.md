@@ -391,9 +391,39 @@ volumes or networks. A stopped container keeps its image, so the `exited`
 datastores below are never pruned.
 
 If the watchdog logs `CRIT disk: still NN% used after the prune`, images are not
-what is filling the disk. Run `docker system df -v`. The next-largest thing that
-grows without bound is the **`langfuse-clickhouse-data` volume (17.68GB on
-2026-09-28)**. Langfuse traces have no TTL. It is not fixed here.
+what is filling the disk. Run `docker system df -v`. Until 2026-11 the largest
+grower was the **`langfuse-clickhouse-data` volume (27GB on 2026-11-07)**, and
+almost all of it was ClickHouse's own system log tables rather than traces. It is
+now bounded; see "Retention and ClickHouse's disk budget" in
+[langfuse-observability.md](langfuse-observability.md). Container logs of
+containers created before `enable-docker-log-rotation.sh` ran are still uncapped
+(ClickHouse's was 9.9GB, Mongo's 5.9GB): recreate the container to apply the cap.
+
+## Filesystem gone read-only (2026-11-06 outage)
+
+At 10:55:28 UTC on 2026-11-06 the Pi's USB SSD (an OSCOO SU001 128GB behind a
+VIA VL716 bridge) started refusing every write, and ext4 remounted `/` read-only.
+The site looked half up for a day: `www` and the backend JVM answered from memory,
+while every Mongo-backed API route hung, Mongo had stopped, Elasticsearch and the
+backend went unhealthy, and nothing at all reached Loki. The disk was only 86%
+full. The watchdog could not run either, because it writes state on every tick, so
+the only alarm was the off-Pi heartbeat (`prod-down` issue #301).
+
+The tells, all readable from a shell on the read-only host:
+
+- `grep ' / ' /proc/mounts` shows `emergency_ro`.
+- `/var/log/prod-health/monitor.log` and Loki both stop at the same minute.
+- `sudo journalctl -u docker` shows `error writing log entry ... read-only file system`.
+- `sudo journalctl -k` at that minute shows the cause. Here it was
+  `critical target error` on WRITE commands (sense key 0x5, ASC 0x20): the drive
+  itself rejecting writes, with nothing logged beforehand.
+- `docker ps` keeps reporting containers as running because Docker cannot write
+  its own state; `docker exec` into one tells you it is not.
+
+No container-level action fixes this, and restarting containers only loses what
+is still in memory. The drive is readable, so the most recent data is on it, more
+recent than the 22:00 application backup. Replace the drive by cloning the old
+one rather than restoring from Drive, and fsck the copy before booting from it.
 
 ### Recovery, in this order
 

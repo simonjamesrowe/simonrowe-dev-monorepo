@@ -1,21 +1,68 @@
 <?xml version="1.0"?>
 <!--
-  Allows `BACKUP DATABASE default TO File('<name>.zip')`.
+  The langfuse-clickhouse server overlay. It holds two things, for one reason.
 
-  ClickHouse refuses a File() backup destination unless the path sits under an
-  explicitly allowed path, so without this overlay the nightly platform backup
-  fails with "Path ... is not allowed for backups" and no ClickHouse data is ever
-  captured. `/backups` is the `langfuse-clickhouse-backups` named volume, shared
-  read-write with the `backend` container, which is how the archive gets from
-  ClickHouse to the uploader (see docs/runbooks/platform-backup-restore.md).
+  1. Allows `BACKUP DATABASE default TO File('<name>.zip')`.
 
-  The volume is mounted at a path that does NOT exist in the image, so Docker
-  creates it empty and root-owned while this container runs as 101:101. The
-  `clickhouse-backups-init` one-shot service chowns it; without that every BACKUP
-  fails on permissions instead of on this setting.
+     ClickHouse refuses a File() backup destination unless the path sits under an
+     explicitly allowed path, so without this overlay the nightly platform backup
+     fails with "Path ... is not allowed for backups" and no ClickHouse data is ever
+     captured. `/backups` is the `langfuse-clickhouse-backups` named volume, shared
+     read-write with the `backend` container, which is how the archive gets from
+     ClickHouse to the uploader (see docs/runbooks/platform-backup-restore.md).
+
+     The volume is mounted at a path that does NOT exist in the image, so Docker
+     creates it empty and root-owned while this container runs as 101:101. The
+     `clickhouse-backups-init` one-shot service chowns it; without that every BACKUP
+     fails on permissions instead of on this setting.
+
+  2. Bounds ClickHouse's own diagnostics, which were most of the Pi's disk.
+
+     On 2026-11-07 the volume held 27GB, and Langfuse's data was about 340MB of it.
+     The rest was ClickHouse logging itself: text_log 9.6GB, trace_log 6.8GB,
+     asynchronous_metric_log 2.7GB, metric_log 2.1GB, part_log 2.0GB, none with a
+     TTL, plus a server log at `trace` level (9.9GB of container stdout). Writing all
+     of that kept ClickHouse at ~100% CPU and the USB SSD busy around the clock, and
+     that SSD stopped accepting writes on 2026-11-06. The six removed tables are the
+     ones Langfuse's scaling guide says to remove (it reads none of them); the rest
+     keep 14 days. Langfuse's own tables get their TTL from
+     scripts/langfuse-retention.sh, which also drops the tables this stops writing.
+
+  Why one file named for backups: it is a single-file bind mount, and adding a second
+  mount would change the service's compose hash. langfuse-clickhouse is not in
+  FACTORY_DEPLOY_RECREATABLE, so sync-config would then hold back every deploy until
+  someone recreated it by hand (docs/runbooks/deploy.md). A content change does not
+  touch the hash, but the running container keeps the old file's inode, so the
+  container must be force-recreated for a change here to take effect (the command is
+  in scripts/langfuse-retention.sh). No double hyphen may appear inside this comment:
+  XML forbids it, and ClickHouse then refuses to start at all.
 -->
 <clickhouse>
     <backups>
         <allowed_path>/backups/</allowed_path>
     </backups>
+
+    <logger>
+        <level>warning</level>
+        <size>100M</size>
+        <count>3</count>
+    </logger>
+
+    <trace_log remove="1"/>
+    <text_log remove="1"/>
+    <opentelemetry_span_log remove="1"/>
+    <asynchronous_metric_log remove="1"/>
+    <metric_log remove="1"/>
+    <latency_log remove="1"/>
+
+    <!-- Kept, but no longer for ever. Each of these has no TTL in the stock config.
+         Adding one makes ClickHouse rename the old table to <name>_0 on its next
+         flush; scripts/langfuse-retention.sh drops those leftovers. -->
+    <query_log><ttl>event_date + INTERVAL 14 DAY DELETE</ttl></query_log>
+    <query_thread_log><ttl>event_date + INTERVAL 14 DAY DELETE</ttl></query_thread_log>
+    <query_views_log><ttl>event_date + INTERVAL 14 DAY DELETE</ttl></query_views_log>
+    <part_log><ttl>event_date + INTERVAL 14 DAY DELETE</ttl></part_log>
+    <background_schedule_pool_log><ttl>event_date + INTERVAL 14 DAY DELETE</ttl></background_schedule_pool_log>
+    <error_log><ttl>event_date + INTERVAL 14 DAY DELETE</ttl></error_log>
+    <query_metric_log><ttl>event_date + INTERVAL 14 DAY DELETE</ttl></query_metric_log>
 </clickhouse>
