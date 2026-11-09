@@ -19,7 +19,7 @@ class StaticAnalysisComposeTest {
 
   @Test
   void theFlagIsOnSoftwareFactory() throws IOException {
-    List<String> factory = ComposeFile.serviceBlock(ComposeFile.lines(), "software-factory");
+    List<String> factory = ComposeFile.softwareFactory();
 
     assertThat(ComposeFile.declaredKeysContaining(factory, "STATICANALYSIS"))
         .contains("FACTORY_STATICANALYSIS_ENABLED");
@@ -27,7 +27,7 @@ class StaticAnalysisComposeTest {
 
   @Test
   void theDeployerCarriesNone() throws IOException {
-    List<String> deployer = ComposeFile.serviceBlock(ComposeFile.lines(), "deployer");
+    List<String> deployer = ComposeFile.everyDeployer();
 
     assertThat(ComposeFile.declaredKeysContaining(deployer, "STATICANALYSIS")).isEmpty();
   }

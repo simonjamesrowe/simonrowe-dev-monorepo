@@ -72,6 +72,8 @@ expect "software-factory source" "factory shell image_factory" \
 echo "  files read across modules"
 expect "the prod compose file is baked into the backend image" \
   "backend factory shell image_backend" docker-compose.prod.yml
+expect "the factory host's compose file is read by the factory's tests, baked into nothing" \
+  "factory shell" docker-compose.factory.yml
 expect "shared Gradle build" "backend factory shell image_backend image_factory" \
   build.gradle.kts
 expect "version catalogue" "backend factory shell image_backend image_factory" \

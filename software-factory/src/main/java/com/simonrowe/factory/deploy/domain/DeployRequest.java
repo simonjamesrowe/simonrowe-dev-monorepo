@@ -26,6 +26,8 @@ import java.util.List;
  *     later. Carried here for the same reason as {@code linearFilingEnabled}, and read only on
  *     the success path — a deploy that failed and rolled back schedules nothing, because the
  *     window would describe the rollback rather than the change.
+ * @param host which host this deploy acts on; null, as in a payload written before two hosts
+ *     existed, means the site
  */
 public record DeployRequest(
     String sha,
@@ -36,7 +38,8 @@ public record DeployRequest(
     List<String> services,
     boolean dryRun,
     boolean linearFilingEnabled,
-    boolean logWatchTriggerEnabled) {
+    boolean logWatchTriggerEnabled,
+    DeployHost host) {
 
   /** Trigger value for a deploy started by a GitHub {@code workflow_run} delivery. */
   public static final String TRIGGER_WEBHOOK = "workflow_run";
@@ -47,5 +50,6 @@ public record DeployRequest(
   public DeployRequest {
     trigger = trigger == null || trigger.isBlank() ? TRIGGER_MANUAL : trigger;
     services = services == null ? List.of() : List.copyOf(services);
+    host = host == null ? DeployHost.SITE : host;
   }
 }

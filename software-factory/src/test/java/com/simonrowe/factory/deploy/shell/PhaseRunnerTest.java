@@ -13,6 +13,7 @@ import static org.mockito.Mockito.when;
 import com.simonrowe.factory.codereview.agent.ProcessRunner;
 import com.simonrowe.factory.deploy.config.DeployProperties;
 import com.simonrowe.factory.deploy.domain.DeployPhase;
+import com.simonrowe.factory.deploy.domain.PhaseScope;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
@@ -70,6 +71,43 @@ class PhaseRunnerTest {
   // ---------------------------------------------------------------------------
   // The command
   // ---------------------------------------------------------------------------
+
+  @Test
+  void scopedPhaseNarrowsTheServicesAndLeavesNginxAlone() {
+    processReturns("", "", 0);
+
+    runner.run(
+        DeployPhase.RECREATE, null, null, false,
+        new PhaseScope(List.of("software-factory", "page-reader"), false), message -> { });
+
+    assertThat(capturedEnvironment())
+        .containsEntry("SERVICES", "software-factory page-reader")
+        .containsEntry("RESTART_NGINX", "0");
+  }
+
+  @Test
+  void unscopedPhaseKeepsTheConfiguredServicesAndTheScriptsNginxDefault() {
+    // The SITE path must hand the script exactly what it always did: the configured services and
+    // no RESTART_NGINX at all, so the script's own default (restart) applies.
+    processReturns("", "", 0);
+
+    runner.run(DeployPhase.RECREATE, null, null, false, message -> { });
+
+    assertThat(capturedEnvironment())
+        .containsEntry("SERVICES", "backend frontend")
+        .doesNotContainKey("RESTART_NGINX");
+  }
+
+  @Test
+  void passesThePreviousCommitToThePlanPhase() {
+    processReturns("", "", 0);
+
+    runner.run(DeployPhase.PLAN, "abc123", "def456", false, message -> { });
+
+    assertThat(capturedCommand())
+        .containsExactly("bash", "/deploy/scripts/restart-prod.sh", "plan", "abc123");
+    assertThat(capturedEnvironment()).containsEntry("IMAGE_TAG", "def456");
+  }
 
   @Test
   void invokesTheConfiguredScriptWithThePhaseArgument() {

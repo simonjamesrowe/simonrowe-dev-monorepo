@@ -1,12 +1,17 @@
 package com.simonrowe.factory.deploy.workflow;
 
 import com.simonrowe.factory.deploy.config.DeployTaskQueues;
+import com.simonrowe.factory.deploy.domain.DeployHost;
+import com.simonrowe.factory.deploy.domain.DeployKind;
 import com.simonrowe.factory.deploy.domain.DeployPhase;
+import com.simonrowe.factory.deploy.domain.DeployPlan;
 import com.simonrowe.factory.deploy.domain.DeployProgress;
 import com.simonrowe.factory.deploy.domain.DeployRequest;
 import com.simonrowe.factory.deploy.domain.DeployResult;
 import com.simonrowe.factory.deploy.domain.DeployStatus;
 import com.simonrowe.factory.deploy.domain.PhaseOutcome;
+import com.simonrowe.factory.deploy.domain.PhaseScope;
+import com.simonrowe.factory.deploy.domain.PlanFacts;
 import com.simonrowe.factory.deploy.domain.SyncDecision;
 import com.simonrowe.factory.deploy.domain.SyncOutcome;
 import com.simonrowe.factory.deploy.persistence.DeployRunRecord;
@@ -27,9 +32,13 @@ import java.util.Locale;
 /**
  * Deterministic deploy flow.
  *
- * <p>{@code sync-config} → {@code maintenance-on} → {@code pull} → {@code recreate} → {@code
- * verify} → {@code maintenance-off} → {@code verify-public}, and on a verification failure the
- * rollback path in {@link #handleFailure}.
+ * <p>{@code sync-config} → {@code plan} → {@code maintenance-on} → {@code pull} → {@code recreate}
+ * → {@code verify} → {@code maintenance-off} → {@code verify-public}, and on a verification
+ * failure the rollback path in {@link #handleFailure}.
+ *
+ * <p>{@code plan} decides the {@link DeployKind}: a deploy that changes nothing stops there, and
+ * one that changes only the software factory skips both maintenance phases and the nginx restart.
+ * Anything else, including a plan that could not be made, runs the full flow above.
  *
  * <p>Every configured value arrives on {@link DeployRequest}: a {@code @WorkflowImpl} is
  * instantiated by the Temporal SDK rather than by Spring, so this class cannot inject {@code
@@ -41,7 +50,7 @@ import java.util.Locale;
  * orchestration: it touches no socket, no filesystem and no credential. Only {@code
  * DeployActivitiesImpl}, which exists on the {@code deployer} alone, does any of that.
  */
-@WorkflowImpl(taskQueues = DeployTaskQueues.DEPLOY)
+@WorkflowImpl(taskQueues = DeployTaskQueues.CONFIGURED)
 public class DeployWorkflowImpl implements DeployWorkflow {
 
   /**
@@ -132,6 +141,18 @@ public class DeployWorkflowImpl implements DeployWorkflow {
 
   private final List<PhaseOutcome> outcomes = new ArrayList<>();
 
+  /**
+   * The {@link Workflow#getVersion} change id guarding the plan phase.
+   *
+   * <p>The plan adds an activity call before {@code maintenance-on} and can remove later ones, so a
+   * history recorded before it must replay without it. Deploys started on the old build get {@link
+   * Workflow#DEFAULT_VERSION} and run exactly the old sequence.
+   */
+  static final String DEPLOY_PLAN_CHANGE = "deploy-plan";
+
+  /** This pass's plan. Reset by every pass of the drain loop. */
+  private DeployPlan plan = DeployPlan.everything(List.of(), "not planned yet");
+
   @Override
   public void deployRequested(final String sha) {
     if (sha != null && !sha.isBlank()) {
@@ -169,6 +190,7 @@ public class DeployWorkflowImpl implements DeployWorkflow {
   private DeployResult deployOnce(
       final DeployRequest request, final String sha, final int attempt) {
     outcomes.clear();
+    plan = DeployPlan.everything(request.services(), "not planned yet", request.host());
     // Workflow time, never Instant.now(): the latter is non-deterministic and would differ on
     // every replay of this history.
     Instant startedAt = Instant.ofEpochMilli(Workflow.currentTimeMillis());
@@ -186,15 +208,23 @@ public class DeployWorkflowImpl implements DeployWorkflow {
           "configuration sync failed before anything was changed");
     }
 
-    // 2. The page goes up before anything is pulled or recreated, so a visitor never sees a
-    //    half-updated site or a raw proxy error.
-    if (!step(DeployPhase.MAINTENANCE_ON, request, null)) {
+    // 2. What kind of deploy this is, decided before anything changes.
+    plan = planDeploy(request, sha, sync);
+    if (plan.kind() == DeployKind.NOTHING) {
+      return finishWithNothingToDo(recordId, request, sha, startedAt, sync);
+    }
+    boolean page = plan.raisesMaintenancePage();
+
+    // 3. The page goes up before anything is pulled or recreated, so a visitor never sees a
+    //    half-updated site or a raw proxy error. Not for a factory-only deploy: nothing a visitor
+    //    reaches is touched, and the page would be the only outage it caused.
+    if (page && !step(DeployPhase.MAINTENANCE_ON, request, null)) {
       return finish(
           recordId, request, sha, startedAt, sync, DeployStatus.FAILED, false, null, false,
           "could not raise the maintenance page");
     }
 
-    // 3. Pull the exact commit's images and re-tag them to :latest, recording the previous image
+    // 4. Pull the exact commit's images and re-tag them to :latest, recording the previous image
     //    ids first so a rollback has somewhere to go.
     if (!step(DeployPhase.PULL, request, sha)) {
       return failWithoutDeploying(
@@ -206,20 +236,21 @@ public class DeployWorkflowImpl implements DeployWorkflow {
           recordId, request, sha, startedAt, sync, DeployPhase.RECREATE);
     }
 
-    // 4. What can be checked while the page is up: the container settle loop and the four ops
+    // 5. What can be checked while the page is up: the container settle loop and the four ops
     //    hostnames. www/api are behind the flag and return 503 by design, which the hostname
-    //    check treats as a failure — correctly — so they wait for step 6.
+    //    check treats as a failure — correctly — so they wait for step 7.
     if (!step(DeployPhase.VERIFY, request, null)) {
       return handleFailure(recordId, request, sha, startedAt, sync, DeployPhase.VERIFY);
     }
 
-    // 5. Page down.
-    if (!step(DeployPhase.MAINTENANCE_OFF, request, null)) {
+    // 6. Page down.
+    if (page && !step(DeployPhase.MAINTENANCE_OFF, request, null)) {
       return handleFailure(
           recordId, request, sha, startedAt, sync, DeployPhase.MAINTENANCE_OFF);
     }
 
-    // 6. And only now the public hostnames.
+    // 7. And only now the public hostnames. Still run for a factory-only deploy: it is the check
+    //    that the site is serving, and the point at which unused images are pruned.
     if (!step(DeployPhase.VERIFY_PUBLIC, request, null)) {
       return handleFailure(
           recordId, request, sha, startedAt, sync, DeployPhase.VERIFY_PUBLIC);
@@ -252,11 +283,80 @@ public class DeployWorkflowImpl implements DeployWorkflow {
     return sync;
   }
 
+  /**
+   * Decides the kind of deploy, on a build that knows how.
+   *
+   * <p>A deploy started before this existed replays as {@link DeployKind#SITE} over every
+   * service, with no {@code plan} activity: exactly what it scheduled the first time.
+   */
+  private DeployPlan planDeploy(
+      final DeployRequest request, final String sha, final SyncOutcome sync) {
+    int version = Workflow.getVersion(DEPLOY_PLAN_CHANGE, Workflow.DEFAULT_VERSION, 1);
+    if (version == Workflow.DEFAULT_VERSION) {
+      return DeployPlan.everything(
+          request.services(), "planned by an older build", request.host());
+    }
+
+    current = new DeployProgress(DeployPhase.PLAN, "Working out what changed", sha);
+    PlanFacts facts;
+    long startedAt = Workflow.currentTimeMillis();
+    try {
+      // previousSha is non-null only when sync-config moved HEAD, which is exactly when
+      // bind-mounted files can have changed underneath the running containers.
+      facts = phases.plan(sync.previousSha(), sha, request.dryRun());
+    } catch (RuntimeException exception) {
+      // A plan that cannot be made is a full deploy, never a stopped one.
+      facts = PlanFacts.unreadable("the plan activity failed: " + exception.getMessage());
+    }
+    DeployPlan decided = DeployPlan.decide(facts, request.services(), request.host());
+    outcomes.add(
+        new PhaseOutcome(
+            DeployPhase.PLAN,
+            true,
+            0,
+            "%s: %s (%s)"
+                .formatted(
+                    decided.kind(),
+                    decided.detail(),
+                    facts == null ? "no facts" : facts.detail()),
+            Workflow.currentTimeMillis() - startedAt));
+    return decided;
+  }
+
+  /**
+   * The exit for a commit that changes nothing running: a documentation-only merge.
+   *
+   * <p>{@link DeployStatus#SKIPPED}, unless configuration sync declined, in which case the run is
+   * reported exactly as an images-only deploy is, so the held-back notice still reaches the
+   * commit. Nothing changed only because the change that mattered was held back.
+   */
+  private DeployResult finishWithNothingToDo(
+      final String recordId,
+      final DeployRequest request,
+      final String sha,
+      final Instant startedAt,
+      final SyncOutcome sync) {
+    boolean declined =
+        !sync.decision().movedHead()
+            && sync.decision() != SyncDecision.ALREADY_CURRENT
+            && sync.decision() != SyncDecision.DISABLED;
+    DeployStatus status = declined ? DeployStatus.DEPLOYED_IMAGES_ONLY : DeployStatus.SKIPPED;
+    current = new DeployProgress(DeployPhase.PLAN, "Nothing to deploy", sha);
+    String detail =
+        declined ? plan.detail() + "; configuration held back: " + sync.detail() : plan.detail();
+    return finish(
+        recordId, request, sha, startedAt, sync, status, false, null, false, detail);
+  }
+
   /** Runs a phase, records its outcome, and reports whether it succeeded. */
   private boolean step(
       final DeployPhase phase, final DeployRequest request, final String imageTag) {
     current = new DeployProgress(phase, "Running " + phase.argument(), request.sha());
-    PhaseOutcome outcome = phases.runPhase(phase, imageTag, request.dryRun());
+    PhaseScope scope = plan.scope();
+    PhaseOutcome outcome =
+        scope == null
+            ? phases.runPhase(phase, imageTag, request.dryRun())
+            : phases.runScopedPhase(phase, imageTag, request.dryRun(), scope);
     outcomes.add(outcome);
     return outcome.succeeded();
   }
@@ -274,7 +374,8 @@ public class DeployWorkflowImpl implements DeployWorkflow {
       final Instant startedAt,
       final SyncOutcome sync,
       final String detail) {
-    boolean pageDown = step(DeployPhase.MAINTENANCE_OFF, request, null);
+    boolean pageDown =
+        !plan.raisesMaintenancePage() || step(DeployPhase.MAINTENANCE_OFF, request, null);
     return reportAndFinish(
         recordId, request, sha, startedAt, sync, DeployStatus.FAILED, false, null, !pageDown,
         DeployPhase.PULL, outputOf(DeployPhase.PULL), detail);
@@ -309,6 +410,9 @@ public class DeployWorkflowImpl implements DeployWorkflow {
       final SyncOutcome sync,
       final DeployPhase failedPhase) {
     String failureOutput = outputOf(failedPhase);
+    // A factory-only deploy never touched what a visitor reaches, so its failure path does not
+    // put the site behind the page either: the rollback restores the factory's own containers.
+    boolean page = plan.raisesMaintenancePage();
 
     if (!request.rollbackEnabled()) {
       // An escape hatch for the case where rollback itself is the problem. The broken version
@@ -317,12 +421,14 @@ public class DeployWorkflowImpl implements DeployWorkflow {
       current = new DeployProgress(failedPhase, "Failed; rollback disabled", sha);
       return reportAndFinish(
           recordId, request, sha, startedAt, sync, DeployStatus.ROLLBACK_DISABLED, false, null,
-          true, failedPhase, failureOutput,
+          page, failedPhase, failureOutput,
           failedPhase.argument() + " failed and rollback is disabled");
     }
 
     current = new DeployProgress(DeployPhase.MAINTENANCE_ON, "Rolling back", sha);
-    step(DeployPhase.MAINTENANCE_ON, request, null);
+    if (page) {
+      step(DeployPhase.MAINTENANCE_ON, request, null);
+    }
 
     if (sync.decision().movedHead() && sync.previousSha() != null) {
       current = new DeployProgress(DeployPhase.ROLLBACK_CONFIG, "Restoring configuration", sha);
@@ -333,19 +439,25 @@ public class DeployWorkflowImpl implements DeployWorkflow {
     boolean rolledBack = step(DeployPhase.ROLLBACK, request, null);
     boolean verified = rolledBack && step(DeployPhase.VERIFY, request, null);
 
-    boolean pageLeftUp = true;
+    boolean pageLeftUp = page;
     DeployStatus rollbackStatus;
     if (verified) {
       rollbackStatus = DeployStatus.ROLLED_BACK;
       // Only now, and only because the rollback verified clean.
-      pageLeftUp = !step(DeployPhase.MAINTENANCE_OFF, request, null);
+      if (page) {
+        pageLeftUp = !step(DeployPhase.MAINTENANCE_OFF, request, null);
+      }
       if (!pageLeftUp) {
         verified = step(DeployPhase.VERIFY_PUBLIC, request, null);
         if (!verified) {
           // The previous version does not serve publicly either. Put the page back rather than
-          // leave a broken site exposed.
-          step(DeployPhase.MAINTENANCE_ON, request, null);
-          pageLeftUp = true;
+          // leave a broken site exposed - but only if this deploy is the one that took it down.
+          // A factory-only deploy did not touch the site, so hiding it behind the page would
+          // hide a fault this deploy did not cause.
+          if (page) {
+            step(DeployPhase.MAINTENANCE_ON, request, null);
+            pageLeftUp = true;
+          }
           rollbackStatus = DeployStatus.ROLLBACK_FAILED;
         }
       }
@@ -359,7 +471,7 @@ public class DeployWorkflowImpl implements DeployWorkflow {
             : DeployStatus.ROLLBACK_FAILED;
     return reportAndFinish(
         recordId, request, sha, startedAt, sync, status, true, rollbackStatus, pageLeftUp,
-        failedPhase, failureOutput, detailForFailure(failedPhase, status));
+        failedPhase, failureOutput, detailForFailure(failedPhase, status, pageLeftUp));
   }
 
   /**
@@ -424,7 +536,7 @@ public class DeployWorkflowImpl implements DeployWorkflow {
                     // Structured enum values already in scope: no parsing, no agent prose. Two
                     // phrasings of one failure must not become two tickets, which is why the
                     // headline is deliberately absent. Commit excluded too - see the design.
-                    List.of(failedPhase.name().toLowerCase(Locale.ROOT), status.name()),
+                    failureKeyParts(request, failedPhase, status),
                     rendered.title(),
                     rendered.body(),
                     "commit " + sha + ", workflow run " + Workflow.getInfo().getRunId(),
@@ -483,6 +595,24 @@ public class DeployWorkflowImpl implements DeployWorkflow {
     return new DeployResult(status, sha, sync.decision(), linearIssueUrl, detail);
   }
 
+  /**
+   * The issue sink's key parts for a failed deploy.
+   *
+   * <p>The site's are unchanged from before two hosts existed, so its existing tickets keep
+   * matching. The factory host's carry the host as well: "verify failed" on the factory host and
+   * on the site are two different problems, and must not land on one ticket.
+   */
+  private static List<String> failureKeyParts(
+      final DeployRequest request, final DeployPhase failedPhase, final DeployStatus status) {
+    List<String> parts = new ArrayList<>();
+    parts.add(failedPhase.name().toLowerCase(Locale.ROOT));
+    parts.add(status.name());
+    if (request.host() == DeployHost.FACTORY) {
+      parts.add("factory-host");
+    }
+    return List.copyOf(parts);
+  }
+
   private String outputOf(final DeployPhase phase) {
     for (int index = outcomes.size() - 1; index >= 0; index--) {
       if (outcomes.get(index).phase() == phase) {
@@ -493,19 +623,23 @@ public class DeployWorkflowImpl implements DeployWorkflow {
   }
 
   private static String detailForFailure(
-      final DeployPhase failedPhase, final DeployStatus status) {
+      final DeployPhase failedPhase, final DeployStatus status, final boolean pageLeftUp) {
     if (status == DeployStatus.ROLLBACK_FAILED) {
-      return "%s failed and the rollback did not verify - the maintenance page has been left up"
-          .formatted(failedPhase.argument());
+      return pageLeftUp
+          ? "%s failed and the rollback did not verify - the maintenance page has been left up"
+              .formatted(failedPhase.argument())
+          : "%s failed and the rollback did not verify".formatted(failedPhase.argument());
     }
     return failedPhase.argument() + " failed; rolled back to the previous version";
   }
 
   private String detailFor(final DeployStatus status, final SyncOutcome sync) {
+    boolean factoryOnly = plan.kind() == DeployKind.FACTORY;
     if (status == DeployStatus.DEPLOYED_IMAGES_ONLY) {
-      return "deployed images only: " + sync.detail();
+      return (factoryOnly ? "deployed the software factory, images only: "
+          : "deployed images only: ") + sync.detail();
     }
-    return "deployed";
+    return factoryOnly ? "deployed the software factory; the site was left up" : "deployed";
   }
 
   /** Persists the run and returns its result. Every non-failure exit path goes through here. */
@@ -581,7 +715,9 @@ public class DeployWorkflowImpl implements DeployWorkflow {
       final String detail) {
     boolean succeeded =
         status == DeployStatus.DEPLOYED || status == DeployStatus.DEPLOYED_IMAGES_ONLY;
-    if (!succeeded || !request.logWatchTriggerEnabled()) {
+    // NOTHING can still end DEPLOYED_IMAGES_ONLY, to carry a held-back notice, but it changed
+    // nothing, so a scan of the next five minutes would be a scan of a deploy that did not happen.
+    if (!succeeded || !request.logWatchTriggerEnabled() || plan.kind() == DeployKind.NOTHING) {
       return detail;
     }
     try {
@@ -624,7 +760,9 @@ public class DeployWorkflowImpl implements DeployWorkflow {
       final boolean linearFilingFailed) {
     return new DeployRunRecord(
         recordId,
-        WORKFLOW_ID,
+        // The workflow's own id, not the site's constant: the factory host's deploys are
+        // `deploy-factory` runs of this same class, and their records must say so.
+        Workflow.getInfo().getWorkflowId(),
         sha,
         request.trigger(),
         startedAt,

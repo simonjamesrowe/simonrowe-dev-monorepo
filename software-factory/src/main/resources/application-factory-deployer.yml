@@ -1,0 +1,21 @@
+# Active on the factory host's `deployer` (docker-compose.factory.yml), whose
+# FACTORY_RUNTIME_ROLE becomes its Spring profile (see spring.profiles.active in application.yml).
+#
+# The same deploy code as the Pi's `deployer` (application-deployer.yml), on a different queue and
+# a different Docker socket: it deploys the software factory's own host. See
+# docs/runbooks/deploy.md ("Two hosts, two deploys").
+spring:
+  temporal:
+    workers-auto-discovery:
+      # Replaces the software-factory role's list wholesale, as application-deployer.yml does. The
+      # deploy workflow only: the platform backup stays on the Pi, next to the datastores it
+      # `docker exec`s into.
+      workflow-packages:
+        - com.simonrowe.factory.deploy.workflow
+
+factory:
+  deploy:
+    # Read by the @WorkflowImpl and @ActivityImpl placeholders (DeployTaskQueues.CONFIGURED). This
+    # is the line that keeps this JVM off the Pi's `deploy` queue: polling it would hand this
+    # container site deploy steps to run against the factory host's Docker daemon.
+    task-queue: deploy-factory

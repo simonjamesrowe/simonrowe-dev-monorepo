@@ -5,6 +5,8 @@ import com.simonrowe.factory.deploy.config.DeployProperties;
 import com.simonrowe.factory.deploy.config.DeployTaskQueues;
 import com.simonrowe.factory.deploy.domain.DeployPhase;
 import com.simonrowe.factory.deploy.domain.PhaseOutcome;
+import com.simonrowe.factory.deploy.domain.PhaseScope;
+import com.simonrowe.factory.deploy.domain.PlanFacts;
 import com.simonrowe.factory.deploy.domain.SyncDecision;
 import com.simonrowe.factory.deploy.domain.SyncOutcome;
 import com.simonrowe.factory.deploy.github.DeployReportGateway;
@@ -63,7 +65,7 @@ import org.springframework.stereotype.Component;
  * DeployWorkerRegistrationTest} exists to stop that.
  */
 @Component
-@ActivityImpl(taskQueues = DeployTaskQueues.DEPLOY)
+@ActivityImpl(taskQueues = DeployTaskQueues.CONFIGURED)
 @ConditionalOnProperty(name = "factory.deploy.enabled", havingValue = "true")
 public class DeployActivitiesImpl implements DeployActivities {
 
@@ -167,6 +169,71 @@ public class DeployActivitiesImpl implements DeployActivities {
         execution.exitCode(),
         execution.output(),
         execution.durationMillis());
+  }
+
+  @Override
+  public PhaseOutcome runScopedPhase(
+      final DeployPhase phase,
+      final String imageTag,
+      final boolean dryRun,
+      final PhaseScope scope) {
+    PhaseRunner.PhaseExecution execution =
+        phaseRunner.run(phase, null, imageTag, dryRun, scope, heartbeat());
+    // Same contract as runPhase: a failed phase is an outcome, not an activity failure.
+    return new PhaseOutcome(
+        phase,
+        execution.succeeded(),
+        execution.exitCode(),
+        execution.output(),
+        execution.durationMillis());
+  }
+
+  @Override
+  public PlanFacts plan(final String previousSha, final String imageTag, final boolean dryRun) {
+    PhaseRunner.PhaseExecution execution =
+        phaseRunner.run(DeployPhase.PLAN, previousSha, imageTag, dryRun, heartbeat());
+    return planFactsFrom(execution);
+  }
+
+  /**
+   * Reads the plan phase's {@code key=value} lines.
+   *
+   * <p>Anything short of a complete, successful read is "could not tell". A key that is merely
+   * missing must not read as "nothing changed": that is the one misreading that would report a
+   * commit as deployed while the previous one runs.
+   */
+  static PlanFacts planFactsFrom(final PhaseRunner.PhaseExecution execution) {
+    if (!execution.succeeded()) {
+      return PlanFacts.unreadable("plan exited " + execution.exitCode());
+    }
+    String images = execution.value("image-changed");
+    String config = execution.value("config-changed");
+    String hostFiles = execution.value("host-config-changed");
+    if (images == null || config == null || hostFiles == null) {
+      return PlanFacts.unreadable("plan did not report every fact");
+    }
+    if (!"ok".equals(execution.value("config-read"))) {
+      return PlanFacts.unreadable("could not read the compose configuration hashes");
+    }
+    String hostRead = execution.value("host-config-read");
+    if (!"ok".equals(hostRead) && !"skipped".equals(hostRead)) {
+      return PlanFacts.unreadable("could not diff config/ against the previous commit");
+    }
+    List<String> changedImages = splitList(images);
+    List<String> changedConfig = splitList(config);
+    List<String> changedHostFiles = splitList(hostFiles);
+    return new PlanFacts(
+        changedImages,
+        changedConfig,
+        changedHostFiles,
+        true,
+        "images: %s; configuration: %s; config/: %s"
+            .formatted(
+                orNone(changedImages), orNone(changedConfig), orNone(changedHostFiles)));
+  }
+
+  private static String orNone(final List<String> values) {
+    return values.isEmpty() ? "none" : String.join(" ", values);
   }
 
   @Override

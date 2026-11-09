@@ -31,7 +31,7 @@ class DeployerGrafanaCredentialTest {
   @Test
   void deployerServiceDeclaresNoGrafanaVariable() throws IOException {
     List<String> deployerBlock =
-        ComposeFile.serviceBlock(ComposeFile.lines(), DEPLOYER_SERVICE);
+        ComposeFile.everyDeployer();
 
     assertThat(ComposeFile.declaredKeysContaining(deployerBlock, FORBIDDEN_FRAGMENT))
         .as(
@@ -47,7 +47,7 @@ class DeployerGrafanaCredentialTest {
     // The mirror of the assertion above, and the one that stops it passing vacuously. Without it,
     // deleting the variable from both services would look like a pass while disabling the module.
     List<String> factoryBlock =
-        ComposeFile.serviceBlock(ComposeFile.lines(), "software-factory");
+        ComposeFile.softwareFactory();
 
     assertThat(ComposeFile.declaredKeysContaining(factoryBlock, FORBIDDEN_FRAGMENT))
         .as("`software-factory` is where the Loki read credential belongs")
@@ -57,7 +57,7 @@ class DeployerGrafanaCredentialTest {
   @Test
   void theDeployerCarriesNeitherLogWatchFlag() throws IOException {
     List<String> deployerBlock =
-        ComposeFile.serviceBlock(ComposeFile.lines(), DEPLOYER_SERVICE);
+        ComposeFile.everyDeployer();
 
     // Neither flag, for two different reasons.
     //
@@ -81,7 +81,7 @@ class DeployerGrafanaCredentialTest {
   @Test
   void softwareFactoryCarriesTheTriggerFlag() throws IOException {
     List<String> factoryBlock =
-        ComposeFile.serviceBlock(ComposeFile.lines(), "software-factory");
+        ComposeFile.softwareFactory();
 
     // The mirror of the assertion above, and what stops it passing by the flag existing nowhere -
     // which would look identical from the deployer's side and disable the feature entirely.
@@ -98,14 +98,13 @@ class DeployerGrafanaCredentialTest {
         .as("docker-compose.prod.yml must exist one directory above the module")
         .exists();
 
-    List<String> deployerBlock =
-        ComposeFile.serviceBlock(ComposeFile.lines(), DEPLOYER_SERVICE);
-
-    assertThat(deployerBlock).as("the `deployer:` service block must be non-empty").isNotEmpty();
-    assertThat(deployerBlock)
-        .as("""
-            the extracted block should contain deployer's own known settings, or the block \
-            boundaries are wrong""")
-        .anySatisfy(line -> assertThat(line).contains("FACTORY_DEPLOY_ENABLED"));
+    for (List<String> deployerBlock : ComposeFile.deployerBlocks().values()) {
+      assertThat(deployerBlock).as("the `deployer:` service block must be non-empty").isNotEmpty();
+      assertThat(deployerBlock)
+          .as("""
+              the extracted block should contain deployer's own known settings, or the block \
+              boundaries are wrong""")
+          .anySatisfy(line -> assertThat(line).contains("FACTORY_DEPLOY_ENABLED"));
+    }
   }
 }
