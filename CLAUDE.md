@@ -281,6 +281,27 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- deploy-plan: **A deploy now works out what it changes before it changes anything, and a
+  software-factory-only merge no longer puts the site behind the maintenance page.** Every merge
+  used to raise the page, docs-only and factory-only ones included. A new `plan` phase runs after
+  `sync-config`. It compares each service's image for the commit with the image its container
+  runs, its `docker compose config --hash` with the container's `com.docker.compose.config-hash`
+  label (exactly what `up -d` compares; checked equal on compose v5.1.2), and `config/` between
+  the previous and target commits (bind-mounted, so in no hash). `DeployPlan` picks `NOTHING`
+  (recorded `SKIPPED`), `FACTORY` (`software-factory`/`page-reader` only: scoped phases,
+  `RESTART_NGINX=0`, no page on the way in or on rollback) or `SITE` (the old flow). It is the
+  first step of moving the factory to its own host. Load-bearing bits:
+  - **Every doubt is `SITE`.** A failed read, missing key or non-zero exit is "could not tell",
+    never "nothing changed": a wrong `NOTHING` reports a commit deployed while the old one runs.
+  - **`SITE` schedules exactly the old activity calls** (`runPhase`, unscoped); `FACTORY` uses
+    the new `runScopedPhase`. A scope is never empty, because the script reads an empty
+    `SERVICES` as every image.
+  - **`plan` pulls by tag and never re-tags `:latest`**, so `monitor-prod.sh`'s `up -d` cannot
+    deploy early while the page is down.
+  - **Gated by `Workflow.getVersion("deploy-plan")`.** `DeployWorkflowReplayTest` replays two
+    histories recorded on the previous build (mutation-checked: removing the gate fails both).
+    Takes effect only once the `deployer` is recreated by hand, like every deployer change.
+  See `docs/runbooks/deploy.md` ("What kind of deploy it is").
 - langfuse-retention: **ClickHouse's own diagnostics were 26GB of the Pi's disk; Langfuse's data
   was 340MB.** Measured 2026-11-07, the day after the Pi's USB SSD stopped accepting writes
   (`emergency_ro`; see `docs/runbooks/prod-monitoring.md`, "Filesystem gone read-only"):

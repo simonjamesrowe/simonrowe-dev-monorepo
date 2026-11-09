@@ -30,12 +30,13 @@ from a service that has already verified an HMAC signature.
 
 ## The phases
 
-`sync-config` → `maintenance-on` → `pull` → `recreate` → `verify` →
+`sync-config` → `plan` → `maintenance-on` → `pull` → `recreate` → `verify` →
 `maintenance-off` → `verify-public`
 
 | Phase | Does |
 | --- | --- |
 | `sync-config` | Fast-forwards the deploy directory to the deployed commit, if that is provably safe |
+| `plan` | Works out what the deploy would change, before anything changes, and so which kind of deploy it is ([below](#what-kind-of-deploy-it-is)) |
 | `maintenance-on` / `maintenance-off` | Creates/removes `/var/run/deploy-state/maintenance.on` |
 | `pull` | Records the current image ID of each target service, then pulls the head SHA and re-tags it to `:latest`. An image the merge did not change was published under the head SHA as an exact copy of the previous one ([build-and-startup.md](build-and-startup.md)), so its ID is unchanged and `recreate` leaves that container running |
 | `recreate` | `up -d --no-deps --pull never` each target, `restart nginx`, then a full `up -d` reconcile |
@@ -51,6 +52,47 @@ Two things about this list are load-bearing and easy to "tidy" into bugs:
 - **Bare `./scripts/restart-prod.sh` never runs `sync-config`.** A human typing
   the script after their own `git pull` must not have it decide to move `HEAD`
   for them. It is opt-in, and only the deployer opts in.
+
+### What kind of deploy it is
+
+`plan` pulls the commit's images by tag (it never re-tags `:latest`, so the watchdog
+cannot deploy early) and reports three facts:
+
+- **Images.** Which services' image for the commit differs from the image their
+  container runs. Publish re-tags an untouched image with the same digest, so a
+  service the merge did not change compares equal.
+- **Service configuration.** Which services' `docker compose config --hash` differs
+  from the `com.docker.compose.config-hash` label on their container. That label is
+  exactly what compose compares when `up -d` decides whether to recreate. A service
+  with no container counts as changed.
+- **Bind-mounted files.** Which files under `config/` changed since the commit
+  `sync-config` moved from. They are in no hash, and nginx's routes and maintenance
+  pages are among them.
+
+`DeployPlan` turns those into one of three kinds:
+
+| Kind | When | What runs |
+| --- | --- | --- |
+| `NOTHING` | Nothing differs: a docs-only merge | Nothing. Recorded as `SKIPPED`, or `DEPLOYED_IMAGES_ONLY` when `sync-config` held a change back, so the held-back notice still reaches the commit |
+| `FACTORY` | Only `software-factory` and/or `page-reader` changed | `pull`, `recreate`, `verify` and `verify-public` scoped to those two, with **no maintenance page and no nginx restart**, including on rollback. A failed rollback does not raise the page either: the site was never touched |
+| `SITE` | Anything else, or the plan could not tell | The full flow, page and nginx restart included, exactly as before `plan` existed |
+
+Every doubt resolves to `SITE`. A wrong `SITE` costs a maintenance page nobody
+needed. A wrong `FACTORY` recreates something visitors use with the site
+exposed. A wrong `NOTHING` reports a commit as deployed while the previous one
+runs. So a failed read (`config-read=failed`, a failed `config/` diff, a non-zero
+exit or a missing key) is "could not tell", never "nothing changed". The run
+record's `plan` entry says which kind was chosen and why.
+
+`FACTORY_SERVICES` is a constant in `DeployPlan`. A service nobody has classified
+counts as the site. This is the step that lets the software factory move to its
+own host later: the kind already says which host a deploy touches.
+
+A deploy started by a deployer older than this replays without `plan`. It is
+gated by `Workflow.getVersion("deploy-plan")`, and `DeployWorkflowReplayTest`
+replays two histories recorded on the previous build. Like any deployer change,
+it only takes effect once the deployer is recreated by hand
+([below](#keeping-the-deployer-current)).
 
 ### The maintenance page brings people back on its own
 

@@ -3,6 +3,7 @@ package com.simonrowe.factory.deploy.shell;
 import com.simonrowe.factory.codereview.agent.ProcessRunner;
 import com.simonrowe.factory.deploy.config.DeployProperties;
 import com.simonrowe.factory.deploy.domain.DeployPhase;
+import com.simonrowe.factory.deploy.domain.PhaseScope;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -54,11 +55,33 @@ public class PhaseRunner {
       final String imageTag,
       final boolean dryRun,
       final Consumer<String> heartbeat) {
+    return run(phase, targetSha, imageTag, dryRun, null, heartbeat);
+  }
+
+  /**
+   * Runs a phase narrowed to part of the stack.
+   *
+   * @param phase the phase to run; must have a script argument
+   * @param targetSha the commit argument, or null
+   * @param imageTag the tag {@code pull} should fetch, or null for the script's default
+   * @param dryRun whether to pass {@code DRY_RUN=1} to the script
+   * @param scope the services to act on and whether to restart nginx, or null for the configured
+   *     services and the script's default
+   * @param heartbeat called periodically while the child process runs
+   * @return what the phase did
+   */
+  public PhaseExecution run(
+      final DeployPhase phase,
+      final String targetSha,
+      final String imageTag,
+      final boolean dryRun,
+      final PhaseScope scope,
+      final Consumer<String> heartbeat) {
     String argument = phase.argument();
     if (argument == null) {
       throw new IllegalArgumentException(phase + " has no script argument");
     }
-    return execute(argument, argumentsOf(targetSha), imageTag, dryRun, heartbeat);
+    return execute(argument, argumentsOf(targetSha), imageTag, dryRun, scope, heartbeat);
   }
 
   /**
@@ -78,7 +101,7 @@ public class PhaseRunner {
    */
   public PhaseExecution capture(
       final String argument, final Consumer<String> heartbeat, final String... arguments) {
-    return execute(argument, List.of(arguments), null, false, heartbeat);
+    return execute(argument, List.of(arguments), null, false, null, heartbeat);
   }
 
   private static java.util.List<String> argumentsOf(final String targetSha) {
@@ -90,6 +113,7 @@ public class PhaseRunner {
       final java.util.List<String> arguments,
       final String imageTag,
       final boolean dryRun,
+      final PhaseScope scope,
       final Consumer<String> heartbeat) {
     Path script = Path.of(properties.script());
     // The repo directory, not the script's own directory: `sync-config` runs git in the working
@@ -108,7 +132,7 @@ public class PhaseRunner {
             command,
             workingDirectory,
             null,
-            environment(imageTag, dryRun),
+            environment(imageTag, dryRun, scope),
             // Nothing is stripped: unlike the agent, this child process is the deploy itself and
             // legitimately needs the environment it was given. ClaudeCliRunner's allowlist exists
             // because the agent reads attacker-authored branches; the script reads nothing.
@@ -124,10 +148,16 @@ public class PhaseRunner {
         result.exitCode(), output, parseKeyValues(result.standardOutput()), durationMillis);
   }
 
-  private Map<String, String> environment(final String imageTag, final boolean dryRun) {
+  private Map<String, String> environment(
+      final String imageTag, final boolean dryRun, final PhaseScope scope) {
     Map<String, String> environment = new LinkedHashMap<>();
     environment.put("COMPOSE_FILE", properties.composeFile());
-    environment.put("SERVICES", String.join(" ", properties.services()));
+    environment.put(
+        "SERVICES",
+        String.join(" ", scope == null ? properties.services() : scope.services()));
+    if (scope != null && !scope.restartNginx()) {
+      environment.put("RESTART_NGINX", "0");
+    }
     environment.put("STATE_DIR", properties.stateDir());
     environment.put("REPO_URL", properties.repoUrl());
     environment.put("RECREATABLE", String.join(" ", properties.recreatable()));

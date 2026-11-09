@@ -139,6 +139,102 @@ rc=$?
 check "rollback with nothing recorded fails rather than silently passing" "[[ $rc -eq 1 ]]"
 
 # ---------------------------------------------------------------------------
+echo "  RESTART_NGINX=0 (a deploy that touches nothing nginx serves)"
+# ---------------------------------------------------------------------------
+out="$(RESTART_NGINX=0 run_phase "$TMP/state-recreate-quiet" recreate)"
+check "recreate leaves nginx alone" "! grep -q 'restart nginx' <<<\"\$out\""
+check "recreate still reconciles" \
+  "grep -E 'DRY-RUN: docker compose -f [^ ]+ up -d ' <<<\"\$out\" | grep -q backend"
+
+state="$TMP/state-rollback-quiet"
+mkdir -p "$state"
+printf 'software-factory\tsha256:ccc\n' >"$state/rollback-images"
+out="$(RESTART_NGINX=0 run_phase "$state" rollback)"
+check "rollback leaves nginx alone" "! grep -q 'restart nginx' <<<\"\$out\""
+check "rollback still re-tags the recorded image" \
+  "grep -q 'DRY-RUN: docker tag sha256:ccc' <<<\"\$out\""
+
+# ---------------------------------------------------------------------------
+echo "  plan"
+# ---------------------------------------------------------------------------
+# The fixtures stand in for `docker inspect` on the running containers and for
+# `docker compose config --hash`. Under DRY_RUN the candidate image id for a
+# service is "dry-run-image-id:<image>:<tag>", so a running container recorded
+# with exactly that id is unchanged.
+prefix="ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-"
+running="$TMP/plan-running"
+{
+  printf 'backend\tdry-run-image-id:%sbackend:abc\thash-backend\n' "$prefix"
+  printf 'frontend\tsomething-older\thash-frontend\n'
+  printf 'software-factory\tdry-run-image-id:%ssoftware-factory:abc\thash-old\n' "$prefix"
+  printf 'page-reader\tdry-run-image-id:%spage-reader:abc\thash-reader\n' "$prefix"
+  printf 'nginx\t-\thash-nginx\n'
+  printf 'deployer\t-\thash-deployer-old\n'
+} >"$running"
+hashes="$TMP/plan-hashes"
+printf '%s\n' 'backend hash-backend' 'frontend hash-frontend' \
+  'software-factory hash-new' 'page-reader hash-reader' 'nginx hash-nginx' \
+  'deployer hash-deployer-new' 'brand-new hash-x' >"$hashes"
+
+out="$(IMAGE_TAG=abc RUNNING_FIXTURE="$running" HASH_FIXTURE="$hashes" \
+  STATE_DIR="$TMP/state-plan" bash "$SCRIPT" plan 2>/dev/null)"
+rc=$?
+check "plan succeeds" "[[ $rc -eq 0 ]]"
+check "plan reports only the image that differs" \
+  "grep -qx 'image-changed=frontend' <<<\"\$out\""
+check "plan reports changed configuration, and a service with no container" \
+  "grep -qx 'config-changed=software-factory brand-new' <<<\"\$out\""
+check "plan never reports the deployer, which deploys exclude" \
+  "! grep -q 'deployer' <<<\"\$out\""
+check "plan read the hashes" "grep -qx 'config-read=ok' <<<\"\$out\""
+check "plan without a previous commit skips the config/ diff" \
+  "grep -qx 'host-config-read=skipped' <<<\"\$out\""
+# Captured first: `cmd | grep -q` SIGPIPEs the writer, which pipefail reports as a failure.
+narration="$(IMAGE_TAG=abc RUNNING_FIXTURE="$running" HASH_FIXTURE="$hashes" \
+  STATE_DIR="$TMP/state-plan" bash "$SCRIPT" plan 2>&1)"
+check "plan pulls the tag" \
+  "grep -q 'docker pull --quiet ${prefix}backend:abc' <<<\"\$narration\""
+check "plan never re-tags :latest, which would let the watchdog deploy early" \
+  "! grep -q 'docker tag' <<<\"\$narration\""
+check "plan writes no rollback state" "[[ ! -e '$TMP/state-plan/rollback-images' ]]"
+
+out="$(IMAGE_TAG=abc STATE_DIR="$TMP/state-plan2" bash "$SCRIPT" plan 2>/dev/null)"
+check "plan with no stack to read says so rather than 'nothing changed'" \
+  "grep -qx 'config-read=failed' <<<\"\$out\""
+check "plan with no stack reports every image as changed" \
+  "grep -qx 'image-changed=backend frontend software-factory page-reader' <<<\"\$out\""
+
+# The config/ diff runs in the checkout the script lives in, so it gets its own
+# throwaway repository rather than depending on this one's history (CI clones
+# shallow).
+repo="$TMP/plan-repo"
+mkdir -p "$repo/scripts/lib" "$repo/config/nginx" "$repo/docs"
+cp "$SCRIPT" "$repo/scripts/restart-prod.sh"
+cp "$PROJECT_DIR/scripts/lib/image-prune.sh" "$repo/scripts/lib/" 2>/dev/null || true
+echo one >"$repo/config/nginx/site.conf"
+echo one >"$repo/docs/readme.md"
+git -C "$repo" init -q
+git -C "$repo" -c user.email=t@t -c user.name=t add -A
+git -C "$repo" -c user.email=t@t -c user.name=t commit -qm one
+first="$(git -C "$repo" rev-parse HEAD)"
+echo two >"$repo/docs/readme.md"
+git -C "$repo" -c user.email=t@t -c user.name=t commit -qam docs
+docs_only="$(git -C "$repo" rev-parse HEAD)"
+echo two >"$repo/config/nginx/site.conf"
+git -C "$repo" -c user.email=t@t -c user.name=t commit -qam nginx
+
+out="$(HASH_FIXTURE="$hashes" RUNNING_FIXTURE="$running" bash "$repo/scripts/restart-prod.sh" plan "$first" 2>/dev/null)"
+check "plan names a changed bind-mounted file" \
+  "grep -qx 'host-config-changed=config/nginx/site.conf' <<<\"\$out\""
+check "plan's config/ diff read cleanly" "grep -qx 'host-config-read=ok' <<<\"\$out\""
+git -C "$repo" reset -q --hard "$docs_only"
+out="$(HASH_FIXTURE="$hashes" RUNNING_FIXTURE="$running" bash "$repo/scripts/restart-prod.sh" plan "$first" 2>/dev/null)"
+check "plan ignores changes outside config/" "grep -qx 'host-config-changed=' <<<\"\$out\""
+out="$(HASH_FIXTURE="$hashes" RUNNING_FIXTURE="$running" bash "$repo/scripts/restart-prod.sh" plan deadbeef 2>/dev/null)"
+check "plan reports a config/ diff it could not make" \
+  "grep -qx 'host-config-read=failed' <<<\"\$out\""
+
+# ---------------------------------------------------------------------------
 echo "  verify / verify-public host split"
 # ---------------------------------------------------------------------------
 state="$TMP/state-verify"

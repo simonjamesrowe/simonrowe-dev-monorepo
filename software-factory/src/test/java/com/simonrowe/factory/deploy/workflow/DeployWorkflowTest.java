@@ -19,6 +19,8 @@ import com.simonrowe.factory.deploy.domain.DeployRequest;
 import com.simonrowe.factory.deploy.domain.DeployResult;
 import com.simonrowe.factory.deploy.domain.DeployStatus;
 import com.simonrowe.factory.deploy.domain.PhaseOutcome;
+import com.simonrowe.factory.deploy.domain.PhaseScope;
+import com.simonrowe.factory.deploy.domain.PlanFacts;
 import com.simonrowe.factory.deploy.domain.SyncDecision;
 import com.simonrowe.factory.deploy.domain.SyncOutcome;
 import com.simonrowe.factory.deploy.persistence.DeployRunRecord;
@@ -600,6 +602,174 @@ class DeployWorkflowTest {
   }
 
   // ---------------------------------------------------------------------------
+  // Deploy plan: what kind of deploy this is
+  // ---------------------------------------------------------------------------
+
+  private static final PhaseScope FACTORY_SCOPE =
+      new PhaseScope(List.of("software-factory"), false);
+
+  private static void planReturns(
+      final DeployActivities activities, final List<String> images, final List<String> config) {
+    when(activities.plan(any(), anyString(), anyBoolean()))
+        .thenReturn(new PlanFacts(images, config, List.of(), true, "facts"));
+  }
+
+  @Test
+  void plansAgainstTheCommitConfigurationSyncMovedFrom() {
+    // Bind-mounted files are diffed against the previous commit, which only sync-config knows.
+    DeployActivities activities = activities();
+
+    execute(activities, request());
+
+    verify(activities).plan(PREVIOUS_SHA, SHA, false);
+  }
+
+  @Test
+  void siteChangeRunsTheFullFlowWithThePage() {
+    DeployActivities activities = activities();
+    planReturns(activities, List.of("backend"), List.of());
+
+    Outcome outcome = execute(activities, request());
+
+    assertThat(outcome.result().status()).isEqualTo(DeployStatus.DEPLOYED);
+    verify(activities).runPhase(eq(DeployPhase.MAINTENANCE_ON), any(), anyBoolean());
+    verify(activities).runPhase(eq(DeployPhase.MAINTENANCE_OFF), any(), anyBoolean());
+    verify(activities, never()).runScopedPhase(any(), any(), anyBoolean(), any());
+  }
+
+  @Test
+  void factoryOnlyChangeLeavesTheSiteUp() {
+    DeployActivities activities = activities();
+    planReturns(activities, List.of("software-factory"), List.of());
+
+    Outcome outcome = execute(activities, request());
+
+    assertThat(outcome.result().status()).isEqualTo(DeployStatus.DEPLOYED);
+    // No maintenance page and no unscoped phase at all: the unscoped calls carry the configured
+    // services and the nginx restart, which is exactly what a factory deploy must not do.
+    verify(activities, never()).runPhase(any(), any(), anyBoolean());
+    ArgumentCaptor<DeployPhase> phases = ArgumentCaptor.forClass(DeployPhase.class);
+    verify(activities, times(4))
+        .runScopedPhase(phases.capture(), any(), anyBoolean(), eq(FACTORY_SCOPE));
+    assertThat(phases.getAllValues())
+        .containsExactly(
+            DeployPhase.PULL, DeployPhase.RECREATE, DeployPhase.VERIFY, DeployPhase.VERIFY_PUBLIC);
+    verify(activities).runScopedPhase(eq(DeployPhase.PULL), eq(SHA), anyBoolean(), any());
+    assertThat(lastRecordedRun(activities).detail()).contains("the site was left up");
+  }
+
+  @Test
+  void factoryRollbackDoesNotTouchTheSite() {
+    DeployActivities activities = activities();
+    planReturns(activities, List.of(), List.of("software-factory"));
+    AtomicInteger verifies = new AtomicInteger();
+    when(activities.runScopedPhase(eq(DeployPhase.VERIFY), any(), anyBoolean(), any()))
+        .thenAnswer(
+            invocation ->
+                verifies.getAndIncrement() == 0
+                    ? new PhaseOutcome(DeployPhase.VERIFY, false, 1, "verify failed", 10L)
+                    : succeeded(DeployPhase.VERIFY));
+
+    Outcome outcome = execute(activities, request());
+
+    assertThat(outcome.result().status()).isEqualTo(DeployStatus.ROLLED_BACK);
+    verify(activities)
+        .runScopedPhase(eq(DeployPhase.ROLLBACK), any(), anyBoolean(), eq(FACTORY_SCOPE));
+    verify(activities).rollbackConfig(PREVIOUS_SHA, false);
+    verify(activities, never()).runPhase(any(), any(), anyBoolean());
+    assertThat(lastRecordedRun(activities).maintenancePageLeftUp()).isFalse();
+  }
+
+  @Test
+  void failedFactoryRollbackStillDoesNotRaiseThePage() {
+    // The site was never touched, so putting it behind the page would hide a fault this deploy
+    // did not cause, and take the site down over a factory problem.
+    DeployActivities activities = activities();
+    planReturns(activities, List.of("software-factory"), List.of());
+    AtomicInteger verifies = new AtomicInteger();
+    when(activities.runScopedPhase(eq(DeployPhase.VERIFY), any(), anyBoolean(), any()))
+        .thenAnswer(
+            invocation ->
+                verifies.getAndIncrement() == 0
+                    ? new PhaseOutcome(DeployPhase.VERIFY, false, 1, "verify failed", 10L)
+                    : succeeded(DeployPhase.VERIFY));
+    when(activities.runScopedPhase(eq(DeployPhase.ROLLBACK), any(), anyBoolean(), any()))
+        .thenReturn(new PhaseOutcome(DeployPhase.ROLLBACK, false, 1, "rollback failed", 10L));
+
+    Outcome outcome = execute(activities, request());
+
+    assertThat(outcome.result().status()).isEqualTo(DeployStatus.ROLLBACK_FAILED);
+    verify(activities, never()).runPhase(any(), any(), anyBoolean());
+    DeployRunRecord record = lastRecordedRun(activities);
+    assertThat(record.maintenancePageLeftUp()).isFalse();
+    assertThat(record.detail()).doesNotContain("maintenance page");
+  }
+
+  @Test
+  void failedFactoryPullDoesNotTakeDownPageItNeverRaised() {
+    DeployActivities activities = activities();
+    planReturns(activities, List.of("software-factory"), List.of());
+    when(activities.runScopedPhase(eq(DeployPhase.PULL), any(), anyBoolean(), any()))
+        .thenReturn(new PhaseOutcome(DeployPhase.PULL, false, 1, "pull failed", 10L));
+
+    Outcome outcome = execute(activities, request());
+
+    assertThat(outcome.result().status()).isEqualTo(DeployStatus.FAILED);
+    verify(activities, never()).runPhase(any(), any(), anyBoolean());
+    assertThat(lastRecordedRun(activities).maintenancePageLeftUp()).isFalse();
+  }
+
+  @Test
+  void nothingChangedRunsNoPhaseAndSchedulesNoScan() {
+    DeployActivities activities = activities();
+    planReturns(activities, List.of(), List.of());
+
+    Outcome outcome = execute(activities, requestSchedulingLogScan());
+
+    assertThat(outcome.result().status()).isEqualTo(DeployStatus.SKIPPED);
+    verify(activities, never()).runPhase(any(), any(), anyBoolean());
+    verify(activities, never()).runScopedPhase(any(), any(), anyBoolean(), any());
+    verify(activities, never()).scheduleLogWatchScan(any(), anyString(), anyBoolean());
+    assertThat(lastRecordedRun(activities).phases())
+        .extracting(PhaseOutcome::phase)
+        .containsExactly(DeployPhase.SYNC_CONFIG, DeployPhase.PLAN);
+  }
+
+  @Test
+  void nothingChangedStillReportsHeldBackConfiguration() {
+    // Nothing changed only because the change that mattered was held back; that notice must
+    // still reach the commit, as it does for an images-only deploy.
+    DeployActivities activities = activities();
+    when(activities.syncConfig(anyString(), anyBoolean()))
+        .thenReturn(sync(SyncDecision.HELD_BACK, null));
+    planReturns(activities, List.of(), List.of());
+
+    Outcome outcome = execute(activities, request());
+
+    assertThat(outcome.result().status()).isEqualTo(DeployStatus.DEPLOYED_IMAGES_ONLY);
+    verify(activities).report(any(), any(), eq(999L), any());
+    verify(activities, never()).runPhase(any(), any(), anyBoolean());
+  }
+
+  @Test
+  void planThatFailsDeploysEverything() {
+    DeployActivities activities = activities();
+    when(activities.plan(any(), anyString(), anyBoolean()))
+        .thenReturn(PlanFacts.unreadable("could not read the compose configuration hashes"));
+
+    Outcome outcome = execute(activities, request());
+
+    assertThat(outcome.result().status()).isEqualTo(DeployStatus.DEPLOYED);
+    verify(activities, times(6)).runPhase(any(), any(), anyBoolean());
+    assertThat(lastRecordedRun(activities).phases())
+        .filteredOn(phase -> phase.phase() == DeployPhase.PLAN)
+        .singleElement()
+        .extracting(PhaseOutcome::detail)
+        .asString()
+        .contains("SITE", "could not read the compose configuration hashes");
+  }
+
+  // ---------------------------------------------------------------------------
   // Helpers
   // ---------------------------------------------------------------------------
 
@@ -610,6 +780,10 @@ class DeployWorkflowTest {
         .thenReturn(sync(SyncDecision.APPLIED, PREVIOUS_SHA));
     when(activities.runPhase(any(), any(), anyBoolean()))
         .thenAnswer(invocation -> succeeded(invocation.getArgument(0)));
+    when(activities.runScopedPhase(any(), any(), anyBoolean(), any()))
+        .thenAnswer(invocation -> succeeded(invocation.getArgument(0)));
+    // No plan stubbed: the mock answers null, which the workflow reads as "could not tell" and
+    // deploys everything. That is what every test above this section relies on.
     when(activities.rollbackConfig(anyString(), anyBoolean()))
         .thenReturn(succeeded(DeployPhase.ROLLBACK_CONFIG));
     when(activities.captureEvidence(any(), any(), any(), any())).thenReturn("/tmp/evidence");
