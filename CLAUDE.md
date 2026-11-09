@@ -101,6 +101,14 @@ deployed from `~/workspace/simonjamesrowe/simonrowe-dev-monorepo` (needs a `.env
 It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` out to Cloudflare
 (Cloudflare → pinggy tunnel → the `nginx` container), so the stack can run on any Docker host.
 
+- **Two hosts.** The Raspberry Pi runs the site, Temporal, Langfuse and Dependency-Track
+  (`docker-compose.prod.yml`). An Intel NUC (x86_64, Ubuntu, `/srv/simonrowe-dev-monorepo`) runs
+  the software factory: `software-factory`, `page-reader`, its own `deployer`, its own Mongo and
+  its own Alloy (`docker-compose.factory.yml`, project `simonrowe-factory`). The Pi reaches it
+  through `factory-gateway` (socat to `FACTORY_HOST:8090`); the NUC reaches Temporal on the Pi's
+  LAN address (`TEMPORAL_BIND_ADDRESS`). Both ports are firewalled to the other host in
+  `DOCKER-USER`, because a published port bypasses ufw. Where this file says `software-factory`
+  below, it now runs on the NUC. See `docs/runbooks/factory-host.md`.
 - **Single `nginx:alpine` reverse proxy** (`config/nginx/nginx-proxy.conf`) fronts every public hostname:
   `www/simonrowe.dev → frontend:80`, `api.simonrowe.dev → backend:8080`,
   `console.simonrowe.dev → portainer:9000` (Portainer has **no** published port — only reachable through nginx),
@@ -281,6 +289,33 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- factory-host-split: **The software factory moves to its own host, an Intel NUC, and each host
+  deploys itself.** Builds on deploy-plan below. The Pi keeps the site, Temporal, Langfuse and
+  Dependency-Track; the NUC runs `docker-compose.factory.yml`. Load-bearing bits:
+  - **One image, two deploy queues.** `DeployTaskQueues.CONFIGURED` is a placeholder
+    (`factory.deploy.task-queue`) that the Temporal starter resolves in both `@WorkflowImpl` and
+    `@ActivityImpl` (checked in temporal-spring-boot-autoconfigure 1.36.0). The
+    `factory-deployer` profile sets `deploy-factory`. A deployer on the other host's queue would
+    run that host's deploy steps against its own Docker, so `FactoryWorkflowWorkersTest` pins it.
+  - **The trigger starts `deploy-prod` and `deploy-factory`** (`DeployRequest.host`, null = site);
+    each plans its own host. The factory host never raises a page or restarts nginx, and
+    verifies with the settle loop only (`VERIFY_OPS_HOSTS`/`VERIFY_PUBLIC_HOSTS` empty).
+  - **`restart-prod.sh` acts only on services its compose file defines**, and `sync-config`
+    reads `$COMPOSE_REL` at the target commit, not always `docker-compose.prod.yml`.
+  - **The Pi reaches the factory through `factory-gateway`**, because nginx resolves upstreams
+    through Docker's DNS, which does not answer for `extra_hosts`. The NUC reaches Temporal on
+    the Pi's LAN address. `scripts/enable-factory-host-firewall.sh` confines both ports, and
+    page-reader's fixed subnet (172.30.250.0/24), in `DOCKER-USER`, not ufw.
+  - **software-factory and page-reader are multi-arch** (arm64 for the Pi's deployer, amd64 for
+    the NUC), built natively per arch and merged into one index. `retag-image.sh` re-tags an
+    index whole and refuses a previous image missing a required platform.
+  - **The Pi's deploys no longer pull the factory image**, so updating the Pi's deployer needs
+    `docker compose pull deployer` first.
+  - **software-factory's test task now declares both compose files, `config/nginx` and the
+    classifier as inputs.** Without that, moving the services was served a cached green result,
+    and ten failures appeared only under `--rerun`.
+  - The merge's own deploy is held back by design (new service, `temporal` changed). The cutover
+    is a manual window: `docs/runbooks/factory-host.md` ("Cutover from the Pi").
 - deploy-plan: **A deploy now works out what it changes before it changes anything, and a
   software-factory-only merge no longer puts the site behind the maintenance page.** Every merge
   used to raise the page, docs-only and factory-only ones included. A new `plan` phase runs after

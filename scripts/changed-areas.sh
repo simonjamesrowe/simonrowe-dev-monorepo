@@ -36,6 +36,7 @@
 # surprising are all of that kind:
 #   - docker-compose.prod.yml is baked into the backend image (ProdImageCatalog) and read by
 #     both Java test suites, so it rebuilds the backend.
+#   - docker-compose.factory.yml (the factory host's) is read by software-factory's tests only.
 #   - config/nginx/ is read by software-factory's FactoryPublicSurfaceTest.
 #   - scripts/classify-change.sh and its fixtures are read by MergeDispositionTest.
 #   - page-reader/ is read by software-factory's PageReadActivitiesContractTest, which holds
@@ -85,6 +86,10 @@ classify() {
       turn_on backend factory shell image_backend image_factory ;;
     docker-compose.prod.yml)
       turn_on backend factory shell image_backend ;;
+    # The factory host's compose file: read by software-factory's confinement tests and by the
+    # deploy shell tests. Not baked into any image, so no image rebuilds.
+    docker-compose.factory.yml)
+      turn_on factory shell ;;
     docker-compose.yml)
       turn_on shell ;;
     Dockerfile.frontend)

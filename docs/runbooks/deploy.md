@@ -173,13 +173,63 @@ service.
 The first two are separate on purpose: a broken deployer must be silenceable
 without also silencing code review.
 
+## Two hosts, two deploys
+
+The software factory runs on its own host (an Intel NUC; see
+[factory-host.md](factory-host.md)). Each host has its own checkout, compose file, deployer and
+deploy queue, and a merge deploys both, independently:
+
+| | Site | Factory host |
+| --- | --- | --- |
+| Compose file | `docker-compose.prod.yml` | `docker-compose.factory.yml` |
+| Workflow id | `deploy-prod` | `deploy-factory` |
+| Task queue | `deploy` | `deploy-factory` |
+| Deployer role | `deployer` | `factory-deployer` |
+| Services deployed | `backend`, `frontend` | `software-factory`, `page-reader` |
+| Maintenance page | when anything a visitor reaches changes | never (there is none) |
+| Verified by | settle loop + ops hostnames, then `www`/`api` | settle loop only (`VERIFY_*_HOSTS` empty) |
+
+- **One trigger, two workflows.** `software-factory` receives the Publish webhook and
+  signal-with-starts `deploy-prod`, then, with `FACTORY_DEPLOY_FACTORY_HOST_ENABLED` (on in the
+  factory host's compose file), `deploy-factory`. The second never blocks the first: a factory
+  host that cannot be reached is logged, and the site still deploys.
+- **Each plans its own host** ([What kind of deploy it is](#what-kind-of-deploy-it-is)), so a
+  merge that changes only the factory runs `deploy-prod` to `SKIPPED` and recreates the
+  factory's containers with the site untouched. On the factory host, every change and every
+  doubt is a `FACTORY` deploy: there is no page to raise and no nginx to restart.
+- **Same code, different queue.** Both deployers run the same image, and the queue comes from
+  `factory.deploy.task-queue`, which `@WorkflowImpl` and `@ActivityImpl` resolve as a placeholder
+  (`DeployTaskQueues.CONFIGURED`). The `factory-deployer` profile sets `deploy-factory`. That
+  property is the line that keeps each deployer's Docker socket on its own host's deploy steps,
+  and `FactoryWorkflowWorkersTest` pins it.
+- **`restart-prod.sh` acts only on services its compose file defines** (`host_services`). A
+  deployer whose `FACTORY_DEPLOY_SERVICES` still names a service that moved hosts skips it, out
+  loud, rather than failing `recreate` on it. `sync-config` reads the target commit's copy of
+  its own compose file (`COMPOSE_REL`), not always the Pi's.
+- **Failures file separately.** A factory host failure's Linear key parts carry `factory-host`,
+  so it never lands on a site deploy's ticket. The site's key parts are unchanged.
+- **Run records** carry their workflow id, so `deploy_runs` tells the two apart. Each host's
+  deployer writes to its own Mongo.
+
 ## Keeping the deployer current
 
 **The deployer never recreates itself, and therefore does not self-update.**
 
+There are two deployers now, one per host ([below](#two-hosts-two-deploys)), and each needs this
+by hand:
+
 ```bash
+# On the Pi. `pull` first: the Pi's deploys no longer pull the software-factory image (it is
+# not a site service any more), so `:latest` there only moves when pulled by hand, and
+# `pull_policy: missing` means `up -d` alone recreates on the image already present.
 cd ~/workspace/simonjamesrowe/simonrowe-dev-monorepo
+docker compose -f docker-compose.prod.yml pull deployer
 docker compose -f docker-compose.prod.yml up -d --no-deps deployer
+
+# On the factory host. Its own deploys pull and re-tag software-factory:latest, which this
+# deployer shares, so `up -d` picks the new image up without a pull.
+cd /srv/simonrowe-dev-monorepo
+docker compose -f docker-compose.factory.yml up -d --no-deps deployer
 ```
 
 Recreating the container that is mid-orchestration is how the backend's old

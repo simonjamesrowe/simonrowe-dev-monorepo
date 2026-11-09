@@ -70,15 +70,22 @@ echo "  pull"
 # ---------------------------------------------------------------------------
 state="$TMP/state-pull"
 out="$(run_phase "$state" pull)"
-check "pull records one rollback line per service" \
-  "[[ \$(grep -c . '$state/rollback-images') -eq 4 ]]"
+# SERVICES defaults to all four images, but this host's compose file (the Pi's)
+# defines only backend and frontend since the software factory moved to its own
+# host. The others are skipped, out loud.
+check "pull records one rollback line per service this host defines" \
+  "[[ \$(grep -c . '$state/rollback-images') -eq 2 ]]"
 check "pull records backend" "grep -q '^backend' '$state/rollback-images'"
-check "pull records page-reader" "grep -q '^page-reader' '$state/rollback-images'"
+check "pull records frontend" "grep -q '^frontend' '$state/rollback-images'"
+check "pull skips page-reader, which the Pi's compose file no longer defines" \
+  "! grep -q '^page-reader' '$state/rollback-images'"
+check "pull says it skipped it" \
+  "grep -q 'page-reader is not defined in docker-compose.prod.yml on this host' <<<\"\$out\""
 check "pull never records deployer" "! grep -q 'deployer' '$state/rollback-images'"
 check "pull with the default tag emits no docker tag" \
   "! grep -q 'DRY-RUN: docker tag' <<<\"\$out\""
 check "pull emits a docker pull per service" \
-  "[[ \$(grep -c 'DRY-RUN: docker pull' <<<\"\$out\") -eq 4 ]]"
+  "[[ \$(grep -c 'DRY-RUN: docker pull' <<<\"\$out\") -eq 2 ]]"
 
 # The regression this guards: an append would make a retried pull record the
 # freshly-pulled image as the rollback target, so rollback would restore the
@@ -106,7 +113,7 @@ echo "  recreate"
 state="$TMP/state-recreate"
 out="$(run_phase "$state" recreate)"
 check "recreate uses --no-deps --pull never per service" \
-  "[[ \$(grep -c 'up -d --no-deps --pull never' <<<\"\$out\") -eq 4 ]]"
+  "[[ \$(grep -c 'up -d --no-deps --pull never' <<<\"\$out\") -eq 2 ]]"
 check "recreate never touches deployer" "! grep -q 'never deployer' <<<\"\$out\""
 check "recreate restarts nginx" "grep -q 'restart nginx' <<<\"\$out\""
 # The reconcile must name its services rather than running a bare `up -d`. A bare
@@ -202,7 +209,7 @@ out="$(IMAGE_TAG=abc STATE_DIR="$TMP/state-plan2" bash "$SCRIPT" plan 2>/dev/nul
 check "plan with no stack to read says so rather than 'nothing changed'" \
   "grep -qx 'config-read=failed' <<<\"\$out\""
 check "plan with no stack reports every image as changed" \
-  "grep -qx 'image-changed=backend frontend software-factory page-reader' <<<\"\$out\""
+  "grep -qx 'image-changed=backend frontend' <<<\"\$out\""
 
 # The config/ diff runs in the checkout the script lives in, so it gets its own
 # throwaway repository rather than depending on this one's history (CI clones
@@ -233,6 +240,33 @@ check "plan ignores changes outside config/" "grep -qx 'host-config-changed=' <<
 out="$(HASH_FIXTURE="$hashes" RUNNING_FIXTURE="$running" bash "$repo/scripts/restart-prod.sh" plan deadbeef 2>/dev/null)"
 check "plan reports a config/ diff it could not make" \
   "grep -qx 'host-config-read=failed' <<<\"\$out\""
+
+# ---------------------------------------------------------------------------
+echo "  the factory host (docker-compose.factory.yml)"
+# ---------------------------------------------------------------------------
+factory_compose="$PROJECT_DIR/docker-compose.factory.yml"
+state="$TMP/state-factory-pull"
+out="$(COMPOSE_FILE="$factory_compose" run_phase "$state" pull)"
+check "factory pull records only the factory's services" \
+  "[[ \$(cut -f1 '$state/rollback-images' | tr '\n' ' ') == 'software-factory page-reader ' ]]"
+out="$(COMPOSE_FILE="$factory_compose" run_phase "$TMP/state-factory-recreate" recreate)"
+check "factory recreate does not restart an nginx it does not have" \
+  "! grep -q 'restart nginx' <<<\"\$out\""
+check "factory recreate says why" "grep -q 'No nginx in docker-compose.factory.yml' <<<\"\$out\""
+check "factory recreate's reconcile never names the deployer" \
+  "! grep -E 'up -d .*deployer' <<<\"\$out\""
+out="$(VERIFY_OPS_HOSTS="" VERIFY_PUBLIC_HOSTS="" DRY_RUN_HTTP_CODE=502 \
+  COMPOSE_FILE="$factory_compose" run_phase "$TMP/state-factory-verify" verify)"
+rc=$?
+check "verify with no hostnames does not judge the factory by the site's" \
+  "[[ $rc -eq 0 ]] && ! grep -q 'simonrowe.dev' <<<\"\$out\""
+out="$(VERIFY_OPS_HOSTS="" VERIFY_PUBLIC_HOSTS="" DRY_RUN_HTTP_CODE=502 \
+  COMPOSE_FILE="$factory_compose" run_phase "$TMP/state-factory-vp" verify-public)"
+rc=$?
+check "verify-public with no hostnames passes" "[[ $rc -eq 0 ]]"
+out="$(DRY_RUN_HTTP_CODE=502 run_phase "$TMP/state-site-verify" verify)"
+rc=$?
+check "the site's verify still checks its hostnames by default" "[[ $rc -ne 0 ]]"
 
 # ---------------------------------------------------------------------------
 echo "  verify / verify-public host split"

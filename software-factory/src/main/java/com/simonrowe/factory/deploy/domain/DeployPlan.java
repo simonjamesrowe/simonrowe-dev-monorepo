@@ -51,6 +51,63 @@ public record DeployPlan(DeployKind kind, List<String> services, String detail) 
   }
 
   /**
+   * {@link #everything}, on a given host.
+   *
+   * <p>On the factory host "everything" is still a {@link DeployKind#FACTORY} deploy: that host has
+   * no maintenance page to raise and no nginx to restart, so the only thing a doubt can buy there
+   * is deploying every one of its services, which a factory scope over all of them already does.
+   *
+   * @param services the request's services
+   * @param reason why there is no finer plan
+   * @param host the host the deploy acts on
+   * @return the plan
+   */
+  public static DeployPlan everything(
+      final List<String> services, final String reason, final DeployHost host) {
+    if (host == DeployHost.FACTORY && !services.isEmpty()) {
+      return new DeployPlan(DeployKind.FACTORY, services, reason);
+    }
+    return everything(services, reason);
+  }
+
+  /**
+   * Decides the kind of deploy on a given host.
+   *
+   * <p>On the site the rules below apply as they always did. On the factory host every service is
+   * the factory's, so any change, and any doubt, is a {@link DeployKind#FACTORY} deploy of all of
+   * them, and only "nothing changed" is different.
+   *
+   * @param facts what the script found; null or unreadable means "could not tell"
+   * @param services the request's services
+   * @param host the host the deploy acts on
+   * @return the plan
+   */
+  public static DeployPlan decide(
+      final PlanFacts facts, final List<String> services, final DeployHost host) {
+    if (host != DeployHost.FACTORY) {
+      return decide(facts, services);
+    }
+    if (facts == null || !facts.readable()) {
+      return everything(
+          services,
+          "could not tell what changed on the factory host, so deploying all of it: %s"
+              .formatted(facts == null ? "no plan" : facts.detail()),
+          host);
+    }
+    Set<String> changed = new LinkedHashSet<>(facts.changedImages());
+    changed.addAll(facts.changedConfig());
+    changed.addAll(facts.changedHostFiles());
+    if (changed.isEmpty()) {
+      return new DeployPlan(
+          DeployKind.NOTHING,
+          List.of(),
+          "nothing to deploy on the factory host: every image and service configuration matches");
+    }
+    return everything(
+        services, "factory host changed: " + String.join(", ", changed), host);
+  }
+
+  /**
    * Decides the kind of deploy.
    *
    * <p>Every doubt resolves towards {@link DeployKind#SITE}. A wrong {@code SITE} costs a

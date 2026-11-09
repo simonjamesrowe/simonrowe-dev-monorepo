@@ -1,6 +1,7 @@
 package com.simonrowe.factory.deploy.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -17,6 +18,8 @@ import com.simonrowe.factory.deploy.config.DeployTaskQueues;
 import com.simonrowe.factory.deploy.domain.DeployPhase;
 import com.simonrowe.factory.deploy.domain.DeployRequest;
 import com.simonrowe.factory.deploy.domain.PhaseOutcome;
+import com.simonrowe.factory.deploy.domain.PhaseScope;
+import com.simonrowe.factory.deploy.domain.PlanFacts;
 import com.simonrowe.factory.deploy.domain.SyncDecision;
 import com.simonrowe.factory.deploy.domain.SyncOutcome;
 import com.simonrowe.factory.deploy.persistence.DeployRunRecord;
@@ -28,6 +31,7 @@ import com.simonrowe.factory.linear.config.LinearTaskQueues;
 import com.simonrowe.factory.linear.domain.FiledIssue;
 import com.simonrowe.factory.linear.domain.FilingDecision;
 import com.simonrowe.factory.linear.workflow.LinearActivities;
+import io.temporal.client.WorkflowNotFoundException;
 import io.temporal.client.WorkflowStub;
 import io.temporal.testing.TestWorkflowEnvironment;
 import io.temporal.worker.Worker;
@@ -103,7 +107,81 @@ class DeployWorkflowServiceTest {
   /** The trigger, wired to a sink that is either enabled or disabled. */
   private DeployWorkflowService serviceWithSink(final boolean sinkEnabled) {
     return new DeployWorkflowService(
-        environment.getWorkflowClient(), properties(), linearProperties(sinkEnabled));
+        environment.getWorkflowClient(), properties(), linearProperties(sinkEnabled), false);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Two hosts
+  // ---------------------------------------------------------------------------
+
+  /** The factory host's deployer: its own queue, its own (mocked) Docker. */
+  private DeployActivities factoryHostWorker() {
+    DeployActivities factory = mock(DeployActivities.class, withSettings().withoutAnnotations());
+    when(factory.syncConfig(anyString(), anyBoolean()))
+        .thenReturn(
+            new SyncOutcome(
+                SyncDecision.APPLIED, "old", SHA, List.of(), List.of(), null, null, "applied"));
+    when(factory.runScopedPhase(any(), any(), anyBoolean(), any()))
+        .thenAnswer(
+            invocation -> new PhaseOutcome(invocation.getArgument(0), true, 0, "ok", 1L));
+    when(factory.plan(any(), anyString(), anyBoolean()))
+        .thenReturn(new PlanFacts(List.of("software-factory"), List.of(), List.of(), true, "f"));
+    Worker worker = environment.newWorker(DeployTaskQueues.DEPLOY_FACTORY);
+    worker.registerWorkflowImplementationTypes(DeployWorkflowImpl.class);
+    worker.registerActivitiesImplementations(factory);
+    return factory;
+  }
+
+  @Test
+  void startsTheFactoryHostDeployOnItsOwnQueueWhenEnabled() {
+    environment.close();
+    environment = TestWorkflowEnvironment.newInstance();
+    Worker site = environment.newWorker(DeployTaskQueues.DEPLOY);
+    site.registerWorkflowImplementationTypes(DeployWorkflowImpl.class);
+    site.registerActivitiesImplementations(activities);
+    final DeployActivities factory = factoryHostWorker();
+    environment.start();
+    DeployWorkflowService both =
+        new DeployWorkflowService(
+            environment.getWorkflowClient(), properties(), linearProperties(false), true);
+
+    DeployAccepted accepted = both.start(SHA, DeployRequest.TRIGGER_WEBHOOK, 1L);
+    awaitCompletion();
+    WorkflowStub.fromTyped(
+            environment
+                .getWorkflowClient()
+                .newWorkflowStub(DeployWorkflow.class, DeployWorkflow.FACTORY_WORKFLOW_ID))
+        .getResult(Object.class);
+
+    // The accepted run is the site's, as before.
+    assertThat(accepted.workflowId()).isEqualTo(DeployWorkflow.WORKFLOW_ID);
+    // The factory host's deploy ran on ITS worker, scoped to its services, never touching the
+    // maintenance page (that would be runPhase), and recorded under its own workflow id.
+    verify(factory).runScopedPhase(
+        eq(DeployPhase.RECREATE), any(), anyBoolean(),
+        eq(new PhaseScope(List.of("software-factory", "page-reader"), false)));
+    verify(factory, never()).runPhase(any(), any(), anyBoolean());
+    ArgumentCaptor<DeployRunRecord> factoryRecord = ArgumentCaptor.forClass(DeployRunRecord.class);
+    verify(factory).recordRun(factoryRecord.capture());
+    assertThat(factoryRecord.getValue().workflowId()).isEqualTo("deploy-factory");
+    // And the site's deploy still ran on the site's worker.
+    ArgumentCaptor<DeployRunRecord> siteRecord = ArgumentCaptor.forClass(DeployRunRecord.class);
+    verify(activities).recordRun(siteRecord.capture());
+    assertThat(siteRecord.getValue().workflowId()).isEqualTo("deploy-prod");
+  }
+
+  @Test
+  void startsNoFactoryHostDeployWhenDisabled() {
+    service.start(SHA, DeployRequest.TRIGGER_WEBHOOK, 1L);
+    awaitCompletion();
+
+    WorkflowStub factory =
+        WorkflowStub.fromTyped(
+            environment
+                .getWorkflowClient()
+                .newWorkflowStub(DeployWorkflow.class, DeployWorkflow.FACTORY_WORKFLOW_ID));
+    assertThatThrownBy(() -> factory.getResult(Object.class))
+        .isInstanceOf(WorkflowNotFoundException.class);
   }
 
   private static LinearProperties linearProperties(final boolean enabled) {

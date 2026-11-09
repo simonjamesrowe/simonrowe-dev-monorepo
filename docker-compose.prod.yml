@@ -181,17 +181,16 @@ services:
       BIND_ON_IP: 0.0.0.0
       DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/production-sql.yaml
     ports:
-      # The host worker needs gRPC; binding loopback keeps it off the public network.
-      - "127.0.0.1:7233:7233"
+      # The software factory's host (the NUC) runs its workers against this Temporal across the
+      # LAN, so the port binds the Pi's LAN address there: TEMPORAL_BIND_ADDRESS in .env. Temporal
+      # has no authentication and a Docker-published port bypasses ufw, so the DOCKER-USER rules
+      # from `scripts/enable-factory-host-firewall.sh --role site` are what keep every other LAN
+      # device off it. The default stays loopback, so a host without the variable exposes nothing.
+      # Recreating temporal is a maintenance-window step: it is outside FACTORY_DEPLOY_RECREATABLE.
+      # See docs/runbooks/factory-host.md.
+      - "${TEMPORAL_BIND_ADDRESS:-127.0.0.1}:7233:7233"
     volumes:
       - ./config/temporal/dynamicconfig:/etc/temporal/config/dynamicconfig:ro
-    # `default` is every other service's network; naming any network drops the implicit one, so
-    # it is listed. `page-reader` is the page-reader's only network, and Temporal is the only
-    # other thing on it: a page the headless browser opens can reach nothing else in the stack
-    # even if its egress proxy failed open.
-    networks:
-      - default
-      - page-reader
     healthcheck:
       test: ["CMD", "nc", "-z", "localhost", "7233"]
       interval: 10s
@@ -248,206 +247,6 @@ services:
       timeout: 10s
       retries: 5
       start_period: 30s
-
-  software-factory:
-    image: ${FACTORY_IMAGE:-ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-software-factory:latest}
-    # Memory cap. Measured steady-state PSS on the Pi is noted below; the limit
-    # carries roughly 2x headroom. NOTE: INERT until the kernel memory cgroup is
-    # enabled - see scripts/enable-memory-cgroup.sh.
-    # Measured: ~264MB; also forks Claude Code and git, so leave real headroom
-    mem_limit: 1500m
-    mem_reservation: 384m
-    # `missing`, not `always`. scripts/monitor-prod.sh runs a bare `docker compose up -d`
-    # every minute whenever it sees anything unsettled, and that command resolves :latest
-    # with no flag to stop it. With `always`, two things follow: a rollback cannot hold -
-    # the watchdog re-pulls the broken :latest within 60 seconds and the site breaks again
-    # with nothing in the deploy log to explain it - and the watchdog can silently upgrade
-    # this service as a side effect of healing an unrelated container.
-    #
-    # With `missing`, pulling is something only the deployer and an explicit
-    # restart-prod.sh run do. restart-prod.sh is unaffected: it runs `docker compose pull`
-    # explicitly before `up -d`.
-    pull_policy: missing
-    restart: unless-stopped
-    # Deliberately no `env_file: .env`. This container terminates untrusted internet
-    # traffic (the GitHub webhook) and also holds the Claude and GitHub App credentials
-    # now that the API and the Temporal worker share one JVM. Loading the whole file
-    # would put every unrelated production secret in that process; declare what it
-    # needs, and nothing else.
-    environment:
-      # Empty by default, so the image's AOT cache (Dockerfile.software-factory) is used. It
-      # was "-Xshare:off" until the AOT cache landed: a JDK 21 aarch64 CDS bug (see the backend
-      # service below). Setting FACTORY_JAVA_TOOL_OPTIONS=-Xshare:off in .env and recreating
-      # this service turns class sharing, and with it the AOT cache, back off: the image's
-      # start script leaves -XX:AOTCache out whenever it sees an -Xshare option, because the
-      # JVM refuses to start with both.
-      JAVA_TOOL_OPTIONS: ${FACTORY_JAVA_TOOL_OPTIONS:-}
-      TEMPORAL_ADDRESS: temporal:7233
-      TEMPORAL_NAMESPACE: default
-      FACTORY_RUNTIME_ROLE: software-factory
-      GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:?set GITHUB_WEBHOOK_SECRET in .env}
-      FACTORY_TRIGGER_TOKEN: ${FACTORY_TRIGGER_TOKEN:?set FACTORY_TRIGGER_TOKEN in .env}
-      # Narrower than the trigger token above: authorises only GET
-      # /api/factory/flow/{nodeKey}. The deployer below is granted this one too, so it
-      # can report deploy/platformbackup detail truthfully without also holding the
-      # trigger token that starts a deploy.
-      # DELIBERATELY `:-` WITH AN EMPTY DEFAULT, NOT `:?`. This variable does not exist
-      # in production `.env` yet (unlike FACTORY_TRIGGER_TOKEN above), so a `:?` here
-      # would make the WHOLE compose file fail to interpolate the moment this file
-      # shipped - wedging `sync-config` and breaking `monitor-prod.sh`'s minutely
-      # `up -d`, taking the self-healing watchdog down with it (see the identical
-      # reasoning on trivy-server's --token below). With the value unset,
-      # authenticateRead fails closed with 503 and the Factory Flow drawer degrades one
-      # panel to "not available" - a far better failure than an un-interpolatable file.
-      FACTORY_READ_TOKEN: ${FACTORY_READ_TOKEN:-}
-      GITHUB_APP_CLIENT_ID: ${GITHUB_APP_CLIENT_ID:?set GITHUB_APP_CLIENT_ID in .env}
-      # Inside the container the PEM always lives here. Only the path is ever configured,
-      # never the key itself. The bind-mount source below is a SEPARATE variable
-      # (GITHUB_APP_PRIVATE_KEY_HOST_PATH) and the two must not be merged back into one.
-      #
-      # They were one name until it broke the deployer: that container sets this variable
-      # to the container path, and it runs `docker compose` against this file, where
-      # process environment beats `.env`. Its reconcile therefore resolved the mount
-      # source to /run/secrets/github-app.pem - a path that does not exist on the host -
-      # and the daemon creates a missing bind source as an empty DIRECTORY, so
-      # software-factory would fail to start with "not a directory". One name meant two
-      # different things depending on which side of the mount was reading it.
-      GITHUB_APP_PRIVATE_KEY_PATH: /run/secrets/github-app.pem
-      CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:?set CLAUDE_CODE_OAUTH_TOKEN in .env}
-      CLAUDE_MODEL: ${CLAUDE_MODEL:-sonnet}
-      CLAUDE_EFFORT: ${CLAUDE_EFFORT:-medium}
-      # These three shadow the application.yml defaults, so they have to be bumped here too or
-      # prod keeps the old, tighter limits no matter what the image ships.
-      CLAUDE_MAX_TURNS: ${CLAUDE_MAX_TURNS:-60}
-      CLAUDE_TIMEOUT: ${CLAUDE_TIMEOUT:-25m}
-      # The ceiling that refused PR #106 (98 files) at its old value of 80. Declared here so it
-      # is tunable from .env without a rebuild, since it is the limit most likely to need it.
-      FACTORY_MAX_CHANGED_FILES: ${FACTORY_MAX_CHANGED_FILES:-250}
-      # The reviewer arms squash auto-merge on a pull request that passed review and whose every
-      # path classifies auto-merge; GitHub merges once the ruleset is satisfied. Declared here and
-      # only here: this service has no env_file, so setting it in .env alone does nothing, and
-      # deployer runs no review activity to read it (DeployerCodeReviewGateTest pins both).
-      FACTORY_CODEREVIEW_AUTO_MERGE_ENABLED: ${FACTORY_CODEREVIEW_AUTO_MERGE_ENABLED:-true}
-      FACTORY_FEEDBACK_ENABLED: ${FACTORY_FEEDBACK_ENABLED:-true}
-      FACTORY_FEEDBACK_HARVEST_MODEL: ${FACTORY_FEEDBACK_HARVEST_MODEL:-haiku}
-      FACTORY_FEEDBACK_DISTILL_MODEL: ${FACTORY_FEEDBACK_DISTILL_MODEL:-sonnet}
-      # The content-writing queue: the backend's own scheduled text jobs (release notes on
-      # /status) written by Claude Code on the subscription in CLAUDE_CODE_OAUTH_TOKEN above,
-      # instead of OpenAI. ONLY for the owner's background jobs, never anything a visitor
-      # triggers (the subscription's terms), and it shares the subscription's rate limits with
-      # the reviewer, so the backend always falls back to OpenAI. Deliberately NOT on
-      # `deployer`: WritingComposeTest fails the build if any FACTORY_WRITING_* appears there.
-      FACTORY_WRITING_ENABLED: ${FACTORY_WRITING_ENABLED:-true}
-      # Accepts the backend's page reads (POST /api/page-reads) and runs PageReadWorkflow. The
-      # browser itself is the page-reader service below; this container never launches one.
-      FACTORY_PAGEREAD_ENABLED: ${FACTORY_PAGEREAD_ENABLED:-true}
-      FACTORY_WRITING_MODEL: ${FACTORY_WRITING_MODEL:-haiku}
-      # The ticket agent: picks up Linear tickets labelled `factory:agent`, makes the change with
-      # file tools only and opens a pull request; CI's workflow_run webhook drives up to three
-      # repair attempts. On here so the console can dry-run and hand over tickets, but its
-      # five-minute intake schedule is created PAUSED, so nothing is picked up on its own until
-      # an operator resumes it from the console. Owner work only: a person adds the label, or the
-      # owner's own vulnerability scan does (never anything a visitor triggers), which is what the
-      # Claude subscription's terms allow. Deliberately NOT on
-      # `deployer`: TicketAgentComposeTest fails the build if any FACTORY_TICKET_AGENT_* appears
-      # there. See docs/runbooks/ticket-agent.md.
-      FACTORY_TICKET_AGENT_ENABLED: ${FACTORY_TICKET_AGENT_ENABLED:-true}
-      # Scanning is on by default. It files one consolidated repository report in Linear and,
-      # with auto-repair on, one repair ticket per backend component with a same-major fix,
-      # labelled `factory:agent`. The scan itself never edits dependencies, pushes a branch or
-      # opens a PR: the ticket agent does, and a version-only change merges itself once CI and
-      # the review pass. An owner-scheduled job on the owner's own repository, like the nightly
-      # log scan. See docs/runbooks/cvefix.md ("Repair tickets").
-      FACTORY_CVEFIX_ENABLED: ${FACTORY_CVEFIX_ENABLED:-true}
-      FACTORY_CVEFIX_AUTO_REPAIR_ENABLED: ${FACTORY_CVEFIX_AUTO_REPAIR_ENABLED:-true}
-      # The receiver half of auto-deploy: gates the `workflow_run` webhook branch and the
-      # DeployWorkflowService client stub. It belongs HERE and not only on `deployer`,
-      # because this is the container that terminates the signed webhook. Without this
-      # line the variable reaches no process at all - this service deliberately has no
-      # `env_file`, so setting it in .env alone is silently inert and the whole feature
-      # does nothing with no error anywhere.
-      FACTORY_DEPLOY_TRIGGER_ENABLED: ${FACTORY_DEPLOY_TRIGGER_ENABLED:-false}
-      # Whether a successful deploy schedules a log scan five minutes later. It belongs HERE, next
-      # to the trigger flag above and for the same reason: DeployWorkflowService runs in this
-      # container - it is the one that terminates the signed webhook - and reads this flag to build
-      # the DeployRequest. Setting it on `deployer` instead leaves it at the application.yml
-      # `false` default here, so no scan is ever scheduled however the deployer is configured. The
-      # deployer needs no copy: the workflow reads the value off the request.
-      FACTORY_DEPLOY_LOG_WATCH_TRIGGER_ENABLED: ${FACTORY_DEPLOY_LOG_WATCH_TRIGGER_ENABLED:-false}
-      # Needs VIEW_PORTFOLIO *and* VIEW_VULNERABILITY. The existing `CI Upload` key is not
-      # sufficient. Read by a Java activity, never by the agent: ClaudeCliRunner strips it
-      # from the child process because it sits outside SAFE_SECRET_ENVIRONMENT, which is
-      # correct here. Defaulted rather than required (`:?`) so a missing key cannot break
-      # every `docker compose` command against this file while the feature is disabled.
-      DEPENDENCYTRACK_API_KEY: ${DEPENDENCYTRACK_API_KEY:-}
-      # The container on the shared compose network, not the public hostname — this keeps the
-      # call off the Cloudflare/pinggy path. Deliberately no `depends_on` for it: the workflow
-      # fails cleanly when Dependency-Track is down, and coupling the webhook receiver's
-      # startup to Dependency-Track would be a regression.
-      DEPENDENCYTRACK_BASE_URL: ${DEPENDENCYTRACK_BASE_URL:-http://dependencytrack-apiserver:8080}
-      FACTORY_MONGODB_URI: mongodb://mongodb:27017/software_factory
-      # The issue sink. On by default. Deliberately NOT set on `deployer`, which runs this
-      # same image: that container holds /var/run/docker.sock and must hold as few other
-      # credentials as possible. See docs/runbooks/linear.md.
-      FACTORY_LINEAR_ENABLED: ${FACTORY_LINEAR_ENABLED:-true}
-      FACTORY_LINEAR_TEAM_KEY: ${FACTORY_LINEAR_TEAM_KEY:-}
-      FACTORY_LINEAR_DRY_RUN: ${FACTORY_LINEAR_DRY_RUN:-false}
-      LINEAR_API_KEY: ${LINEAR_API_KEY:-}
-      # Log watch. OFF by default: its signature rules and occurrence thresholds are estimates
-      # until they have been validated against real production log lines, and the first runs are
-      # expected to be loud because WARN is in scope and the stack emits connection-retry
-      # warnings while it boots. Turn it on, dry-run it, read what it *would* file, then let it
-      # file for real.
-      FACTORY_LOGWATCH_ENABLED: ${FACTORY_LOGWATCH_ENABLED:-false}
-      # Close the tickets log watch filed for problems it has stopped seeing, with a comment
-      # saying so. ON by default, unlike everything else here: a factory that only ever opens
-      # tickets leaves a human closing them by hand, which is the manual step this whole module
-      # exists to remove. Set it false to go back to filing only.
-      #
-      # `resolve-after` is seven consecutive nightly scans. Do not shorten it much: a problem on a
-      # weekly cadence would then be closed and re-filed every week, which is the duplicate
-      # ticket disease 046 exists to cure.
-      FACTORY_LOGWATCH_RESOLVE_WHEN_CLEAR: ${FACTORY_LOGWATCH_RESOLVE_WHEN_CLEAR:-true}
-      FACTORY_LOGWATCH_RESOLVE_AFTER: ${FACTORY_LOGWATCH_RESOLVE_AFTER:-7d}
-      # Static analysis: reads SonarCloud's nightly view of main and files new-code findings in
-      # Linear, since pull requests are no longer analysed. ON by default, like the vulnerability
-      # scan: it only reads and files, and needs no credential (the SonarCloud project is public).
-      # Deliberately NOT set on `deployer`; a second poller on another build is how logwatch
-      # wedged. See docs/runbooks/static-analysis.md.
-      FACTORY_STATICANALYSIS_ENABLED: ${FACTORY_STATICANALYSIS_ENABLED:-true}
-      # Deliberately NOT set on `deployer`, which runs this same image: that container holds
-      # /var/run/docker.sock and must hold as few other credentials as possible. Enforced by
-      # DeployerGrafanaCredentialTest, which fails the build if any variable whose name contains
-      # GRAFANA appears under `deployer`. See docs/runbooks/log-shipping.md.
-      #
-      # This is the same read credential Alloy publishes with; the access policy carries both
-      # logs:write and logs:read. Note reads keep working while ingest is refused, so a working
-      # read proves nothing about the pipeline - which is what the source-health check is for.
-      GRAFANA_CLOUD_LOKI_ENDPOINT: ${GRAFANA_CLOUD_LOKI_ENDPOINT:-}
-      GRAFANA_CLOUD_LOKI_USER: ${GRAFANA_CLOUD_LOKI_USER:-}
-      GRAFANA_CLOUD_API_KEY: ${GRAFANA_CLOUD_API_KEY:-}
-    volumes:
-      - ${GITHUB_APP_PRIVATE_KEY_HOST_PATH:?set GITHUB_APP_PRIVATE_KEY_HOST_PATH in .env}:/run/secrets/github-app.pem:ro
-      - software-factory-workspace:/workspace
-    depends_on:
-      temporal:
-        condition: service_healthy
-      temporal-create-namespace:
-        condition: service_completed_successfully
-      mongodb:
-        condition: service_healthy
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "bash",
-          "-c",
-          "exec 3<>/dev/tcp/localhost/8091 && printf 'GET /actuator/health HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && timeout 4 cat <&3 | grep -q '\"status\":\"UP\"'",
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 15s
 
   # The executor half of auto-deploy on merge. Same image as software-factory, run a
   # second time with different module flags - the pattern FACTORY_CVEFIX_ENABLED already
@@ -569,7 +368,11 @@ services:
       # If you ever add `env_file: .env` to this service, this reasoning breaks.
       FACTORY_DEPLOY_SYNC_CONFIG: ${FACTORY_DEPLOY_SYNC_CONFIG:-true}
       FACTORY_DEPLOY_ROLLBACK_ENABLED: ${FACTORY_DEPLOY_ROLLBACK_ENABLED:-true}
-      FACTORY_DEPLOY_SERVICES: ${FACTORY_DEPLOY_SERVICES:-backend,frontend,software-factory,page-reader}
+      # The site's images only. software-factory and page-reader run on the factory host and are
+      # deployed by its own deployer (docker-compose.factory.yml). restart-prod.sh also skips any
+      # listed service this file does not define, so a deployer created before the split, still
+      # naming them, does not fail its recreate on them.
+      FACTORY_DEPLOY_SERVICES: ${FACTORY_DEPLOY_SERVICES:-backend,frontend}
       # An allowlist, not a denylist: a service added to this file next year is held for a
       # human by default rather than silently recreated by the first deploy that touches
       # it. The absentees are absent for concrete reasons - recreating
@@ -599,7 +402,11 @@ services:
       # To settle it properly: recreate pinggy by hand while watching its log for
       # "A tunnel with the same token is already active". If a clean recreate reconnects,
       # add pinggy here and cite that observation.
-      FACTORY_DEPLOY_RECREATABLE: ${FACTORY_DEPLOY_RECREATABLE:-backend,frontend,software-factory,page-reader,nginx,alloy,searxng,temporal-ui,dependencytrack-frontend,trivy-server}
+      # factory-gateway is on the list from the day it was added, for trivy-server's reason above:
+      # it is stateless and holds nothing. (The merge that introduces it is still held back once,
+      # because the allowlist is read from the RUNNING deployer; the cutover runbook recreates
+      # the deployer for exactly that reason.)
+      FACTORY_DEPLOY_RECREATABLE: ${FACTORY_DEPLOY_RECREATABLE:-backend,frontend,nginx,alloy,searxng,temporal-ui,dependencytrack-frontend,trivy-server,factory-gateway}
       # All three are the HOST path, not a container-private one, and the mount below puts
       # the deploy directory at that same path inside this container. See the volume for
       # why anything else cannot work.
@@ -745,6 +552,36 @@ services:
       retries: 10
       start_period: 15s
 
+  # The Pi's way to the software factory, which runs on its own host (the NUC; see
+  # docker-compose.factory.yml and docs/runbooks/factory-host.md). A plain TCP forward to
+  # software-factory's published port, under a name on this network, so nginx (the GitHub
+  # webhook) and the backend (page reads, writing jobs, the admin console, /status) keep
+  # addressing a container rather than an IP.
+  #
+  # Why a container and not the NUC's address in nginx: nginx resolves its upstreams at request
+  # time through Docker's DNS, which answers for containers but not for `extra_hosts`, and the
+  # proxy conf is a bind-mounted file that cannot read .env. The address lives in one place,
+  # FACTORY_HOST in .env, read only here.
+  #
+  # FACTORY_HOST unset resolves to a name that does not exist, so a missing value shows up as a
+  # failing webhook (502) rather than as an uninterpolatable compose file - the `:?` trap that
+  # would take monitor-prod.sh's `up -d` down with it.
+  factory-gateway:
+    image: alpine/socat:1.8.0.3
+    restart: unless-stopped
+    mem_limit: 64m
+    mem_reservation: 16m
+    command:
+      - TCP-LISTEN:8090,fork,reuseaddr
+      - TCP:${FACTORY_HOST:-factory-host-not-configured}:8090
+    healthcheck:
+      # Healthy means the forward can open a connection to the factory host. nc is in the image.
+      test: ["CMD-SHELL", "nc -z -w 3 ${FACTORY_HOST:-factory-host-not-configured} 8090"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
   uploads-init:
     image: busybox
     volumes:
@@ -801,6 +638,10 @@ services:
       BPL_JVM_AOTCACHE_ENABLED: ${BACKEND_AOT_CACHE_ENABLED:-true}
       SPRING_MONGODB_URI: mongodb://mongodb:27017/simonrowe
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      # software-factory runs on its own host now; `factory-gateway` forwards to it. Every
+      # backend call to the factory (page reads, writing jobs, the admin console, /status) uses
+      # this one URL. The deployer stays here, so PLATFORM_DEPLOYER_URL keeps its default.
+      PLATFORM_FACTORY_URL: ${PLATFORM_FACTORY_URL:-http://factory-gateway:8090}
       SPRING_ELASTICSEARCH_URIS: http://elasticsearch:9200
       # term-time.simonrowe.dev must be listed even though its /api and /ws calls are
       # same-origin: WebSocketConfig passes this list to setAllowedOrigins, and Spring rejects
@@ -1622,53 +1463,6 @@ services:
   # apiserver on it would trade a soft failure for a hard startup dependency - on the one
   # container in this file that is NOT in FACTORY_DEPLOY_RECREATABLE (its KEK makes
   # recreation risky), i.e. the worst possible place to add a new boot gate.
-  # Reads article pages that refuse plain scrapers (openai.com's Cloudflare challenge) in
-  # headless Chromium, as a Temporal activity worker on the `page-reader` queue. The workflow is
-  # software-factory's PageReadWorkflow; this only drives the browser. See
-  # docs/runbooks/page-reader.md.
-  page-reader:
-    image: ${PAGE_READER_IMAGE:-ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-page-reader:latest}
-    # `missing`, like the other first-party images: monitor-prod.sh's bare `up -d` must never
-    # pull a newer image while healing something else, or it would undo a rollback.
-    pull_policy: missing
-    restart: unless-stopped
-    depends_on:
-      temporal:
-        condition: service_healthy
-    environment:
-      TEMPORAL_ADDRESS: temporal:7233
-      TEMPORAL_NAMESPACE: default
-      # Chromium writes its profile and crash state under HOME; the root filesystem is
-      # read-only, so HOME is the tmpfs.
-      HOME: /tmp
-    # Its own network, shared with Temporal alone (see `temporal` above). Every connection the
-    # browser makes also goes through an egress proxy inside the container that refuses any
-    # private, loopback or link-local destination at connect time, redirects included.
-    networks:
-      - page-reader
-    # Chromium runs without its own sandbox here (Playwright's default in a container), so the
-    # container is the sandbox: no capabilities, no privilege escalation, a read-only root.
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
-    read_only: true
-    tmpfs:
-      - /tmp:size=512m
-    # One browser at a time, closed after every read. NOT measured on the Pi yet; Chromium's
-    # headless shell needs a few hundred MB per page. Inert until the memory cgroup is enabled
-    # (scripts/enable-memory-cgroup.sh), like every limit in this file.
-    mem_limit: 1g
-    mem_reservation: 128m
-    healthcheck:
-      # The worker's own state, served on loopback. UP means it is polling Temporal; it says
-      # nothing about whether a given site will let it in.
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8090/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-
   trivy-server:
     image: aquasec/trivy:0.74.0
     restart: unless-stopped
@@ -1716,10 +1510,6 @@ services:
       # and the volume above means only the very first boot pays it.
       start_period: 900s
 
-networks:
-  # The page-reader's network: Temporal is the only other member. Not `internal`, because the
-  # browser must reach the internet; what it must not reach is everything else in this file.
-  page-reader:
 
 volumes:
   mongodb-data:
@@ -1778,7 +1568,6 @@ volumes:
   trivy-cache:
   # Where the software factory clones pull-request branches. A named volume rather
   # than a host bind so contributor-authored code never lands on the host filesystem.
-  software-factory-workspace:
   # Scratch space for the deployer's failure-path evidence directory.
   deployer-workspace:
   # The deploy flag file and the recorded rollback image ids. Read-write on `deployer`,

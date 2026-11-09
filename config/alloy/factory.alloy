@@ -1,0 +1,66 @@
+// The factory host's log shipping (docker-compose.factory.yml, `alloy`).
+//
+// The same docker log pipeline as config/alloy/config.alloy on the Pi, and nothing else: no
+// OTLP receiver and no trace export, because nothing on this host emits traces (the backend's go
+// to the Pi's Alloy, and from there to Langfuse, which this host cannot address).
+//
+// Container names carry this host's compose project (`simonrowe-factory-software-factory-1`),
+// so the `container` label differs from the Pi's for the same service. Log watch's ignore rules
+// match `container` by substring (`deployer`, `alloy`), so they still apply. The extra
+// `host="factory"` label tells the two hosts' streams apart when both run a service of the
+// same name (deployer, alloy, mongodb).
+
+discovery.docker "containers" {
+	host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "docker_logs" {
+	targets = []
+
+	rule {
+		source_labels = ["__meta_docker_container_name"]
+		regex         = "/(.*)"
+		target_label  = "container"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_container_image"]
+		target_label  = "image"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+		target_label  = "service"
+	}
+
+	rule {
+		target_label = "host"
+		replacement  = "factory"
+	}
+
+	// Mongo is chatty and its lines are never actionable here, exactly as on the Pi, where the
+	// same drop keeps ~90MB/day out of the Grafana Cloud allowance.
+	rule {
+		source_labels = ["service"]
+		regex         = "mongodb"
+		action        = "drop"
+	}
+}
+
+loki.source.docker "default" {
+	host          = "unix:///var/run/docker.sock"
+	targets       = discovery.docker.containers.targets
+	relabel_rules = discovery.relabel.docker_logs.rules
+	forward_to    = [loki.write.grafana_cloud.receiver]
+}
+
+loki.write "grafana_cloud" {
+	endpoint {
+		url = sys.env("GRAFANA_CLOUD_LOKI_ENDPOINT")
+
+		basic_auth {
+			username = sys.env("GRAFANA_CLOUD_LOKI_USER")
+			password = sys.env("GRAFANA_CLOUD_API_KEY")
+		}
+	}
+}

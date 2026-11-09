@@ -65,7 +65,7 @@ import org.springframework.stereotype.Component;
  * DeployWorkerRegistrationTest} exists to stop that.
  */
 @Component
-@ActivityImpl(taskQueues = DeployTaskQueues.DEPLOY)
+@ActivityImpl(taskQueues = DeployTaskQueues.CONFIGURED)
 @ConditionalOnProperty(name = "factory.deploy.enabled", havingValue = "true")
 public class DeployActivitiesImpl implements DeployActivities {
 

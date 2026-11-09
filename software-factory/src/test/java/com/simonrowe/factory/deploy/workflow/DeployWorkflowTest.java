@@ -59,20 +59,20 @@ class DeployWorkflowTest {
   private static DeployRequest request() {
     return new DeployRequest(
         SHA, DeployRequest.TRIGGER_WEBHOOK, 999L, true, true,
-        List.of("backend", "frontend", "software-factory"), false, false, false);
+        List.of("backend", "frontend", "software-factory"), false, false, false, null);
   }
 
   private static DeployRequest request(final boolean syncConfig, final boolean rollbackEnabled) {
     return new DeployRequest(
         SHA, DeployRequest.TRIGGER_WEBHOOK, 999L, syncConfig, rollbackEnabled,
-        List.of("backend"), false, false, false);
+        List.of("backend"), false, false, false, null);
   }
 
   /** The default request with the post-deploy log scan switched on. */
   private static DeployRequest requestSchedulingLogScan() {
     return new DeployRequest(
         SHA, DeployRequest.TRIGGER_WEBHOOK, 999L, true, true,
-        List.of("backend", "frontend", "software-factory"), false, false, true);
+        List.of("backend", "frontend", "software-factory"), false, false, true, null);
   }
 
   /** The same request with the Linear issue sink switched on. */
@@ -84,7 +84,7 @@ class DeployWorkflowTest {
       final boolean syncConfig, final boolean rollbackEnabled) {
     return new DeployRequest(
         SHA, DeployRequest.TRIGGER_WEBHOOK, 999L, syncConfig, rollbackEnabled,
-        List.of("backend", "frontend", "software-factory"), false, true, false);
+        List.of("backend", "frontend", "software-factory"), false, true, false, null);
   }
 
   // ---------------------------------------------------------------------------

@@ -53,6 +53,18 @@ class FactoryWorkflowWorkersTest {
 
   /** Loads application*.yml the way Boot does, with only the given variables in scope. */
   private static Set<String> workflowPackages(final Map<String, Object> variables) {
+    return new HashSet<>(
+        Binder.get(environmentFor(variables))
+            .bind(WORKFLOW_PACKAGES, Bindable.listOf(String.class))
+            .orElse(List.of()));
+  }
+
+  /** One resolved property, loaded the same way. */
+  private static String property(final Map<String, Object> variables, final String key) {
+    return environmentFor(variables).getProperty(key);
+  }
+
+  private static StandardEnvironment environmentFor(final Map<String, Object> variables) {
     StandardEnvironment environment = new StandardEnvironment();
     // The real process environment is dropped so a FACTORY_RUNTIME_ROLE on the build machine
     // cannot decide the outcome.
@@ -64,10 +76,7 @@ class FactoryWorkflowWorkersTest {
         .remove(StandardEnvironment.SYSTEM_PROPERTIES_PROPERTY_SOURCE_NAME);
     environment.getPropertySources().addFirst(new MapPropertySource("test", variables));
     ConfigDataEnvironmentPostProcessor.applyTo(environment);
-    return new HashSet<>(
-        Binder.get(environment)
-            .bind(WORKFLOW_PACKAGES, Bindable.listOf(String.class))
-            .orElse(List.of()));
+    return environment;
   }
 
   private static Set<String> workflowPackagesFor(final String role) {
@@ -84,13 +93,13 @@ class FactoryWorkflowWorkersTest {
         .collect(Collectors.toSet());
   }
 
-  private static String runtimeRoleIn(final String service) throws IOException {
-    return ComposeFile.serviceBlock(ComposeFile.lines(), service).stream()
+  private static String runtimeRoleIn(final List<String> serviceBlock) {
+    return serviceBlock.stream()
         .map(String::trim)
         .filter(line -> line.startsWith("FACTORY_RUNTIME_ROLE:"))
         .map(line -> line.substring("FACTORY_RUNTIME_ROLE:".length()).trim())
         .findFirst()
-        .orElseThrow(() -> new AssertionError(service + " declares no FACTORY_RUNTIME_ROLE"));
+        .orElseThrow(() -> new AssertionError("a service declares no FACTORY_RUNTIME_ROLE"));
   }
 
   @Test
@@ -129,13 +138,32 @@ class FactoryWorkflowWorkersTest {
   @Test
   @DisplayName("compose sets the roles the profiles are named after, and nothing overrides them")
   void composeRolesActivateTheProfiles() throws IOException {
-    assertThat(runtimeRoleIn("software-factory")).isEqualTo("software-factory");
-    assertThat(runtimeRoleIn("deployer")).isEqualTo("deployer");
-    for (String service : List.of("software-factory", "deployer")) {
-      assertThat(ComposeFile.declaredKeysContaining(
-              ComposeFile.serviceBlock(ComposeFile.lines(), service), "SPRING_PROFILES"))
-          .as("SPRING_PROFILES_ACTIVE on %s would replace the role profile", service)
+    List<String> softwareFactory = ComposeFile.softwareFactory();
+    List<String> siteDeployer = ComposeFile.serviceBlock(ComposeFile.lines(), "deployer");
+    List<String> factoryDeployer = ComposeFile.serviceBlock(ComposeFile.factoryLines(), "deployer");
+
+    assertThat(runtimeRoleIn(softwareFactory)).isEqualTo("software-factory");
+    assertThat(runtimeRoleIn(siteDeployer)).isEqualTo("deployer");
+    assertThat(runtimeRoleIn(factoryDeployer)).isEqualTo("factory-deployer");
+    for (List<String> block : List.of(softwareFactory, siteDeployer, factoryDeployer)) {
+      assertThat(ComposeFile.declaredKeysContaining(block, "SPRING_PROFILES"))
+          .as("SPRING_PROFILES_ACTIVE would replace the role profile")
           .isEmpty();
     }
+  }
+
+  @Test
+  @DisplayName("the factory host's deployer polls the deploy workflow, on its own queue")
+  void factoryDeployerPollsOnlyTheDeployWorkflowOnItsOwnQueue() {
+    Map<String, Object> role = Map.of("FACTORY_RUNTIME_ROLE", "factory-deployer");
+
+    assertThat(workflowPackages(role)).containsExactly("com.simonrowe.factory.deploy.workflow");
+    // The line that keeps this JVM off the Pi's `deploy` queue. Getting it wrong is not a
+    // clean failure: the two deployers would race for each other's deploy steps, each running
+    // them against its own host's Docker.
+    assertThat(property(role, "factory.deploy.task-queue")).isEqualTo("deploy-factory");
+    assertThat(property(Map.of("FACTORY_RUNTIME_ROLE", "deployer"), "factory.deploy.task-queue"))
+        .isEqualTo("deploy");
+    assertThat(property(Map.of(), "factory.deploy.task-queue")).isEqualTo("deploy");
   }
 }

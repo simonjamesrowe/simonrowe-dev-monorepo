@@ -95,6 +95,25 @@ tasks.test {
     inputs.dir(rootProject.file("page-reader/src"))
         .withPropertyName("pageReaderSource")
         .withPathSensitivity(PathSensitivity.RELATIVE)
+    // Both compose files, read by the confinement tests (testsupport/ComposeFile and
+    // DeployerLinearCredentialTest). Undeclared until the factory host split, so moving
+    // software-factory out of docker-compose.prod.yml was served the cached green result: ten
+    // failures appeared only under --rerun. config/nginx is read by FactoryPublicSurfaceTest, and
+    // scripts/classify-change.sh and its fixtures by MergeDispositionTest, for the same reason.
+    inputs.files(
+        rootProject.file("docker-compose.prod.yml"),
+        rootProject.file("docker-compose.factory.yml"))
+        .withPropertyName("composeFiles")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.dir(rootProject.file("config/nginx"))
+        .withPropertyName("nginxConfig")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.files(rootProject.file("scripts/classify-change.sh"))
+        .withPropertyName("classifyChangeScript")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.dir(rootProject.file("scripts/test/fixtures"))
+        .withPropertyName("classifyChangeFixtures")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
 }
 
 // Report only — deliberately NO jacocoTestCoverageVerification and NO tasks.check

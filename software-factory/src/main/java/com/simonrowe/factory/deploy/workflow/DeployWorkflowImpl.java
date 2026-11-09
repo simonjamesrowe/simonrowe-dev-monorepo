@@ -1,6 +1,7 @@
 package com.simonrowe.factory.deploy.workflow;
 
 import com.simonrowe.factory.deploy.config.DeployTaskQueues;
+import com.simonrowe.factory.deploy.domain.DeployHost;
 import com.simonrowe.factory.deploy.domain.DeployKind;
 import com.simonrowe.factory.deploy.domain.DeployPhase;
 import com.simonrowe.factory.deploy.domain.DeployPlan;
@@ -49,7 +50,7 @@ import java.util.Locale;
  * orchestration: it touches no socket, no filesystem and no credential. Only {@code
  * DeployActivitiesImpl}, which exists on the {@code deployer} alone, does any of that.
  */
-@WorkflowImpl(taskQueues = DeployTaskQueues.DEPLOY)
+@WorkflowImpl(taskQueues = DeployTaskQueues.CONFIGURED)
 public class DeployWorkflowImpl implements DeployWorkflow {
 
   /**
@@ -189,7 +190,7 @@ public class DeployWorkflowImpl implements DeployWorkflow {
   private DeployResult deployOnce(
       final DeployRequest request, final String sha, final int attempt) {
     outcomes.clear();
-    plan = DeployPlan.everything(request.services(), "not planned yet");
+    plan = DeployPlan.everything(request.services(), "not planned yet", request.host());
     // Workflow time, never Instant.now(): the latter is non-deterministic and would differ on
     // every replay of this history.
     Instant startedAt = Instant.ofEpochMilli(Workflow.currentTimeMillis());
@@ -292,7 +293,8 @@ public class DeployWorkflowImpl implements DeployWorkflow {
       final DeployRequest request, final String sha, final SyncOutcome sync) {
     int version = Workflow.getVersion(DEPLOY_PLAN_CHANGE, Workflow.DEFAULT_VERSION, 1);
     if (version == Workflow.DEFAULT_VERSION) {
-      return DeployPlan.everything(request.services(), "planned by an older build");
+      return DeployPlan.everything(
+          request.services(), "planned by an older build", request.host());
     }
 
     current = new DeployProgress(DeployPhase.PLAN, "Working out what changed", sha);
@@ -306,7 +308,7 @@ public class DeployWorkflowImpl implements DeployWorkflow {
       // A plan that cannot be made is a full deploy, never a stopped one.
       facts = PlanFacts.unreadable("the plan activity failed: " + exception.getMessage());
     }
-    DeployPlan decided = DeployPlan.decide(facts, request.services());
+    DeployPlan decided = DeployPlan.decide(facts, request.services(), request.host());
     outcomes.add(
         new PhaseOutcome(
             DeployPhase.PLAN,
@@ -534,7 +536,7 @@ public class DeployWorkflowImpl implements DeployWorkflow {
                     // Structured enum values already in scope: no parsing, no agent prose. Two
                     // phrasings of one failure must not become two tickets, which is why the
                     // headline is deliberately absent. Commit excluded too - see the design.
-                    List.of(failedPhase.name().toLowerCase(Locale.ROOT), status.name()),
+                    failureKeyParts(request, failedPhase, status),
                     rendered.title(),
                     rendered.body(),
                     "commit " + sha + ", workflow run " + Workflow.getInfo().getRunId(),
@@ -591,6 +593,24 @@ public class DeployWorkflowImpl implements DeployWorkflow {
             linearFilingFailed);
     fast.recordRun(finalRecord);
     return new DeployResult(status, sha, sync.decision(), linearIssueUrl, detail);
+  }
+
+  /**
+   * The issue sink's key parts for a failed deploy.
+   *
+   * <p>The site's are unchanged from before two hosts existed, so its existing tickets keep
+   * matching. The factory host's carry the host as well: "verify failed" on the factory host and
+   * on the site are two different problems, and must not land on one ticket.
+   */
+  private static List<String> failureKeyParts(
+      final DeployRequest request, final DeployPhase failedPhase, final DeployStatus status) {
+    List<String> parts = new ArrayList<>();
+    parts.add(failedPhase.name().toLowerCase(Locale.ROOT));
+    parts.add(status.name());
+    if (request.host() == DeployHost.FACTORY) {
+      parts.add("factory-host");
+    }
+    return List.copyOf(parts);
   }
 
   private String outputOf(final DeployPhase phase) {
@@ -740,7 +760,9 @@ public class DeployWorkflowImpl implements DeployWorkflow {
       final boolean linearFilingFailed) {
     return new DeployRunRecord(
         recordId,
-        WORKFLOW_ID,
+        // The workflow's own id, not the site's constant: the factory host's deploys are
+        // `deploy-factory` runs of this same class, and their records must say so.
+        Workflow.getInfo().getWorkflowId(),
         sha,
         request.trigger(),
         startedAt,

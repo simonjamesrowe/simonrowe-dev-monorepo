@@ -301,6 +301,14 @@ factory:
     # and same reason, as factory.deploy.enabled against trigger-enabled.
     log-watch-trigger-enabled: ${FACTORY_DEPLOY_LOG_WATCH_TRIGGER_ENABLED:false}
     trigger-enabled: ${FACTORY_DEPLOY_TRIGGER_ENABLED:false}
+    # Whether the trigger also starts `deploy-factory`, the deploy of the factory host
+    # (docker-compose.factory.yml), on the `deploy-factory` queue. Read where the webhook is
+    # received, like trigger-enabled. Off here; docker-compose.factory.yml turns it on, because a
+    # software-factory running from that file always has that host's deployer beside it.
+    factory-host-enabled: ${FACTORY_DEPLOY_FACTORY_HOST_ENABLED:false}
+    # The queue this JVM's deploy workflow and activities poll (DeployTaskQueues.CONFIGURED).
+    # `deploy` everywhere except the factory host's deployer, whose profile sets `deploy-factory`.
+    task-queue: deploy
     # The repository allowlist, and it is a set of exactly one. There is no shared allowlist to
     # reuse: factory.feedback.repos is feedback-only and factory.cvefix pins owner/repository as
     # scalars, which is the pattern followed here.
