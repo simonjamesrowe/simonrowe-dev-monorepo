@@ -55,6 +55,11 @@ export interface NarrationAudioApi extends NarrationAudioState {
   setUpNext: (tracks: NarrationTrack[]) => void
   /** Skip to the next track. */
   next: () => void
+  /**
+   * Record the current playlist item as heard, drop it from the list and play the next one.
+   * Does nothing for a track not from the playlist, or for a signed-out listener.
+   */
+  markListened: () => void
   /** Back to the start of this track, or to the previous one when already near the start. */
   previous: () => void
   /** Jump forward or back by some seconds. */

@@ -7,13 +7,14 @@ import { NarrationAudioStub } from '../../testUtils/NarrationAudioStub'
 import { narrationAudioStub } from '../../testUtils/narrationAudioValue'
 import type { NarrationAudioApi } from '../../../src/components/narration/narrationAudioContext'
 
-function renderButton(value: NarrationAudioApi) {
+function renderButton(value: NarrationAudioApi, offerWhenCold?: boolean) {
   return render(
     <NarrationAudioStub value={value}>
       <ListenButton
         contentId="blog-1"
         contentType="BLOG"
         href="/blogs/blog-1"
+        offerWhenCold={offerWhenCold}
         title="Kafka Without Surprises"
       />
     </NarrationAudioStub>,
@@ -50,6 +51,23 @@ describe('ListenButton', () => {
     })
     expect(button).toHaveTextContent('Listen')
     expect(button).toHaveClass('listen-button--cold')
+  })
+
+  // News cards: Summarise is the one action there, and asks for the audio itself.
+  it('shows nothing with no audio when told not to offer it', () => {
+    const { container } = renderButton(narrationAudioStub(), false)
+
+    expect(container).toBeEmptyDOMElement()
+  })
+
+  it('still shows audio that exists when told not to offer it', () => {
+    renderButton(narrationAudioStub({ ready: readyBlog }), false)
+    expect(screen.getByRole('button')).toHaveTextContent('12 min')
+  })
+
+  it('still shows a generation in flight when told not to offer it', () => {
+    renderButton(narrationAudioStub({ stages: { 'BLOG:blog-1': 'narrating' } }), false)
+    expect(screen.getByRole('button')).toBeDisabled()
   })
 
   it('asks the provider to listen, passing where the bar should link', async () => {

@@ -75,6 +75,7 @@ export function narrationAudioStub(
     playQueue: vi.fn(),
     setUpNext: vi.fn(),
     next: vi.fn(),
+    markListened: vi.fn(),
     previous: vi.fn(),
     skipBy: vi.fn(),
     setJourney: vi.fn(),

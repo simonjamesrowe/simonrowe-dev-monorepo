@@ -751,6 +751,38 @@ export function NarrationAudioProvider({ children }: NarrationAudioProviderProps
 
   handlersRef.current = { finished, saveProgress }
 
+  /**
+   * "I've heard enough": records the current playlist item as heard, takes it off the list at
+   * once, and moves on to the next one. Stops when there is nothing after it. Signed in only,
+   * like every other change to the shared playlist.
+   */
+  const markListened = useCallback(() => {
+    const current = trackRef.current
+    if (!current?.fromPlaylist || !authRef.current.isAuthenticated) return
+    trackEvent('Playlist Marked Listened', {
+      contentType: ANALYTICS_CONTENT_TYPE[current.contentType],
+    })
+    updatePlaylist((data) => ({
+      ...data,
+      items: data.items.map((item) => (item.contentType === current.contentType
+        && item.contentId === current.contentId
+        ? {
+          ...item,
+          status: 'LISTENED' as const,
+          progressSeconds: 0,
+          pinnedAt: undefined,
+          listenedAt: new Date().toISOString(),
+        }
+        : item)),
+    }))
+    void markPlaylistListened(authRef.current.getAccessToken, current)
+      .catch(() => {
+        // The optimistic change is put right by the reload below: it reappears in the queue.
+      })
+      .finally(() => { void loadPlaylist(true) })
+    if (!advance()) dismiss()
+  }, [advance, dismiss])
+
   const playQueue = useCallback((tracks: NarrationTrack[], startIndex: number) => {
     const start = tracks[startIndex]
     if (!start?.audioUrl) return
@@ -920,13 +952,14 @@ export function NarrationAudioProvider({ children }: NarrationAudioProviderProps
     playQueue,
     setUpNext,
     next,
+    markListened,
     previous,
     skipBy,
     setJourney,
     dismissNotice,
   }), [
     changeRate, currentTime, delayed, dismiss, dismissNotice, duration, error, journeyEndsAt, lastCompleted,
-    listen, next, notice, playQueue, playing, position, previous, rate, readyFor, recheck, retry,
+    listen, markListened, next, notice, playQueue, playing, position, previous, rate, readyFor, recheck, retry,
     seek, setJourney, setUpNext, skipBy, stage, stageFor, togglePlay, track, upNext,
   ])
 

@@ -19,6 +19,7 @@ vi.mock('../../src/services/playlistApi', () => ({
   requestPlaylistAudio: vi.fn().mockResolvedValue([]),
   updatePlaylistSettings: vi.fn().mockResolvedValue(true),
   clearListened: vi.fn().mockResolvedValue(undefined),
+  markPlaylistListened: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock('../../src/services/favouritesApi', () => ({
@@ -42,6 +43,7 @@ vi.mock('../../src/hooks/useEnsureAuthenticated', () => ({
 import { addFavourite } from '../../src/services/favouritesApi'
 import {
   fetchPlaylist,
+  markPlaylistListened,
   playNextInPlaylist,
   requestPlaylistAudio,
 } from '../../src/services/playlistApi'
@@ -90,6 +92,7 @@ describe('PlaylistPage', () => {
     auth.isAuthenticated = true
     vi.mocked(addFavourite).mockClear()
     vi.mocked(playNextInPlaylist).mockClear()
+    vi.mocked(markPlaylistListened).mockClear()
     vi.mocked(requestPlaylistAudio).mockClear()
   })
 
@@ -153,6 +156,34 @@ describe('PlaylistPage', () => {
     const rows = within(screen.getByRole('region', { name: /Up next/ })).getAllByRole('listitem')
     expect(rows[0]).toHaveTextContent('Title a-2')
     expect(rows[0]).toHaveTextContent('Plays next')
+  })
+
+  it('takes a row off the queue with "Mark as listened"', async () => {
+    renderPage([READY_ONE, READY_TWO])
+
+    await userEvent.click(await screen.findByRole('button', { name: 'More for Title a-2' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Mark as listened' }))
+
+    expect(markPlaylistListened).toHaveBeenCalledWith(
+      getAccessToken, expect.objectContaining({ contentId: 'a-2' }))
+    const rows = within(screen.getByRole('region', { name: /Up next/ })).getAllByRole('listitem')
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toHaveTextContent('Title a-1')
+  })
+
+  it('marks the row playing through the player, so it moves on to the next', async () => {
+    const audio = narrationAudioStub({
+      track: { ...READY_ONE, audioUrl: READY_ONE.audio.audioUrl, fromPlaylist: true },
+      playing: true,
+    })
+    renderPage([READY_ONE, READY_TWO], audio)
+
+    await userEvent.click(await screen.findByRole('button', { name: 'More for Title a-1' }))
+    const menu = document.querySelector<HTMLElement>('.row-menu__list')!
+    await userEvent.click(within(menu).getByRole('button', { name: 'Mark as listened' }))
+
+    expect(audio.markListened).toHaveBeenCalledOnce()
+    expect(markPlaylistListened).not.toHaveBeenCalled()
   })
 
   it('has the player go to a pinned item next, then on down the list', async () => {

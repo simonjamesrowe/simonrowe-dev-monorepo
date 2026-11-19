@@ -68,8 +68,8 @@ public class ArticleSummaryController {
    * {@code 200} carrying {@code FAILED}: the request itself succeeded, and the client needs
    * the {@code retryable} flag to decide whether offering a retry is honest.
    *
-   * <p>The article joins the playlist first, so that if automatic audio is on, the audio
-   * is made the moment this summary is written.
+   * <p>The article joins the playlist first, asking for its audio, so the audio is made the
+   * moment this summary is written. Summarising and listening are one action on the site.
    *
    * @param articleId the aggregated article id
    * @return the summary, or the in-progress state

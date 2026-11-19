@@ -30,6 +30,7 @@ export const EVENTS = {
   'Listen Pressed': { contentType: ['blog', 'article'], ready: 'flag' },
   'Playlist Played': { queueLength: 'count' },
   'Narration Completed': { contentType: ['blog', 'article'], fromPlaylist: 'flag' },
+  'Playlist Marked Listened': { contentType: ['blog', 'article'] },
   'Tour Started': { stepCount: 'count' },
   'Tour Step Viewed': { step: 'count' },
   'Tour Completed': {},

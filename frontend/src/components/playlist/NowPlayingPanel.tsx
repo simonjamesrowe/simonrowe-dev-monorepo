@@ -1,5 +1,6 @@
 import {
   BookOpenText,
+  CheckCheck,
   ChevronDown,
   ExternalLink,
   Headphones,
@@ -57,7 +58,7 @@ interface NowPlayingPanelProps {
 export function NowPlayingPanel({ variant, onClose, headingRef }: NowPlayingPanelProps) {
   const {
     track, playing, position, duration, rate, upNext, journeyEndsAt,
-    togglePlay, seek, setRate, next, previous, skipBy, setJourney, playQueue,
+    togglePlay, seek, setRate, next, previous, skipBy, setJourney, playQueue, markListened,
   } = useNarrationAudio()
   const { isAuthenticated } = useAuth()
   const isAdmin = useAdminRole()
@@ -243,6 +244,18 @@ export function NowPlayingPanel({ variant, onClose, headingRef }: NowPlayingPane
           >
             {rate}×
           </button>
+          {track.fromPlaylist && isAuthenticated && (
+            <button
+              aria-label={upNext.length > 0
+                ? 'Mark as listened and play the next one'
+                : 'Mark as listened'}
+              className="now-playing__option"
+              onClick={markListened}
+              type="button"
+            >
+              <CheckCheck aria-hidden="true" size={14} /> Mark as listened
+            </button>
+          )}
           {variant === 'sheet' && text && (
             <button
               aria-pressed={reading}

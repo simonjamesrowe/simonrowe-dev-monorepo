@@ -1,5 +1,5 @@
 import {
-  ChevronUp, Headphones, Heart, Loader2, Pause, Play, SkipBack, SkipForward, X,
+  CheckCheck, ChevronUp, Headphones, Heart, Loader2, Pause, Play, SkipBack, SkipForward, X,
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
@@ -48,7 +48,7 @@ const STAGE_LABELS: Record<ChainStage, string> = {
 export function NarrationPlayerBar() {
   const {
     track, stage, playing, position, duration, rate, error, delayed, upNext, notice,
-    togglePlay, seek, setRate, dismiss, retry, recheck, next, previous, dismissNotice,
+    togglePlay, seek, setRate, dismiss, retry, recheck, next, previous, dismissNotice, markListened,
   } = useNarrationAudio()
   const compact = useMediaQuery('(max-width: 640px)')
   const location = useLocation()
@@ -155,6 +155,19 @@ export function NarrationPlayerBar() {
             {upNextCount > 0 && (
               <button aria-label="Next" className="narration-bar__step" onClick={next} type="button">
                 <SkipForward aria-hidden="true" fill="currentColor" size={16} />
+              </button>
+            )}
+            {track?.fromPlaylist && isAuthenticated && (
+              <button
+                aria-label={upNextCount > 0
+                  ? 'Mark as listened and play the next one'
+                  : 'Mark as listened'}
+                className="narration-bar__step"
+                onClick={markListened}
+                title="Mark as listened"
+                type="button"
+              >
+                <CheckCheck aria-hidden="true" size={16} />
               </button>
             )}
             <input

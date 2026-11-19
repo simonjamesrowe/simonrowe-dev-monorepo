@@ -7,6 +7,7 @@ import { addFavourite, removeFavourite } from '../services/favouritesApi'
 import {
   addToPlaylist,
   clearListened,
+  markPlaylistListened,
   playNextInPlaylist,
   removeFromPlaylist,
   requestPlaylistAudio,
@@ -22,6 +23,8 @@ export interface PlaylistActions {
   remove: (entry: PlaylistItemKey) => Promise<void>
   /** Puts an item ahead of the date order. */
   playNext: (entry: PlaylistEntry) => Promise<void>
+  /** Records a queued item as heard without playing it, so it drops off the queue. */
+  markListened: (entry: PlaylistItemKey) => Promise<void>
   requestAudio: (entries: PlaylistItemKey[]) => Promise<PlaylistAudioResult[]>
   setAutoVoice: (autoVoice: boolean) => Promise<void>
   /** Queues something already heard again, from the start, at the end of the list. */
@@ -95,6 +98,24 @@ export function usePlaylistActions(): PlaylistActions {
     )
   }, [getAccessToken, run])
 
+  const markListened = useCallback(async (entry: PlaylistItemKey) => {
+    await run(
+      () => markPlaylistListened(getAccessToken, entry),
+      () => updatePlaylist((data) => ({
+        ...data,
+        items: data.items.map((item) => (sameItem(item, entry)
+          ? {
+            ...item,
+            status: 'LISTENED' as const,
+            progressSeconds: 0,
+            pinnedAt: undefined,
+            listenedAt: new Date().toISOString(),
+          }
+          : item)),
+      })),
+    )
+  }, [getAccessToken, run])
+
   const requestAudio = useCallback(async (entries: PlaylistItemKey[]) => {
     const results = await run(() => requestPlaylistAudio(getAccessToken, entries))
     if (results) await loadPlaylist(true)
@@ -132,6 +153,7 @@ export function usePlaylistActions(): PlaylistActions {
     toggleFavourite,
     remove,
     playNext,
+    markListened,
     requestAudio,
     setAutoVoice,
     playAgain,

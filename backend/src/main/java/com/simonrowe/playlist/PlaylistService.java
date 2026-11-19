@@ -87,6 +87,9 @@ public class PlaylistService implements PlaylistRecorder {
       if (!contentExists(contentType, contentId)) {
         return;
       }
+      if (source.asksForAudio()) {
+        requestVoiceWhenQueued(contentType, contentId);
+      }
       if (insertIfAbsent(contentType, contentId, source)) {
         LOG.info("Added to playlist: {} {} via {}", contentType, LogSafe.value(contentId), source);
         voiceIfAutomatic(contentType, contentId);
@@ -352,6 +355,22 @@ public class PlaylistService implements PlaylistRecorder {
   }
 
   /**
+   * Marks an item already queued as wanting its audio. Something already heard is left alone:
+   * summarising it again is not asking to hear it again.
+   */
+  private void requestVoiceWhenQueued(
+      final PlaylistContentType contentType,
+      final String contentId
+  ) {
+    Query queued = Query.query(Criteria.where(ID).is(PlaylistItem.idFor(contentType, contentId))
+        .and(STATUS).is(PlaylistItemStatus.QUEUED));
+    mongoTemplate.updateFirst(queued, new Update()
+            .set(VOICE_REQUESTED, true)
+            .set(UPDATED_AT, Instant.now()),
+        PlaylistItem.class);
+  }
+
+  /**
    * Inserts a queued item unless one exists, in a single upsert keyed on {@code _id}.
    *
    * @return whether this call created it
@@ -368,7 +387,7 @@ public class PlaylistService implements PlaylistRecorder {
         .setOnInsert(STATUS, PlaylistItemStatus.QUEUED)
         .setOnInsert(PROGRESS, 0.0)
         .setOnInsert("addedVia", source)
-        .setOnInsert(VOICE_REQUESTED, false)
+        .setOnInsert(VOICE_REQUESTED, source.asksForAudio())
         .setOnInsert("addedAt", now)
         .setOnInsert(UPDATED_AT, now);
     try {
