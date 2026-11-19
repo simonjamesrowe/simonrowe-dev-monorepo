@@ -30,12 +30,13 @@ from a service that has already verified an HMAC signature.
 
 ## The phases
 
-`sync-config` → `maintenance-on` → `pull` → `recreate` → `verify` →
+`sync-config` → `plan` → `maintenance-on` → `pull` → `recreate` → `verify` →
 `maintenance-off` → `verify-public`
 
 | Phase | Does |
 | --- | --- |
 | `sync-config` | Fast-forwards the deploy directory to the deployed commit, if that is provably safe |
+| `plan` | Works out what the deploy would change, before anything changes, and so which kind of deploy it is ([below](#what-kind-of-deploy-it-is)) |
 | `maintenance-on` / `maintenance-off` | Creates/removes `/var/run/deploy-state/maintenance.on` |
 | `pull` | Records the current image ID of each target service, then pulls the head SHA and re-tags it to `:latest`. An image the merge did not change was published under the head SHA as an exact copy of the previous one ([build-and-startup.md](build-and-startup.md)), so its ID is unchanged and `recreate` leaves that container running |
 | `recreate` | `up -d --no-deps --pull never` each target, `restart nginx`, then a full `up -d` reconcile |
@@ -51,6 +52,47 @@ Two things about this list are load-bearing and easy to "tidy" into bugs:
 - **Bare `./scripts/restart-prod.sh` never runs `sync-config`.** A human typing
   the script after their own `git pull` must not have it decide to move `HEAD`
   for them. It is opt-in, and only the deployer opts in.
+
+### What kind of deploy it is
+
+`plan` pulls the commit's images by tag (it never re-tags `:latest`, so the watchdog
+cannot deploy early) and reports three facts:
+
+- **Images.** Which services' image for the commit differs from the image their
+  container runs. Publish re-tags an untouched image with the same digest, so a
+  service the merge did not change compares equal.
+- **Service configuration.** Which services' `docker compose config --hash` differs
+  from the `com.docker.compose.config-hash` label on their container. That label is
+  exactly what compose compares when `up -d` decides whether to recreate. A service
+  with no container counts as changed.
+- **Bind-mounted files.** Which files under `config/` changed since the commit
+  `sync-config` moved from. They are in no hash, and nginx's routes and maintenance
+  pages are among them.
+
+`DeployPlan` turns those into one of three kinds:
+
+| Kind | When | What runs |
+| --- | --- | --- |
+| `NOTHING` | Nothing differs: a docs-only merge | Nothing. Recorded as `SKIPPED`, or `DEPLOYED_IMAGES_ONLY` when `sync-config` held a change back, so the held-back notice still reaches the commit |
+| `FACTORY` | Only `software-factory` and/or `page-reader` changed | `pull`, `recreate`, `verify` and `verify-public` scoped to those two, with **no maintenance page and no nginx restart**, including on rollback. A failed rollback does not raise the page either: the site was never touched |
+| `SITE` | Anything else, or the plan could not tell | The full flow, page and nginx restart included, exactly as before `plan` existed |
+
+Every doubt resolves to `SITE`. A wrong `SITE` costs a maintenance page nobody
+needed. A wrong `FACTORY` recreates something visitors use with the site
+exposed. A wrong `NOTHING` reports a commit as deployed while the previous one
+runs. So a failed read (`config-read=failed`, a failed `config/` diff, a non-zero
+exit or a missing key) is "could not tell", never "nothing changed". The run
+record's `plan` entry says which kind was chosen and why.
+
+`FACTORY_SERVICES` is a constant in `DeployPlan`. A service nobody has classified
+counts as the site. This is the step that lets the software factory move to its
+own host later: the kind already says which host a deploy touches.
+
+A deploy started by a deployer older than this replays without `plan`. It is
+gated by `Workflow.getVersion("deploy-plan")`, and `DeployWorkflowReplayTest`
+replays two histories recorded on the previous build. Like any deployer change,
+it only takes effect once the deployer is recreated by hand
+([below](#keeping-the-deployer-current)).
 
 ### The maintenance page brings people back on its own
 
@@ -131,13 +173,63 @@ service.
 The first two are separate on purpose: a broken deployer must be silenceable
 without also silencing code review.
 
+## Two hosts, two deploys
+
+The software factory runs on its own host (an Intel NUC; see
+[factory-host.md](factory-host.md)). Each host has its own checkout, compose file, deployer and
+deploy queue, and a merge deploys both, independently:
+
+| | Site | Factory host |
+| --- | --- | --- |
+| Compose file | `docker-compose.prod.yml` | `docker-compose.factory.yml` |
+| Workflow id | `deploy-prod` | `deploy-factory` |
+| Task queue | `deploy` | `deploy-factory` |
+| Deployer role | `deployer` | `factory-deployer` |
+| Services deployed | `backend`, `frontend` | `software-factory`, `page-reader` |
+| Maintenance page | when anything a visitor reaches changes | never (there is none) |
+| Verified by | settle loop + ops hostnames, then `www`/`api` | settle loop only (`VERIFY_*_HOSTS` empty) |
+
+- **One trigger, two workflows.** `software-factory` receives the Publish webhook and
+  signal-with-starts `deploy-prod`, then, with `FACTORY_DEPLOY_FACTORY_HOST_ENABLED` (on in the
+  factory host's compose file), `deploy-factory`. The second never blocks the first: a factory
+  host that cannot be reached is logged, and the site still deploys.
+- **Each plans its own host** ([What kind of deploy it is](#what-kind-of-deploy-it-is)), so a
+  merge that changes only the factory runs `deploy-prod` to `SKIPPED` and recreates the
+  factory's containers with the site untouched. On the factory host, every change and every
+  doubt is a `FACTORY` deploy: there is no page to raise and no nginx to restart.
+- **Same code, different queue.** Both deployers run the same image, and the queue comes from
+  `factory.deploy.task-queue`, which `@WorkflowImpl` and `@ActivityImpl` resolve as a placeholder
+  (`DeployTaskQueues.CONFIGURED`). The `factory-deployer` profile sets `deploy-factory`. That
+  property is the line that keeps each deployer's Docker socket on its own host's deploy steps,
+  and `FactoryWorkflowWorkersTest` pins it.
+- **`restart-prod.sh` acts only on services its compose file defines** (`host_services`). A
+  deployer whose `FACTORY_DEPLOY_SERVICES` still names a service that moved hosts skips it, out
+  loud, rather than failing `recreate` on it. `sync-config` reads the target commit's copy of
+  its own compose file (`COMPOSE_REL`), not always the Pi's.
+- **Failures file separately.** A factory host failure's Linear key parts carry `factory-host`,
+  so it never lands on a site deploy's ticket. The site's key parts are unchanged.
+- **Run records** carry their workflow id, so `deploy_runs` tells the two apart. Each host's
+  deployer writes to its own Mongo.
+
 ## Keeping the deployer current
 
 **The deployer never recreates itself, and therefore does not self-update.**
 
+There are two deployers now, one per host ([below](#two-hosts-two-deploys)), and each needs this
+by hand:
+
 ```bash
+# On the Pi. `pull` first: the Pi's deploys no longer pull the software-factory image (it is
+# not a site service any more), so `:latest` there only moves when pulled by hand, and
+# `pull_policy: missing` means `up -d` alone recreates on the image already present.
 cd ~/workspace/simonjamesrowe/simonrowe-dev-monorepo
+docker compose -f docker-compose.prod.yml pull deployer
 docker compose -f docker-compose.prod.yml up -d --no-deps deployer
+
+# On the factory host. Its own deploys pull and re-tag software-factory:latest, which this
+# deployer shares, so `up -d` picks the new image up without a pull.
+cd /srv/simonrowe-dev-monorepo
+docker compose -f docker-compose.factory.yml up -d --no-deps deployer
 ```
 
 Recreating the container that is mid-orchestration is how the backend's old

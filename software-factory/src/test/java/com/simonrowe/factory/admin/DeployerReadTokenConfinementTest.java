@@ -28,7 +28,7 @@ class DeployerReadTokenConfinementTest {
 
   @Test
   void deployerDeclaresNoTriggerToken() throws IOException {
-    List<String> deployerBlock = ComposeFile.serviceBlock(ComposeFile.lines(), DEPLOYER_SERVICE);
+    List<String> deployerBlock = ComposeFile.everyDeployer();
 
     assertThat(ComposeFile.declaredKeysContaining(deployerBlock, FORBIDDEN_FRAGMENT))
         .as("""
@@ -40,8 +40,14 @@ class DeployerReadTokenConfinementTest {
   @Test
   void deployerDeclaresTheReadToken() throws IOException {
     // Without this, the deploy/platformbackup detail panel silently degrades to an empty list
-    // that looks identical to a genuinely quiet module.
-    List<String> deployerBlock = ComposeFile.serviceBlock(ComposeFile.lines(), DEPLOYER_SERVICE);
+    // that looks identical to a genuinely quiet module. Both deployers: each answers for its own
+    // host's deploy runs.
+    for (var deployer : ComposeFile.deployerBlocks().entrySet()) {
+      assertThat(ComposeFile.declaredKeysContaining(deployer.getValue(), "FACTORY_READ_TOKEN"))
+          .withFailMessage("the deployer in %s declares no FACTORY_READ_TOKEN", deployer.getKey())
+          .isNotEmpty();
+    }
+    List<String> deployerBlock = ComposeFile.everyDeployer();
 
     assertThat(ComposeFile.declaredKeysContaining(deployerBlock, "FACTORY_READ_TOKEN"))
         .as("""
@@ -52,7 +58,7 @@ class DeployerReadTokenConfinementTest {
 
   @Test
   void softwareFactoryDeclaresBothTokens() throws IOException {
-    List<String> factoryBlock = ComposeFile.serviceBlock(ComposeFile.lines(), FACTORY_SERVICE);
+    List<String> factoryBlock = ComposeFile.softwareFactory();
 
     assertThat(ComposeFile.declaredKeysContaining(factoryBlock, "FACTORY_TRIGGER_TOKEN"))
         .isNotEmpty();
@@ -66,14 +72,17 @@ class DeployerReadTokenConfinementTest {
     // from the prod .env fails interpolation for the WHOLE compose file, which wedges sync-config
     // AND takes down monitor-prod.sh's minutely `up -d` - the self-healing watchdog. Assert both
     // the deployer's and software-factory's lines use `:-`, and that neither ever uses `:?`.
-    List<String> occurrences = ComposeFile.lines().stream()
+    List<String> occurrences = java.util.stream.Stream.concat(
+            ComposeFile.lines().stream(), ComposeFile.factoryLines().stream())
         .filter(line -> line.contains("FACTORY_READ_TOKEN:"))
         .filter(line -> !line.trim().startsWith("#"))
         .toList();
 
     assertThat(occurrences)
-        .as("expected exactly two FACTORY_READ_TOKEN assignment lines (deployer, software-factory)")
-        .hasSize(2);
+        .as("""
+            expected exactly three FACTORY_READ_TOKEN assignment lines: the Pi's deployer, and \
+            software-factory and the deployer on the factory host""")
+        .hasSize(3);
     assertThat(occurrences)
         .as("""
             every FACTORY_READ_TOKEN assignment must use the optional ${FACTORY_READ_TOKEN:-} \

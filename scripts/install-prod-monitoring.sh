@@ -7,7 +7,11 @@ MONITOR_SCRIPT="$PROJECT_DIR/scripts/monitor-prod.sh"
 LOG_DIR="/var/log/prod-health"
 LOG_FILE="$LOG_DIR/monitor.log"
 LOGROTATE_FILE="/etc/logrotate.d/prod-health"
-CRON_LINE="* * * * * $MONITOR_SCRIPT >> $LOG_FILE 2>&1"
+# Environment for the cron job, as `NAME=value` words. Empty on the Pi, so its cron
+# line is exactly what it always was. The factory host (scripts/install-factory-host.sh)
+# sets MONITOR_ROLE=factory and its compose file and project here.
+MONITOR_ENV="${MONITOR_ENV:-}"
+CRON_LINE="* * * * * ${MONITOR_ENV:+$MONITOR_ENV }$MONITOR_SCRIPT >> $LOG_FILE 2>&1"
 
 if [[ ! -x "$MONITOR_SCRIPT" ]]; then
   echo "ERROR: Monitor script is missing or not executable: $MONITOR_SCRIPT"
@@ -47,6 +51,7 @@ echo "Installed monitoring job:"
 crontab -l | grep -F "$MONITOR_SCRIPT"
 
 echo "Running a verification check..."
-"$MONITOR_SCRIPT"
+# shellcheck disable=SC2086
+env $MONITOR_ENV "$MONITOR_SCRIPT"
 
 echo "Production monitoring installed."

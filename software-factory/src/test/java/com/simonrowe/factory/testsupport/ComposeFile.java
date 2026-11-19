@@ -4,7 +4,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -28,6 +30,13 @@ public final class ComposeFile {
    */
   public static final Path PATH = Path.of("..", "docker-compose.prod.yml");
 
+  /**
+   * The factory host's compose file. {@code software-factory} and {@code page-reader} live here,
+   * and so does a second {@code deployer}, which holds that host's Docker socket and so carries
+   * every confinement rule the Pi's does.
+   */
+  public static final Path FACTORY_PATH = Path.of("..", "docker-compose.factory.yml");
+
   /** A top-level compose mapping key at two-space indent, e.g. {@code "  deployer:"}. */
   private static final Pattern SERVICE_HEADER = Pattern.compile("^ {2}([a-zA-Z0-9_-]+):\\s*$");
 
@@ -44,14 +53,66 @@ public final class ComposeFile {
    * @throws IOException if the file cannot be read
    */
   public static List<String> lines() throws IOException {
-    if (!Files.exists(PATH)) {
+    return readLines(PATH);
+  }
+
+  /**
+   * Reads the factory host's compose file.
+   *
+   * @return every line, in order
+   * @throws IOException if the file cannot be read
+   */
+  public static List<String> factoryLines() throws IOException {
+    return readLines(FACTORY_PATH);
+  }
+
+  /**
+   * Both deployers' service blocks, keyed by compose file name: the Pi's and the factory host's.
+   *
+   * <p>Every rule that keeps a credential or a flag off a container holding a Docker socket must
+   * hold for both, so confinement tests assert over this rather than over one file.
+   *
+   * @return the two blocks, the Pi's first
+   * @throws IOException if either file cannot be read
+   */
+  public static Map<String, List<String>> deployerBlocks() throws IOException {
+    Map<String, List<String>> blocks = new LinkedHashMap<>();
+    blocks.put(PATH.getFileName().toString(), serviceBlock(lines(), "deployer"));
+    blocks.put(FACTORY_PATH.getFileName().toString(), serviceBlock(factoryLines(), "deployer"));
+    return blocks;
+  }
+
+  /**
+   * Both deployers' lines, concatenated, for assertions that something appears in neither.
+   *
+   * @return the Pi's deployer block followed by the factory host's
+   * @throws IOException if either file cannot be read
+   */
+  public static List<String> everyDeployer() throws IOException {
+    List<String> lines = new ArrayList<>();
+    deployerBlocks().values().forEach(lines::addAll);
+    return lines;
+  }
+
+  /**
+   * The {@code software-factory} service block, from the factory host's file.
+   *
+   * @return its lines
+   * @throws IOException if the file cannot be read
+   */
+  public static List<String> softwareFactory() throws IOException {
+    return serviceBlock(factoryLines(), "software-factory");
+  }
+
+  private static List<String> readLines(final Path path) throws IOException {
+    if (!Files.exists(path)) {
       throw new AssertionError(
           """
           Could not find %s - this test assumes the Gradle test \
           working directory is the module directory, one level below the repo \
-          root.""".formatted(PATH.toAbsolutePath()));
+          root.""".formatted(path.toAbsolutePath()));
     }
-    return Files.readAllLines(PATH);
+    return Files.readAllLines(path);
   }
 
   /**
@@ -84,9 +145,10 @@ public final class ComposeFile {
     if (!found) {
       throw new AssertionError(
           """
-          Could not find a '%s:' service block in %s - has it been renamed or removed? \
-          This test must not pass by reading nothing."""
-              .formatted(serviceName, PATH.toAbsolutePath()));
+          Could not find a '%s:' service block in the compose file - has it been renamed, \
+          removed or moved to the other host's file? This test must not pass by reading \
+          nothing."""
+              .formatted(serviceName));
     }
     return block;
   }

@@ -21,8 +21,14 @@ import io.temporal.workflow.WorkflowMethod;
 @WorkflowInterface
 public interface DeployWorkflow {
 
-  /** The fixed workflow id. One deploy at a time, on a single-node host. */
+  /** The site's fixed workflow id. One deploy at a time, on a single-node host. */
   String WORKFLOW_ID = "deploy-prod";
+
+  /**
+   * The factory host's fixed workflow id: the same workflow, on {@code deploy-factory}, for the
+   * same reasons (idempotent deliveries, one deploy of the newest commit at a time on that host).
+   */
+  String FACTORY_WORKFLOW_ID = "deploy-factory";
 
   /**
    * Runs the deploy.

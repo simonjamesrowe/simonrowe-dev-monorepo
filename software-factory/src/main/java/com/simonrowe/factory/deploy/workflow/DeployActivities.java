@@ -2,6 +2,8 @@ package com.simonrowe.factory.deploy.workflow;
 
 import com.simonrowe.factory.deploy.domain.DeployPhase;
 import com.simonrowe.factory.deploy.domain.PhaseOutcome;
+import com.simonrowe.factory.deploy.domain.PhaseScope;
+import com.simonrowe.factory.deploy.domain.PlanFacts;
 import com.simonrowe.factory.deploy.domain.SyncOutcome;
 import com.simonrowe.factory.deploy.persistence.DeployRunRecord;
 import io.temporal.activity.ActivityInterface;
@@ -33,6 +35,38 @@ public interface DeployActivities {
    */
   @ActivityMethod
   PhaseOutcome runPhase(DeployPhase phase, String imageTag, boolean dryRun);
+
+  /**
+   * Runs one phase of {@code scripts/restart-prod.sh}, narrowed to part of the stack.
+   *
+   * <p>A separate method rather than a fourth argument on {@link #runPhase}, so a deploy planned
+   * as {@link com.simonrowe.factory.deploy.domain.DeployKind#SITE} schedules exactly the calls it
+   * always did.
+   *
+   * @param phase the phase to run
+   * @param imageTag the tag {@code pull} should fetch, or null for the script's default
+   * @param dryRun whether to run the script with {@code DRY_RUN=1}
+   * @param scope the services to act on and whether nginx is restarted
+   * @return what the phase did, including its exit code
+   */
+  @ActivityMethod
+  PhaseOutcome runScopedPhase(
+      DeployPhase phase, String imageTag, boolean dryRun, PhaseScope scope);
+
+  /**
+   * Finds out what deploying {@code imageTag} would change on the host, before anything changes.
+   *
+   * <p>Never throws for "could not tell": that comes back as unreadable facts, and the workflow
+   * deploys everything, as it did before planning existed.
+   *
+   * @param previousSha the commit the deploy directory was at before {@code sync-config} moved it,
+   *     or null when it did not move; bind-mounted files are compared against it
+   * @param imageTag the commit's image tag
+   * @param dryRun whether to run the script with {@code DRY_RUN=1}
+   * @return what differs
+   */
+  @ActivityMethod
+  PlanFacts plan(String previousSha, String imageTag, boolean dryRun);
 
   /**
    * Fast-forwards the deploy directory to {@code targetSha}, if that is provably safe.

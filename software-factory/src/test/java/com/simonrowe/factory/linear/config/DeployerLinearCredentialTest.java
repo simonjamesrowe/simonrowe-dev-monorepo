@@ -42,6 +42,9 @@ class DeployerLinearCredentialTest {
    */
   private static final Path COMPOSE_FILE = Path.of("..", "docker-compose.prod.yml");
 
+  /** The factory host's file, whose deployer holds that host's Docker socket. */
+  private static final Path FACTORY_COMPOSE_FILE = Path.of("..", "docker-compose.factory.yml");
+
   /** A top-level compose mapping key at two-space indent, e.g. {@code "  deployer:"}. */
   private static final Pattern SERVICE_HEADER = Pattern.compile("^ {2}([a-zA-Z0-9_-]+):\\s*$");
 
@@ -59,7 +62,10 @@ class DeployerLinearCredentialTest {
 
   @Test
   void deployerServiceDeclaresNoLinearVariable() throws IOException {
-    List<String> deployerBlock = extractServiceBlock(readComposeLines(), DEPLOYER_SERVICE);
+    List<String> deployerBlock =
+        new ArrayList<>(extractServiceBlock(readComposeLines(COMPOSE_FILE), DEPLOYER_SERVICE));
+    deployerBlock.addAll(
+        extractServiceBlock(readComposeLines(FACTORY_COMPOSE_FILE), DEPLOYER_SERVICE));
 
     List<String> offendingKeys = new ArrayList<>();
     for (String line : deployerBlock) {
@@ -92,25 +98,27 @@ class DeployerLinearCredentialTest {
         .as("docker-compose.prod.yml must exist one directory above the module")
         .exists();
 
-    List<String> deployerBlock = extractServiceBlock(readComposeLines(), DEPLOYER_SERVICE);
+    for (Path file : List.of(COMPOSE_FILE, FACTORY_COMPOSE_FILE)) {
+      List<String> deployerBlock = extractServiceBlock(readComposeLines(file), DEPLOYER_SERVICE);
 
-    assertThat(deployerBlock).as("the `deployer:` service block must be non-empty").isNotEmpty();
-    assertThat(deployerBlock)
-        .as("""
-            the extracted block should contain deployer's own known settings, or the block \
-            boundaries are wrong""")
-        .anySatisfy(line -> assertThat(line).contains("FACTORY_DEPLOY_ENABLED"));
+      assertThat(deployerBlock).as("the `deployer:` service block must be non-empty").isNotEmpty();
+      assertThat(deployerBlock)
+          .as("""
+              the extracted block should contain deployer's own known settings, or the block \
+              boundaries are wrong""")
+          .anySatisfy(line -> assertThat(line).contains("FACTORY_DEPLOY_ENABLED"));
+    }
   }
 
-  private static List<String> readComposeLines() throws IOException {
-    if (!Files.exists(COMPOSE_FILE)) {
+  private static List<String> readComposeLines(final Path composeFile) throws IOException {
+    if (!Files.exists(composeFile)) {
       throw new AssertionError(
           """
           Could not find %s - this test assumes the Gradle \
           test working directory is the module directory, one level below the repo \
-          root.""".formatted(COMPOSE_FILE.toAbsolutePath()));
+          root.""".formatted(composeFile.toAbsolutePath()));
     }
-    return Files.readAllLines(COMPOSE_FILE);
+    return Files.readAllLines(composeFile);
   }
 
   /**

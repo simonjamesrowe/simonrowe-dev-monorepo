@@ -24,6 +24,8 @@ scripts/restart-prod.sh [PHASE] [TARGET_SHA]
 | `VERIFY_TIMEOUT` | `420` | Container settle budget, seconds. Unchanged. |
 | `VERIFY_POLL` | `10` | Settle poll interval, seconds. Unchanged. |
 | `REPO_URL` | the pinned https URL | What `sync-config` fetches from. Never `origin`. |
+| `RESTART_NGINX` | `1` | `0` stops `recreate` and `rollback` restarting nginx. Set by the deployer only for a `FACTORY` deploy. |
+| `COMPOSE_PROJECT_NAME` | the checkout's directory name | The project whose containers `plan` compares against. |
 | `DRY_RUN` | unset | When set to `1`, every `docker`/`git`-mutating command is echoed instead of run. **Tests must set this.** |
 
 ## Exit codes
@@ -124,6 +126,24 @@ that broke the deploy was a change to the script itself.
 Idempotent in both directions (`touch`, and `rm -f`). Exit `0` regardless of the
 prior state.
 
+### `plan [previous-sha]`
+
+Read-only apart from `docker pull "$image:$IMAGE_TAG"` for each service in
+`SERVICES`. It never re-tags `:latest`, never writes `STATE_DIR` and always exits
+`0`. Emits on stdout:
+
+| Key | Value |
+| --- | --- |
+| `image-changed` | `SERVICES` whose `$IMAGE_TAG` image id differs from the image the service's container was created from (`docker inspect .Image`, found by compose labels) |
+| `config-changed` | Services, `deployer` excluded, whose `docker compose config --hash` differs from their container's `com.docker.compose.config-hash` label. No container counts as changed |
+| `config-read` | `ok`, or `failed` when no hashes could be read |
+| `host-config-changed` | `git diff --name-only <previous-sha> HEAD -- config/` |
+| `host-config-read` | `ok`, `failed`, or `skipped` when no previous sha was given |
+
+Fixtures for tests: `RUNNING_FIXTURE` (`service<TAB>image-id<TAB>config-hash`) and
+`HASH_FIXTURE` (`config --hash` output). Under `DRY_RUN` with no fixture there is no
+stack, so `config-read=failed` and every image reads as changed.
+
 ### `pull`
 
 For each service in `SERVICES`:
@@ -148,7 +168,7 @@ the rollback target, and rollback would then restore the broken version.
 For each service in `SERVICES`:
 `docker compose -f "$COMPOSE_FILE" up -d --no-deps --pull never "$service"`.
 
-Then `docker compose restart nginx`, then a full
+Then `docker compose restart nginx` (unless `RESTART_NGINX=0`), then a full
 `docker compose -f "$COMPOSE_FILE" up -d` reconcile (non-fatal, as in `all`).
 
 `--pull never` is what makes the local re-tag authoritative for this invocation.

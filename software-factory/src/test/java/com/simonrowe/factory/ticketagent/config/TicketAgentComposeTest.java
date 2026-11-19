@@ -21,7 +21,7 @@ class TicketAgentComposeTest {
 
   @Test
   void theDeployerCarriesNoTicketAgentVariable() throws IOException {
-    List<String> deployer = ComposeFile.serviceBlock(ComposeFile.lines(), "deployer");
+    List<String> deployer = ComposeFile.everyDeployer();
 
     assertThat(deployer)
         .as("the block boundaries must be right, or this passes by reading nothing")
@@ -31,7 +31,7 @@ class TicketAgentComposeTest {
 
   @Test
   void softwareFactoryCarriesTheEnableFlag() throws IOException {
-    List<String> factory = ComposeFile.serviceBlock(ComposeFile.lines(), "software-factory");
+    List<String> factory = ComposeFile.softwareFactory();
 
     assertThat(ComposeFile.declaredKeysContaining(factory, FRAGMENT))
         .contains("FACTORY_TICKET_AGENT_ENABLED");

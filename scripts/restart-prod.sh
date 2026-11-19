@@ -33,6 +33,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 COMPOSE_FILE="${COMPOSE_FILE:-$PROJECT_DIR/docker-compose.prod.yml}"
+# The compose file as a path inside the repository, which is how sync-config reads
+# the target commit's copy of it. docker-compose.prod.yml on the Pi,
+# docker-compose.factory.yml on the factory host.
+COMPOSE_REL="${COMPOSE_FILE#"$PROJECT_DIR"/}"
 
 # How long to wait for every container to settle before declaring the deploy bad.
 # Elasticsearch alone needs ~130s to bind 9200 on the Pi and the backend another
@@ -53,6 +57,16 @@ SERVICES="${SERVICES:-backend frontend software-factory page-reader}"
 # sha so an exact commit is deployed rather than whatever :latest points at when
 # the pull runs.
 IMAGE_TAG="${IMAGE_TAG:-latest}"
+
+# Whether `recreate` and `rollback` restart nginx. 0 for a deploy that touches no
+# service a visitor reaches: the restart leaves nothing serving for a second or
+# two, and that deploy runs with no maintenance page to cover it. See `plan`.
+RESTART_NGINX="${RESTART_NGINX:-1}"
+
+# The compose project whose containers `plan` compares against. The deployer sets
+# COMPOSE_PROJECT_NAME; a human running this from the checkout gets the directory
+# name, which is what compose itself would use.
+PROJECT_NAME="${COMPOSE_PROJECT_NAME:-$(basename "$PROJECT_DIR")}"
 
 # SERVICES may only name services whose image is ${IMAGE_PREFIX}<service>. That
 # holds for exactly the three images CI publishes, which is the whole default set.
@@ -86,20 +100,20 @@ fi
 
 # Never behind the maintenance flag: these are how a failing deploy gets fixed,
 # so `verify` can check them while the page is up.
-OPS_HOSTS=(
-  console.simonrowe.dev
-  langfuse.simonrowe.dev
-  temporal.simonrowe.dev
-  dependency-track.simonrowe.dev
-)
+#
+# VERIFY_OPS_HOSTS / VERIFY_PUBLIC_HOSTS replace either list. The factory host's
+# deployer sets both EMPTY: it serves none of these hostnames, so curling them
+# from there would judge its deploy by the Pi's health, and roll the factory back
+# over a site outage it did not cause. `-` rather than `:-`, so an empty value
+# means "none" rather than "the default".
+# shellcheck disable=SC2206 # word splitting is the point: a space-separated list
+OPS_HOSTS=(${VERIFY_OPS_HOSTS-console.simonrowe.dev langfuse.simonrowe.dev temporal.simonrowe.dev dependency-track.simonrowe.dev})
 
 # Behind the flag. Checked only by verify-public, after the page comes down - the
 # maintenance page returns 503 by design and the check below treats 503 as a
 # failure, correctly, so running it with the flag set would fail every deploy.
-PUBLIC_HOSTS=(
-  www.simonrowe.dev
-  api.simonrowe.dev
-)
+# shellcheck disable=SC2206
+PUBLIC_HOSTS=(${VERIFY_PUBLIC_HOSTS-www.simonrowe.dev api.simonrowe.dev})
 
 # ---------------------------------------------------------------------------
 # Plumbing
@@ -120,6 +134,28 @@ compose() {
 
 image_for() {
   echo "${IMAGE_PREFIX}$1"
+}
+
+# SERVICES narrowed to the ones this host's compose file defines, in order.
+#
+# Two hosts share one deployer image and one configured list, and the list on a
+# RUNNING deployer is whatever its compose file said when it was created. The Pi's
+# deployer therefore keeps naming software-factory and page-reader after they move
+# to the factory host, until someone recreates it - and `up -d <service>` on a
+# service the file does not define is an error, so without this the first deploy
+# after the split would fail at `recreate` and roll back a healthy site. A service
+# skipped here is said out loud, on stderr, so a typo cannot hide.
+host_services() {
+  local defined service kept=""
+  defined="$(enumerate_services)"
+  for service in $SERVICES; do
+    if [[ -z "$defined" ]] || printf '%s\n' "$defined" | grep -qx "$service"; then
+      kept="${kept:+$kept }$service"
+    else
+      echo "  $service is not defined in $COMPOSE_REL on this host; skipping it" >&2
+    fi
+  done
+  printf '%s\n' "$kept"
 }
 
 # Read-only, so it does not go through run_cmd - but it still needs a DRY_RUN
@@ -303,7 +339,7 @@ phase_pull() {
   rm -f "$ROLLBACK_TAKEN_FLAG"
 
   local service image id
-  for service in $SERVICES; do
+  for service in $(host_services); do
     image="$(image_for "$service")"
     id="$(image_id "${image}:latest")"
     if [[ -n "$id" ]]; then
@@ -329,23 +365,177 @@ phase_pull() {
 # are a pair; neither is safe without the other.
 phase_recreate() {
   local service
-  for service in $SERVICES; do
+  for service in $(host_services); do
     compose up -d --no-deps --pull never "$service"
   done
 
-  # nginx resolves container names at request time through Docker DNS, but it
-  # still needs a reload when the mounted config gains a new route. Restarting
-  # after reconciliation covers that and remains safe because nginx no longer
-  # requires every upstream to resolve at startup.
-  #
-  # nginx is also what serves the maintenance page, so for a second or two here
-  # there is nothing serving at all. Accepted: unavoidable while the page lives in
-  # the same nginx that proxies the site, and a couple of seconds inside an
-  # already-degraded window is not worth a second proxy container.
+  restart_nginx
+  reconcile
+}
+
+# nginx resolves container names at request time through Docker DNS, but it
+# still needs a reload when the mounted config gains a new route. Restarting
+# after reconciliation covers that and remains safe because nginx no longer
+# requires every upstream to resolve at startup.
+#
+# nginx is also what serves the maintenance page, so for a second or two here
+# there is nothing serving at all. Accepted: unavoidable while the page lives in
+# the same nginx that proxies the site, and a couple of seconds inside an
+# already-degraded window is not worth a second proxy container.
+#
+# Skipped with RESTART_NGINX=0, which the deployer sets only when `plan` found
+# that nothing a visitor reaches changed - no site image, no site service's
+# configuration and no file under config/. Then there is no new route to load,
+# no maintenance page covering the gap, and restarting would be the only thing
+# the deploy did to the public site.
+restart_nginx() {
+  if [[ "$RESTART_NGINX" == "0" ]]; then
+    echo "Leaving nginx alone: this deploy changes nothing it serves."
+    return 0
+  fi
+  # The factory host has no nginx, and `compose restart` of a service the file
+  # does not define is an error that would fail the phase.
+  if ! enumerate_services | grep -qx nginx; then
+    echo "No nginx in $COMPOSE_REL; nothing to restart."
+    return 0
+  fi
   echo "Restarting nginx to load the current proxy configuration..."
   compose restart nginx
+}
 
-  reconcile
+# What a deploy of IMAGE_TAG would change on this host, decided before anything
+# changes. Read-only apart from pulling IMAGE_TAG, which neither re-tags :latest
+# nor touches a running container, so this is safe without the maintenance page.
+#
+# Three facts, as key=value lines; the deployer decides what kind of deploy that
+# makes (DeployPlan):
+#
+#   image-changed=<services>   SERVICES whose IMAGE_TAG image is not the image the
+#                              running container was created from. Publish
+#                              re-tags an unchanged image with the same digest,
+#                              so an untouched service compares equal.
+#   config-changed=<services>  services whose compose configuration hash differs
+#                              from the com.docker.compose.config-hash label on
+#                              their container: exactly what compose itself
+#                              compares when `up -d` decides whether to recreate.
+#                              A service with no container counts as changed.
+#   host-config-changed=<paths>
+#                              files under config/ changed since PREVIOUS_SHA.
+#                              They are bind-mounted, so their content is in no
+#                              hash: nginx's routes and the maintenance pages are
+#                              among them.
+#
+# Plus `config-read=ok|failed` and `host-config-read=ok|failed|skipped`. A failed
+# read means "could not tell", and the deployer then deploys everything with the
+# maintenance page up, exactly as before this phase existed. The phase itself
+# never fails: a plan that cannot be made is a full deploy, not a stopped one.
+#
+# Machine-readable lines go to stdout, narration to stderr, as in sync-config.
+phase_plan() {
+  local previous="${1:-}"
+  local images="" configs="" service image candidate running
+
+  # 1. Images.
+  for service in $(host_services); do
+    image="$(image_for "$service")"
+    # Pulling the tag, not re-tagging :latest. A failed pull leaves no candidate,
+    # which reads as changed; the `pull` phase then fails loudly on its own.
+    run_cmd docker pull --quiet "${image}:${IMAGE_TAG}" >&2 || true
+    candidate="$(image_id "${image}:${IMAGE_TAG}")"
+    running="$(running_field "$service" 2)"
+    if [[ -z "$candidate" || "$candidate" != "$running" ]]; then
+      images="${images:+$images }$service"
+      echo "  $service: new image" >&2
+    fi
+  done
+
+  # 2. Service configuration, for every service but the deployer.
+  local hashes config_read=ok
+  hashes="$(desired_hashes)"
+  if [[ -z "$hashes" ]]; then
+    config_read=failed
+    echo "  could not read the compose configuration hashes" >&2
+  else
+    local desired actual
+    while IFS=$'\t' read -r service desired; do
+      [[ -z "$service" || "$service" == "deployer" ]] && continue
+      actual="$(running_field "$service" 3)"
+      if [[ "$desired" != "$actual" ]]; then
+        configs="${configs:+$configs }$service"
+        echo "  $service: configuration changed" >&2
+      fi
+    done <<<"$hashes"
+  fi
+
+  # 3. Bind-mounted files.
+  local host_files="" host_read=skipped
+  if [[ -n "$previous" ]]; then
+    if host_files="$(git_in_repo diff --name-only --no-renames "$previous" HEAD -- config/ 2>/dev/null)"; then
+      host_read=ok
+      host_files="$(printf '%s' "$host_files" | tr '\n' ' ' | sed 's/ *$//')"
+      [[ -n "$host_files" ]] && echo "  host configuration changed: $host_files" >&2
+    else
+      host_read=failed
+      host_files=""
+      echo "  could not diff config/ against $previous" >&2
+    fi
+  fi
+
+  echo "image-changed=$images"
+  echo "config-changed=$configs"
+  echo "config-read=$config_read"
+  echo "host-config-changed=$host_files"
+  echo "host-config-read=$host_read"
+  return 0
+}
+
+# `service<TAB>hash` for every service in the compose file as it is on disk.
+#
+# HASH_FIXTURE lets a test supply `config --hash` output, as PS_FIXTURE does for
+# the settle loop. Under DRY_RUN with no fixture there is no stack to compare
+# against, so this answers nothing and the plan reads as "could not tell".
+desired_hashes() {
+  local raw
+  if [[ -n "${HASH_FIXTURE:-}" ]]; then
+    raw="$(cat -- "$HASH_FIXTURE")"
+  elif [[ -n "${DRY_RUN:-}" ]]; then
+    return 0
+  else
+    # --project-directory for the reason service_hashes gives: .env is found
+    # relative to it.
+    raw="$(docker compose --project-directory "$PROJECT_DIR" -f "$COMPOSE_FILE" \
+      config --hash='*' 2>/dev/null || true)"
+  fi
+  printf '%s\n' "$raw" | awk 'NF >= 2 { print $1 "\t" $NF }'
+}
+
+# One field of what a service's container is running: 2 = image id, 3 = compose
+# configuration hash. Empty when the service has no container.
+#
+# RUNNING_FIXTURE holds `service<TAB>image-id<TAB>config-hash` lines for a test.
+# Under DRY_RUN with no fixture there is no container, so everything reads as
+# changed, which is the safe answer.
+running_field() {
+  local service="$1" field="$2"
+  if [[ -n "${RUNNING_FIXTURE:-}" ]]; then
+    awk -F'\t' -v s="$service" -v f="$field" '$1 == s { print $f; exit }' "$RUNNING_FIXTURE"
+    return 0
+  fi
+  [[ -n "${DRY_RUN:-}" ]] && return 0
+
+  # By compose's own labels rather than a formatted container name, as
+  # backup-platform.sh resolves its containers. -a: a stopped container still
+  # says what it was created from.
+  local container
+  container="$(docker ps -aq \
+    --filter "label=com.docker.compose.project=$PROJECT_NAME" \
+    --filter "label=com.docker.compose.service=$service" 2>/dev/null | head -1)"
+  [[ -z "$container" ]] && return 0
+  case "$field" in
+    2) docker inspect --format '{{.Image}}' "$container" 2>/dev/null || true ;;
+    3) docker inspect --format '{{index .Config.Labels "com.docker.compose.config-hash"}}' \
+      "$container" 2>/dev/null || true ;;
+  esac
 }
 
 # Deliberately not fatal. A dependency gate that expires (for example
@@ -453,7 +643,7 @@ phase_verify() {
 
   echo
   echo "Checking operations hostnames..."
-  check_hosts "${OPS_HOSTS[@]}" || failed=1
+  check_hosts ${OPS_HOSTS[@]+"${OPS_HOSTS[@]}"} || failed=1
 
   return "$failed"
 }
@@ -464,7 +654,7 @@ phase_verify_public() {
   # public hostnames.
   echo
   echo "Checking public hostnames..."
-  check_hosts "${PUBLIC_HOSTS[@]}" || return 1
+  check_hosts ${PUBLIC_HOSTS[@]+"${PUBLIC_HOSTS[@]}"} || return 1
 
   prune_after_deploy
 }
@@ -640,9 +830,9 @@ phase_sync_config() {
   # shellcheck disable=SC2064
   trap "rm -f '$candidate' '$current_copy'" RETURN
 
-  if ! git_in_repo show "$target:docker-compose.prod.yml" >"$candidate" 2>/dev/null; then
+  if ! git_in_repo show "$target:$COMPOSE_REL" >"$candidate" 2>/dev/null; then
     echo "decision=failed"
-    echo "Could not read docker-compose.prod.yml at $target" >&2
+    echo "Could not read $COMPOSE_REL at $target" >&2
     return 1
   fi
   cp "$COMPOSE_FILE" "$current_copy"
@@ -709,7 +899,7 @@ phase_sync_config() {
   if [[ -n "$held_back" ]]; then
     echo "decision=held-back"
     echo "held-back=$held_back"
-    echo "manual-command=docker compose -f docker-compose.prod.yml up -d $held_back"
+    echo "manual-command=docker compose -f $COMPOSE_REL up -d $held_back"
     echo "Held back for a human: $held_back" >&2
     return 2
   fi
@@ -806,8 +996,7 @@ phase_rollback() {
     compose up -d --no-deps --pull never "$service"
   done <"$ROLLBACK_FILE"
 
-  echo "Restarting nginx to load the current proxy configuration..."
-  compose restart nginx
+  restart_nginx
   reconcile
 }
 
@@ -830,7 +1019,7 @@ phase_all() {
 
   echo
   echo "Checking public hostnames..."
-  check_hosts "${PUBLIC_HOSTS[@]}" "${OPS_HOSTS[@]}" || failed=1
+  check_hosts ${PUBLIC_HOSTS[@]+"${PUBLIC_HOSTS[@]}"} ${OPS_HOSTS[@]+"${OPS_HOSTS[@]}"} || failed=1
 
   echo
   if [[ "$failed" -ne 0 ]]; then
@@ -859,8 +1048,13 @@ Phases:
                      reset the deploy directory back to <sha>
   maintenance-on     create the maintenance flag file
   maintenance-off    remove the maintenance flag file
+  plan [previous-sha]
+                     report which images, service configurations and config/ files
+                     a deploy of IMAGE_TAG would change; read-only apart from
+                     pulling IMAGE_TAG, and never fails
   pull               record current image ids, pull IMAGE_TAG, re-tag to :latest
-  recreate           up -d --no-deps --pull never each SERVICE, restart nginx, reconcile
+  recreate           up -d --no-deps --pull never each SERVICE, restart nginx
+                     (unless RESTART_NGINX=0), reconcile
   verify             container settle loop + the four ops hostnames
   verify-public      www + api (run only after maintenance-off); on success, prune
                      unused images older than IMAGE_PRUNE_KEEP unless this deploy
@@ -890,6 +1084,7 @@ main() {
     commit-range) phase_commit_range "${2:-}" "${3:-HEAD}" ;;
     maintenance-on) phase_maintenance_on ;;
     maintenance-off) phase_maintenance_off ;;
+    plan) phase_plan "${2:-}" ;;
     pull) phase_pull ;;
     recreate) phase_recreate ;;
     verify) phase_verify ;;

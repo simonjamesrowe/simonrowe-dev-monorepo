@@ -22,7 +22,7 @@ class WritingComposeTest {
 
   @Test
   void theDeployerCarriesNoWritingVariable() throws IOException {
-    List<String> deployer = ComposeFile.serviceBlock(ComposeFile.lines(), "deployer");
+    List<String> deployer = ComposeFile.everyDeployer();
 
     assertThat(deployer)
         .as("the block boundaries must be right, or this passes by reading nothing")
@@ -37,7 +37,7 @@ class WritingComposeTest {
     // The mirror of the assertion above: without it, deleting the flag from both services would
     // pass while switching the queue off everywhere, and every release note would quietly fall
     // back to OpenAI.
-    List<String> factory = ComposeFile.serviceBlock(ComposeFile.lines(), "software-factory");
+    List<String> factory = ComposeFile.softwareFactory();
 
     assertThat(ComposeFile.declaredKeysContaining(factory, FRAGMENT))
         .contains("FACTORY_WRITING_ENABLED");

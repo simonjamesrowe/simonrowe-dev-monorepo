@@ -36,6 +36,19 @@ set -euo pipefail
 # proves PID 1 exists). `docker compose up -d` does not touch a container that is
 # already `Up`, so the whole-stack reconcile alone ran unremediated for 4 hours.
 # See the layer-1 code below for the full account.
+#
+# ROLES. The same script watches two hosts, chosen by MONITOR_ROLE:
+#
+#   site     (default) the Raspberry Pi: docker-compose.prod.yml, project
+#            simonrowe-dev-monorepo, every layer above. Unset MONITOR_ROLE and this
+#            script does exactly what it did before roles existed.
+#   factory  the NUC running the software factory: docker-compose.factory.yml,
+#            project simonrowe-factory. It serves no public hostname and has no
+#            nginx or pinggy, so layers 1 and 3 do not apply and are skipped; disk,
+#            layer 2 (unhealthy restart, created/exited reconcile) and layer 4 (DNS)
+#            run as on the Pi. See docs/runbooks/factory-host.md.
+#
+# COMPOSE_FILE and COMPOSE_PROJECT override the role's defaults.
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -62,8 +75,28 @@ STATE_DIR=${STATE_DIR:-/tmp/prod-health}
 # real restarts and can recreate containers if the compose file has been edited.
 DRY_RUN=${DRY_RUN:-0}
 
-COMPOSE_FILE="$PROJECT_DIR/docker-compose.prod.yml"
-COMPOSE_PROJECT=${COMPOSE_PROJECT:-simonrowe-dev-monorepo}
+MONITOR_ROLE=${MONITOR_ROLE:-site}
+case "$MONITOR_ROLE" in
+  site)
+    COMPOSE_FILE=${COMPOSE_FILE:-"$PROJECT_DIR/docker-compose.prod.yml"}
+    COMPOSE_PROJECT=${COMPOSE_PROJECT:-simonrowe-dev-monorepo}
+    # Unchanged from before roles: compose names the project itself (from .env's
+    # COMPOSE_PROJECT_NAME or the directory), exactly as it always has on the Pi.
+    COMPOSE_CMD=(docker compose -f "$COMPOSE_FILE")
+    ;;
+  factory)
+    COMPOSE_FILE=${COMPOSE_FILE:-"$PROJECT_DIR/docker-compose.factory.yml"}
+    COMPOSE_PROJECT=${COMPOSE_PROJECT:-simonrowe-factory}
+    # `-p` named explicitly: the NUC's checkout is also called
+    # simonrowe-dev-monorepo, so a project derived from the directory would be the
+    # Pi's name and `ps` would find nothing to watch.
+    COMPOSE_CMD=(docker compose -p "$COMPOSE_PROJECT" -f "$COMPOSE_FILE")
+    ;;
+  *)
+    echo "$(date -Iseconds) [ERROR] MONITOR_ROLE must be 'site' or 'factory', not '$MONITOR_ROLE'" >&2
+    exit 2
+    ;;
+esac
 
 # One-shot init services. These run to completion and then stay `exited 0` for the
 # life of the stack - that is success, not failure. They are depended on with
@@ -78,6 +111,47 @@ ONESHOT_SERVICES=(
   "temporal-create-namespace"
   "dependencytrack-db-init"
 )
+if [[ "$MONITOR_ROLE" == factory ]]; then
+  ONESHOT_SERVICES=("deploy-state-init")
+fi
+
+# The stack-wide reconcile. On the Pi a bare `up -d`, as it has always been. On the
+# factory host, every service EXCEPT the deployer, and the deployer only ever
+# `start`ed, never recreated.
+#
+# The reason is the one restart-prod.sh's reconcile() gives: the deployer shares the
+# software-factory:latest image reference, and a deploy's `pull` re-tags :latest
+# mid-deploy. A bare `up -d` at that moment sees the deployer's image as changed and
+# recreates it, killing the deploy it is running. On the Pi the maintenance flag
+# makes this watchdog stand down for the length of a deploy; a factory host deploy
+# raises no flag, so the exclusion has to be here.
+compose_up_all() {
+  if [[ "$MONITOR_ROLE" != factory ]]; then
+    run_cmd "${COMPOSE_CMD[@]}" up -d
+    return
+  fi
+  local services
+  services="$("${COMPOSE_CMD[@]}" config --no-interpolate --services 2>/dev/null || true)"
+  if [[ -z "$services" ]]; then
+    # The same fallback restart-prod.sh uses when compose cannot be asked: the
+    # top-level keys of the services block.
+    services="$(awk '
+      /^services:/ { in_services = 1; next }
+      /^[a-zA-Z_-]+:/ { in_services = 0 }
+      in_services && /^  [a-zA-Z0-9._-]+:[[:space:]]*$/ { gsub(/^  |:[[:space:]]*$/, ""); print }
+    ' "$COMPOSE_FILE" 2>/dev/null || true)"
+  fi
+  services="$(printf '%s\n' "$services" | grep -vx deployer | grep -v '^$' | sort | tr '\n' ' ')"
+  if [[ -z "${services// /}" ]]; then
+    log "ERROR" "could not enumerate the factory services; not running a bare up -d that could recreate the deployer"
+    return 1
+  fi
+  local rc=0
+  # shellcheck disable=SC2086 # one word per service
+  run_cmd "${COMPOSE_CMD[@]}" up -d $services || rc=$?
+  run_cmd "${COMPOSE_CMD[@]}" start deployer >/dev/null 2>&1 || true
+  return "$rc"
+}
 
 is_oneshot() {
   local candidate="$1" s
@@ -111,6 +185,11 @@ ENDPOINTS=(
   "temporal-ui|https://temporal.simonrowe.dev/|200"
   "portainer|https://console.simonrowe.dev/|200"
 )
+# The factory host serves no public hostname: GitHub's webhooks reach it through
+# the Pi's nginx and factory-gateway, so a failing webhook URL is the Pi's to see.
+if [[ "$MONITOR_ROLE" == factory ]]; then
+  ENDPOINTS=()
+fi
 
 # Services that cannot do their job without resolving names OUTSIDE the stack
 # (Auth0, Grafana Cloud, GitHub, Linear, OpenAI, the Trivy/NVD feeds, the pinggy
@@ -131,6 +210,13 @@ DNS_EGRESS_SERVICES=(
   "trivy-server"
   "pinggy"
 )
+if [[ "$MONITOR_ROLE" == factory ]]; then
+  # software-factory talks to GitHub, Linear, Loki and Anthropic; the deployer to
+  # GitHub and ghcr; alloy to Grafana Cloud (it went silent in the 2026-09-24
+  # incident). page-reader is left out: its browser egress goes through its own
+  # proxy and a dead lookup there falls back to Jina, so a restart buys nothing.
+  DNS_EGRESS_SERVICES=("alloy" "software-factory" "deployer")
+fi
 # Any name every one of those services depends on resolving would do; github.com
 # is stable, has no IPv6 records to confuse an IPv4-only host, and is what the
 # factory and deployer reach first.
@@ -154,6 +240,13 @@ DISK_CRIT_PERCENT=${DISK_CRIT_PERCENT:-95}
 DISK_PRUNE_INTERVAL=${DISK_PRUNE_INTERVAL:-3600}
 # No prune within this long of a deploy's `pull`. See check_disk.
 DISK_PRUNE_DEPLOY_GRACE=${DISK_PRUNE_DEPLOY_GRACE:-3600}
+# Where to look first once images are ruled out. Per host: the Pi's known grower
+# is ClickHouse; the factory host's is the Mongo volume and the review workspaces.
+if [[ "$MONITOR_ROLE" == factory ]]; then
+  DISK_CRIT_HINT=" (factory-mongo-data and the software-factory workspace volumes are the likeliest growers)"
+else
+  DISK_CRIT_HINT=" (langfuse-clickhouse-data is the next-largest grower)"
+fi
 
 # prune_unused_images and IMAGE_PRUNE_KEEP, shared with restart-prod.sh.
 #
@@ -313,7 +406,7 @@ svc_restart() {
   # `restart` rather than `up -d`: it does not re-evaluate the compose file, so a
   # half-applied local edit or a missing .env variable cannot recreate or destroy
   # anything here. Container recreation is the whole-stack path's job.
-  if run_cmd docker compose -f "$COMPOSE_FILE" restart "$svc" >/dev/null 2>&1; then
+  if run_cmd "${COMPOSE_CMD[@]}" restart "$svc" >/dev/null 2>&1; then
     log "INFO" "$svc: restart issued"
     svc_set_failures "$svc" 0
     return 0
@@ -367,8 +460,25 @@ pinggy_token_conflict() {
   grep -aqF -e 'with the same token' -e 'token is temporarily blocked' <<<"$recent"
 }
 
+# The container through which the deploy-state volume is read, for the flag here
+# and for the prune grace below. On the Pi that is nginx (read-only mount). The
+# factory host has no nginx, so it is the deployer, which mounts the same volume
+# read-write and is the only thing that writes it.
+#
+# On the factory host the NUC's deploy does not raise a maintenance page, so today
+# nothing sets the flag there and this check is inert. It is kept rather than
+# skipped because it costs one exec and is the safe direction: if that deploy ever
+# marks itself in progress, the watchdog honours it instead of reconciling
+# underneath it. If the deployer is down the exec fails and the tick carries on,
+# and no deploy can be running without the deployer.
+if [[ "$MONITOR_ROLE" == factory ]]; then
+  DEPLOY_STATE_CONTAINER="${COMPOSE_PROJECT}-deployer-1"
+else
+  DEPLOY_STATE_CONTAINER="${COMPOSE_PROJECT}-nginx-1"
+fi
+
 deploy_in_progress() {
-  docker exec "${COMPOSE_PROJECT}-nginx-1" \
+  docker exec "$DEPLOY_STATE_CONTAINER" \
     test -f /var/run/deploy-state/maintenance.on 2>/dev/null
 }
 
@@ -451,12 +561,34 @@ is_number() {
 # cannot be read (no nginx, no deploy yet). Failing open is deliberate and matches
 # layer 0: on a full disk nginx may well be what is down, and not pruning then
 # would leave the watchdog unable to help in exactly the case it exists for.
-seconds_since_deploy_pull() {
-  local mtime
-  mtime="$(docker exec "${COMPOSE_PROJECT}-nginx-1" \
-    stat -c %Y /var/run/deploy-state/rollback-images 2>/dev/null)" || return 1
-  is_number "$mtime" || return 1
-  echo $(( $(date +%s) - mtime ))
+#
+# On the factory host it is read through the deployer (DEPLOY_STATE_CONTAINER).
+# Failing open is if anything safer there: the deployer is what would perform a
+# rollback, so if it cannot be reached no rollback is in flight to protect. The
+# reason is logged there (see check_disk), because "no deploy yet" and "the
+# deployer image has no stat" (exit 126/127) both land here and should be told apart.
+#
+# Sets DEPLOY_PULL_AGE (or DEPLOY_PULL_UNREADABLE_REASON) rather than printing, so
+# the caller does not lose the reason to a command substitution's subshell.
+DEPLOY_PULL_AGE=""
+DEPLOY_PULL_UNREADABLE_REASON=""
+read_deploy_pull_age() {
+  local mtime rc=0
+  mtime="$(docker exec "$DEPLOY_STATE_CONTAINER" \
+    stat -c %Y /var/run/deploy-state/rollback-images 2>/dev/null)" || rc=$?
+  if (( rc != 0 )); then
+    if (( rc == 126 || rc == 127 )); then
+      DEPLOY_PULL_UNREADABLE_REASON="stat is not runnable in $DEPLOY_STATE_CONTAINER (exit $rc)"
+    else
+      DEPLOY_PULL_UNREADABLE_REASON="no rollback-images readable through $DEPLOY_STATE_CONTAINER (exit $rc: no deploy yet, or the container is down)"
+    fi
+    return 1
+  fi
+  if ! is_number "$mtime"; then
+    DEPLOY_PULL_UNREADABLE_REASON="unexpected mtime from $DEPLOY_STATE_CONTAINER"
+    return 1
+  fi
+  DEPLOY_PULL_AGE=$(( $(date +%s) - mtime ))
 }
 
 check_disk() {
@@ -489,9 +621,14 @@ check_disk() {
   log "$level" "$summary"
 
   local since
-  if since="$(seconds_since_deploy_pull)" && (( since < DISK_PRUNE_DEPLOY_GRACE )); then
-    log "$level" "disk: a deploy pulled images ${since}s ago - not pruning within ${DISK_PRUNE_DEPLOY_GRACE}s of a pull, its rollback target may be unused right now"
-    return 0
+  if read_deploy_pull_age; then
+    since="$DEPLOY_PULL_AGE"
+    if (( since < DISK_PRUNE_DEPLOY_GRACE )); then
+      log "$level" "disk: a deploy pulled images ${since}s ago - not pruning within ${DISK_PRUNE_DEPLOY_GRACE}s of a pull, its rollback target may be unused right now"
+      return 0
+    fi
+  elif [[ "$MONITOR_ROLE" == factory ]]; then
+    log "$level" "disk: deploy grace not applied - ${DEPLOY_PULL_UNREADABLE_REASON:-rollback-images unreadable}; pruning anyway"
   fi
 
   # Stamped BEFORE pruning, so a prune that outlasts the minute cannot be joined by
@@ -529,7 +666,7 @@ check_disk() {
   used="$(disk_used_percent)"
   is_number "$used" || return 0
   if (( used >= DISK_CRIT_PERCENT )); then
-    log "CRIT" "disk: still ${used}% used after the prune - images are not what is filling it. Needs a human: docker system df -v (langfuse-clickhouse-data is the next-largest grower)"
+    log "CRIT" "disk: still ${used}% used after the prune - images are not what is filling it. Needs a human: docker system df -v${DISK_CRIT_HINT}"
   else
     log "INFO" "disk: ${used}% used after the prune"
   fi
@@ -545,8 +682,10 @@ prune_old_restarts
 # Layer 1: is the public site up at all?
 # ---------------------------------------------------------------------------
 
+# Factory role: there is no site on this host, so layer 1 (and the pinggy logic
+# inside it) does not run. site_up stays true and the tick goes on to layer 2.
 site_up=true
-if ! curl -sf -o /dev/null -m 10 "$CHECK_URL"; then
+if [[ "$MONITOR_ROLE" == site ]] && ! curl -sf -o /dev/null -m 10 "$CHECK_URL"; then
   site_up=false
 fi
 
@@ -614,7 +753,7 @@ if [[ "$site_up" == false ]]; then
   # exactly the pinggy shape above, and why that gets its own restart rather
   # than relying on this step to cover it too.
   log "ERROR" "Reconciling compose stack ($failure_count consecutive failures)"
-  if run_cmd docker compose -f "$COMPOSE_FILE" up -d; then
+  if run_cmd "${COMPOSE_CMD[@]}" up -d; then
     # nginx now defers upstream DNS resolution to request time (see the resolver
     # directive in config/nginx/nginx-proxy.conf), so it no longer caches a dead
     # upstream IP for the lifetime of the process and does not need bouncing here.
@@ -688,7 +827,7 @@ while IFS='|' read -r svc state health; do
     restarting|paused|removing) ;;
   esac
 done < <(
-  docker compose -f "$COMPOSE_FILE" ps --all --format '{{.Service}}|{{.State}}|{{.Health}}' 2>/dev/null || true
+  "${COMPOSE_CMD[@]}" ps --all --format '{{.Service}}|{{.State}}|{{.Health}}' 2>/dev/null || true
 )
 
 if [[ "$needs_reconcile" == true ]]; then
@@ -697,7 +836,7 @@ if [[ "$needs_reconcile" == true ]]; then
     log "CRIT" "Containers need reconciling but stack backoff is active - needs a human."
   else
     log "ERROR" "Reconciling compose stack to start non-running containers"
-    if run_cmd docker compose -f "$COMPOSE_FILE" up -d >/dev/null 2>&1; then
+    if compose_up_all >/dev/null 2>&1; then
       log "INFO" "Compose stack reconciled"
     else
       log "ERROR" "Failed to reconcile compose stack"
@@ -729,7 +868,10 @@ endpoint_failures_file() {
 # three times, or it would be restarted on its first failure.
 failed_services=" "
 failure_reasons=""
-for entry in "${ENDPOINTS[@]}"; do
+# `${ENDPOINTS[@]+...}`: the factory role has none (so this layer is a no-op
+# there), and an empty array expanded bare under `set -u` is an unbound variable
+# on bash < 4.4.
+for entry in ${ENDPOINTS[@]+"${ENDPOINTS[@]}"}; do
   IFS='|' read -r svc url expected <<< "$entry"
 
   # A container still inside its start_period is not yet expected to serve, so
@@ -761,7 +903,7 @@ done
 # Second pass: one count per service per tick. A starting service starts again
 # from zero, because failures from before its restart describe a process that is
 # gone.
-for svc in $(printf '%s\n' "${ENDPOINTS[@]}" | cut -d'|' -f1 | awk '!seen[$0]++'); do
+for svc in $(printf '%s\n' ${ENDPOINTS[@]+"${ENDPOINTS[@]}"} | cut -d'|' -f1 | awk '!seen[$0]++'); do
   file="$(endpoint_failures_file "$svc")"
   if [[ "$failed_services" != *" $svc "* ]]; then
     echo 0 > "$file"

@@ -218,6 +218,31 @@ check "reports not-an-ancestor" "[[ \"\$(value_of decision)\" == 'not-an-ancesto
 check "leaves HEAD untouched" "[[ \"\$(head_of '$clone')\" == '$before' ]]"
 
 # ---------------------------------------------------------------------------
+echo "  the factory host syncs against its own compose file"
+# ---------------------------------------------------------------------------
+# sync-config used to read docker-compose.prod.yml at the target commit whatever
+# COMPOSE_FILE said, so the factory host's deployer would have judged a change by
+# the Pi's file. It reads the file it was given, as a repository path.
+clone="$(new_fixture factoryfile)"
+compose_with base base >"$TMP/factoryfile-origin/docker-compose.factory.yml"
+git -C "$TMP/factoryfile-origin" add -A
+git -C "$TMP/factoryfile-origin" commit -q -m "add the factory host's file"
+git -C "$clone" pull -q --ff-only
+compose_with base changed >"$TMP/factoryfile-origin/docker-compose.factory.yml"
+git -C "$TMP/factoryfile-origin" add -A
+git -C "$TMP/factoryfile-origin" commit -q -m "change mongodb in the factory file only"
+target="$(git -C "$TMP/factoryfile-origin" rev-parse HEAD)"
+before="$(head_of "$clone")"
+rc="$(COMPOSE_FILE="$clone/docker-compose.factory.yml" sync "$clone" "$target")"
+check "a change only in the factory file is judged by the factory file (held back)" \
+  "[[ '$rc' == '2' && \"\$(value_of decision)\" == 'held-back' ]]"
+check "the manual command names the factory file" \
+  "[[ \"\$(value_of manual-command)\" == *'docker-compose.factory.yml up -d'*mongodb* ]]"
+rc="$(sync "$clone" "$target")"
+check "the same commit is applied on the site, whose file did not change" \
+  "[[ '$rc' == '0' && \"\$(head_of '$clone')\" == '$target' ]]"
+
+# ---------------------------------------------------------------------------
 echo "  holds back a change affecting a non-allowlisted service"
 # ---------------------------------------------------------------------------
 clone="$(new_fixture heldback)"

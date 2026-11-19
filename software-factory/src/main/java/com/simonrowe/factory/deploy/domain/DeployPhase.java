@@ -3,9 +3,11 @@ package com.simonrowe.factory.deploy.domain;
 /**
  * The ordered phases of one deploy.
  *
- * <p>The first seven map one-for-one onto arguments of {@code scripts/restart-prod.sh}, which is
+ * <p>The first eight map one-for-one onto arguments of {@code scripts/restart-prod.sh}, which is
  * why {@link #argument()} exists: the enum is the single place the Java side and the shell side
- * agree on a name. {@code ROLLBACK_CONFIG} is only reached on the failure path.
+ * agree on a name. {@code ROLLBACK_CONFIG} is only reached on the failure path. {@code PLAN} runs
+ * only on a deploy started by a build that has it (see {@code DeployWorkflowImpl}), and {@code
+ * MAINTENANCE_ON}/{@code MAINTENANCE_OFF} only when the plan touches the public site.
  *
  * <p>{@link #TRIAGE} and {@link #REPORT} have no script argument — they are Java-side phases.
  * They are in this enum anyway so a persisted run record tells the whole story rather than only
@@ -13,6 +15,7 @@ package com.simonrowe.factory.deploy.domain;
  */
 public enum DeployPhase {
   SYNC_CONFIG,
+  PLAN,
   MAINTENANCE_ON,
   PULL,
   RECREATE,

@@ -40,7 +40,14 @@ class DeployerCodeReviewGateTest {
 
   @Test
   void deployerServiceDisablesCodeReviewActivities() throws IOException {
-    Optional<String> value = declaredValue(deployerBlock(), FLAG);
+    for (var deployer : ComposeFile.deployerBlocks().entrySet()) {
+      assertDeployerDisablesCodeReview(deployer.getKey(), deployer.getValue());
+    }
+  }
+
+  private static void assertDeployerDisablesCodeReview(
+      final String file, final List<String> deployerBlock) {
+    Optional<String> value = declaredValue(deployerBlock, FLAG);
 
     assertThat(value)
         .as(
@@ -50,6 +57,7 @@ class DeployerCodeReviewGateTest {
             container polling the code-review activity queue with no GitHub App \
             credential, failing roughly half of all reviews and blocking every merge.""",
             FLAG)
+        .withFailMessage("%s is not declared on the deployer in %s", FLAG, file)
         .isPresent();
 
     assertThat(value.orElseThrow().replace("\"", "").replace("'", "").trim())
@@ -68,7 +76,7 @@ class DeployerCodeReviewGateTest {
     // it relies on the application.yml default of true, so the only thing that could break it is
     // an explicit "false" appearing here. An absent variable is correct and expected.
     Optional<String> value =
-        declaredValue(ComposeFile.serviceBlock(ComposeFile.lines(), "software-factory"), FLAG);
+        declaredValue(ComposeFile.softwareFactory(), FLAG);
 
     assertThat(value.map(raw -> raw.replace("\"", "").replace("'", "").trim()))
         .as(
@@ -89,7 +97,7 @@ class DeployerCodeReviewGateTest {
   void softwareFactoryDeclaresAutoMergeOnByDefault() throws IOException {
     Optional<String> value =
         declaredValue(
-            ComposeFile.serviceBlock(ComposeFile.lines(), "software-factory"), AUTO_MERGE_FLAG);
+            ComposeFile.softwareFactory(), AUTO_MERGE_FLAG);
 
     assertThat(value)
         .as("%s must be declared on `software-factory`, which has no env_file", AUTO_MERGE_FLAG)
@@ -109,18 +117,18 @@ class DeployerCodeReviewGateTest {
   void theScanActuallyFoundTheDeployerService() throws IOException {
     // Without this, a wrong path or a renamed service would make the assertions above fail
     // confusingly, or a future refactor could make them pass by reading nothing.
-    List<String> block = deployerBlock();
-
-    assertThat(block).as("the `deployer:` service block must be non-empty").isNotEmpty();
-    assertThat(block)
-        .as("""
-            the extracted block should contain deployer's own known settings, or the block \
-            boundaries are wrong""")
-        .anySatisfy(line -> assertThat(line).contains("FACTORY_DEPLOY_ENABLED"));
+    for (List<String> block : ComposeFile.deployerBlocks().values()) {
+      assertThat(block).as("the `deployer:` service block must be non-empty").isNotEmpty();
+      assertThat(block)
+          .as("""
+              the extracted block should contain deployer's own known settings, or the block \
+              boundaries are wrong""")
+          .anySatisfy(line -> assertThat(line).contains("FACTORY_DEPLOY_ENABLED"));
+    }
   }
 
   private static List<String> deployerBlock() throws IOException {
-    return ComposeFile.serviceBlock(ComposeFile.lines(), DEPLOYER_SERVICE);
+    return ComposeFile.everyDeployer();
   }
 
   /**

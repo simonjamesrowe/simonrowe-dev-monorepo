@@ -175,14 +175,42 @@ jobs:
             VITE_GIT_SHA=${{ github.sha }}
             VITE_BUILD_TIME=${{ steps.build-time.outputs.value }}
 
-  publish-software-factory:
-    name: Publish Software Factory Image
-    runs-on: ubuntu-24.04-arm
+  # software-factory and page-reader run on two hosts with different CPUs: the software factory
+  # and page-reader on the amd64 NUC, the Pi's `deployer` (the same software-factory image) on
+  # the arm64 Pi. So these two images are published as ONE multi-platform index under each tag,
+  # and `docker pull <image>:<sha>` resolves the right platform on each host.
+  #
+  # Each platform is built NATIVELY on its own runner, never emulated or cross-built: the
+  # software-factory image trains its Leyden AOT cache during the build (a cache trained on one
+  # CPU is not valid on another; see aot-cache-class-data-only in CLAUDE.md), and
+  # Dockerfile.page-reader keeps only the build machine's own Temporal native bridge and
+  # Playwright's Chromium for it. An amd64 layer built on an arm64 runner would carry arm64
+  # binaries.
+  #
+  # Three jobs per image:
+  #   *-plan   decides ONCE whether to rebuild, re-tagging the previous commit's index when
+  #            nothing changed. Deciding per platform could let one platform re-tag while the
+  #            other rebuilds, and the two halves could not then be published as one index.
+  #   *-build  one leg per platform, each pushing its image by digest only (no tag), and
+  #            handing the digest on as an artifact.
+  #   publish-* creates the index from both digests under `:<sha>` and `:latest`, then asserts
+  #            that whatever is under `:<sha>` - built or re-tagged - serves both platforms.
+  #            It keeps the job id the rest of the workflow `needs:`.
+  #
+  # The re-tag requires the previous image to be an index of BOTH platforms (the PLATFORMS
+  # argument to retag-image.sh). Without that, the first merge after this change that did not
+  # touch the factory would re-tag the last arm64-only image, and the NUC could not pull it.
+  software-factory-plan:
+    name: Plan Software Factory Image
+    runs-on: ubuntu-latest
     needs: changes
     env:
       IMAGE: ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-software-factory
+      PLATFORMS: linux/arm64,linux/amd64
       CHANGED: ${{ needs.changes.result != 'success' || needs.changes.outputs.factory == 'true' }}
     if: ${{ !cancelled() }}
+    outputs:
+      build: ${{ steps.decide.outputs.build }}
     steps:
       - uses: actions/checkout@v4
 
@@ -199,7 +227,40 @@ jobs:
         env:
           BEFORE: ${{ github.event.before }}
           AFTER: ${{ github.sha }}
-        run: scripts/ci/retag-image.sh "$IMAGE" "$BEFORE" "$AFTER" | tee -a "$GITHUB_OUTPUT"
+        run: scripts/ci/retag-image.sh "$IMAGE" "$BEFORE" "$AFTER" "$PLATFORMS" | tee -a "$GITHUB_OUTPUT"
+
+      - name: Decide whether to build
+        id: decide
+        env:
+          BUILD: ${{ env.CHANGED == 'true' || steps.retag.outputs.retagged != 'true' }}
+        run: echo "build=$BUILD" | tee -a "$GITHUB_OUTPUT"
+
+  software-factory-build:
+    name: Build Software Factory Image (${{ matrix.arch }})
+    needs: software-factory-plan
+    if: ${{ !cancelled() && needs.software-factory-plan.result == 'success' && needs.software-factory-plan.outputs.build == 'true' }}
+    strategy:
+      # One platform's image alone cannot be published, so there is no point finishing the
+      # other once one has failed.
+      fail-fast: true
+      matrix:
+        include:
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+          - arch: amd64
+            runner: ubuntu-24.04
+    runs-on: ${{ matrix.runner }}
+    env:
+      IMAGE: ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-software-factory
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       # .dockerignore excludes .git/ from the build context on purpose (shipping full repo
       # history into an image that gets published is the wrong trade), so
@@ -207,10 +268,10 @@ jobs:
       # Docker build the way backend's bootBuildImage reads it directly on the runner. Resolve
       # it here instead and pass it in as build-args below. The delimited form for `subject`
       # guards against a commit subject containing characters that would otherwise break a
-      # plain KEY=VALUE line written to GITHUB_OUTPUT.
+      # plain KEY=VALUE line written to GITHUB_OUTPUT. Both legs resolve the same commit, so
+      # both platforms report the same build metadata.
       - name: Resolve commit metadata
         id: commit-meta
-        if: env.CHANGED == 'true' || steps.retag.outputs.retagged != 'true'
         run: |
           {
             echo "time=$(git log -1 --format=%ct)"
@@ -219,32 +280,123 @@ jobs:
             echo "COMMIT_SUBJECT_EOF"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Build and push software factory image
-        if: env.CHANGED == 'true' || steps.retag.outputs.retagged != 'true'
+      # The docker-container builder this sets up is what can push by digest.
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Pushed by digest with no tag: `:<sha>` must only ever name the finished two-platform
+      # index, never one half of it. `provenance`/`sbom` are off so each leg pushes a plain
+      # image manifest, as the old single-runner build did, and the index carries exactly the
+      # two platform images (the SBOMs Dependency-Track reads are generated by trivy below).
+      - name: Build and push by digest
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
           file: Dockerfile.software-factory
-          push: true
-          tags: |
-            ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-software-factory:latest
-            ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-software-factory:${{ github.sha }}
+          platforms: linux/${{ matrix.arch }}
+          provenance: false
+          sbom: false
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
           build-args: |
             GIT_SHA=${{ github.sha }}
             GIT_COMMIT_TIME=${{ steps.commit-meta.outputs.time }}
             GIT_COMMIT_SUBJECT=${{ steps.commit-meta.outputs.subject }}
 
-  # The page-reader: Node, Playwright's headless Chromium, and a Temporal activity worker. Built
-  # on an arm64 runner because the Pi is arm64, exactly as the software-factory image is. It
-  # carries no build metadata yet, so the status page lists it as a floating `latest` image.
-  publish-page-reader:
-    name: Publish Page Reader Image
-    runs-on: ubuntu-24.04-arm
+      - name: Record the digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          [[ "$DIGEST" == sha256:* ]] || { echo "::error::The build reported no digest ('$DIGEST')"; exit 1; }
+          mkdir -p "$RUNNER_TEMP/digests"
+          echo "$DIGEST" > "$RUNNER_TEMP/digests/$ARCH"
+
+      - name: Upload the digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: software-factory-digest-${{ matrix.arch }}
+          path: ${{ runner.temp }}/digests/${{ matrix.arch }}
+          if-no-files-found: error
+          retention-days: 1
+
+  publish-software-factory:
+    name: Publish Software Factory Image
+    runs-on: ubuntu-latest
+    needs: [software-factory-plan, software-factory-build]
+    # Runs when the plan re-tagged (the build legs are skipped) or both legs succeeded. A failed
+    # plan or leg skips it, and with it everything that `needs:` this job.
+    if: ${{ !cancelled() && needs.software-factory-plan.result == 'success' && (needs.software-factory-plan.outputs.build != 'true' || needs.software-factory-build.result == 'success') }}
+    env:
+      IMAGE: ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-software-factory
+      BUILD: ${{ needs.software-factory-plan.outputs.build }}
+    outputs:
+      scan-digest: ${{ steps.assert.outputs.scan-digest }}
+    steps:
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Download the digests
+        if: env.BUILD == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: software-factory-digest-*
+          merge-multiple: true
+
+      # Copies manifests within the registry; no layers move. The digest files are named by
+      # platform rather than by digest so the order in the index is fixed (arm64, then amd64)
+      # and a missing leg fails here by name instead of producing a one-platform index.
+      - name: Create the multi-platform index
+        if: env.BUILD == 'true'
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/digests"
+          docker buildx imagetools create \
+            --tag "$IMAGE:$GITHUB_SHA" \
+            --tag "$IMAGE:latest" \
+            "$IMAGE@$(cat arm64)" \
+            "$IMAGE@$(cat amd64)"
+
+      # Checked on the published artifact, on both paths: a re-tag that somehow carried one
+      # platform, or an index assembled from one leg, would otherwise surface only as a pull
+      # failure on one host at deploy time. Also hands the sbom job the amd64 manifest to scan.
+      - name: Assert the image serves both platforms
+        id: assert
+        run: |
+          set -euo pipefail
+          raw="$(docker buildx imagetools inspect --raw "$IMAGE:$GITHUB_SHA")"
+          for arch in arm64 amd64; do
+            jq -e --arg a "$arch" 'any(.manifests[]?; .platform.os == "linux" and .platform.architecture == $a)' \
+              <<<"$raw" >/dev/null \
+              || { echo "::error::$IMAGE:$GITHUB_SHA has no linux/$arch image"; exit 1; }
+          done
+          digest="$(jq -r 'first(.manifests[] | select(.platform.os == "linux" and .platform.architecture == "amd64") | .digest)' <<<"$raw")"
+          echo "scan-digest=$digest" | tee -a "$GITHUB_OUTPUT"
+
+  # The page-reader: Node, Playwright's headless Chromium, and a Temporal activity worker. It
+  # runs on the amd64 NUC; arm64 is still built so the Pi can run it until the move is proven.
+  # Same three-job shape as the software-factory image above, for the same reasons. It carries
+  # no build metadata yet, so the status page lists it as a floating `latest` image.
+  page-reader-plan:
+    name: Plan Page Reader Image
+    runs-on: ubuntu-latest
     needs: changes
     env:
       IMAGE: ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-page-reader
+      PLATFORMS: linux/arm64,linux/amd64
       CHANGED: ${{ needs.changes.result != 'success' || needs.changes.outputs.reader == 'true' }}
     if: ${{ !cancelled() }}
+    outputs:
+      build: ${{ steps.decide.outputs.build }}
     steps:
       - uses: actions/checkout@v4
 
@@ -261,18 +413,118 @@ jobs:
         env:
           BEFORE: ${{ github.event.before }}
           AFTER: ${{ github.sha }}
-        run: scripts/ci/retag-image.sh "$IMAGE" "$BEFORE" "$AFTER" | tee -a "$GITHUB_OUTPUT"
+        run: scripts/ci/retag-image.sh "$IMAGE" "$BEFORE" "$AFTER" "$PLATFORMS" | tee -a "$GITHUB_OUTPUT"
 
-      - name: Build and push page-reader image
-        if: env.CHANGED == 'true' || steps.retag.outputs.retagged != 'true'
+      - name: Decide whether to build
+        id: decide
+        env:
+          BUILD: ${{ env.CHANGED == 'true' || steps.retag.outputs.retagged != 'true' }}
+        run: echo "build=$BUILD" | tee -a "$GITHUB_OUTPUT"
+
+  page-reader-build:
+    name: Build Page Reader Image (${{ matrix.arch }})
+    needs: page-reader-plan
+    if: ${{ !cancelled() && needs.page-reader-plan.result == 'success' && needs.page-reader-plan.outputs.build == 'true' }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+          - arch: amd64
+            runner: ubuntu-24.04
+    runs-on: ${{ matrix.runner }}
+    env:
+      IMAGE: ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-page-reader
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push by digest
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
           file: Dockerfile.page-reader
-          push: true
-          tags: |
-            ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-page-reader:latest
-            ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-page-reader:${{ github.sha }}
+          platforms: linux/${{ matrix.arch }}
+          provenance: false
+          sbom: false
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+
+      - name: Record the digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          [[ "$DIGEST" == sha256:* ]] || { echo "::error::The build reported no digest ('$DIGEST')"; exit 1; }
+          mkdir -p "$RUNNER_TEMP/digests"
+          echo "$DIGEST" > "$RUNNER_TEMP/digests/$ARCH"
+
+      - name: Upload the digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: page-reader-digest-${{ matrix.arch }}
+          path: ${{ runner.temp }}/digests/${{ matrix.arch }}
+          if-no-files-found: error
+          retention-days: 1
+
+  publish-page-reader:
+    name: Publish Page Reader Image
+    runs-on: ubuntu-latest
+    needs: [page-reader-plan, page-reader-build]
+    if: ${{ !cancelled() && needs.page-reader-plan.result == 'success' && (needs.page-reader-plan.outputs.build != 'true' || needs.page-reader-build.result == 'success') }}
+    env:
+      IMAGE: ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-page-reader
+      BUILD: ${{ needs.page-reader-plan.outputs.build }}
+    steps:
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Download the digests
+        if: env.BUILD == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: page-reader-digest-*
+          merge-multiple: true
+
+      - name: Create the multi-platform index
+        if: env.BUILD == 'true'
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/digests"
+          docker buildx imagetools create \
+            --tag "$IMAGE:$GITHUB_SHA" \
+            --tag "$IMAGE:latest" \
+            "$IMAGE@$(cat arm64)" \
+            "$IMAGE@$(cat amd64)"
+
+      - name: Assert the image serves both platforms
+        run: |
+          set -euo pipefail
+          raw="$(docker buildx imagetools inspect --raw "$IMAGE:$GITHUB_SHA")"
+          for arch in arm64 amd64; do
+            jq -e --arg a "$arch" 'any(.manifests[]?; .platform.os == "linux" and .platform.architecture == $a)' \
+              <<<"$raw" >/dev/null \
+              || { echo "::error::$IMAGE:$GITHUB_SHA has no linux/$arch image"; exit 1; }
+          done
 
   sbom:
     name: Publish SBOMs to Dependency-Track
@@ -331,10 +583,12 @@ jobs:
       # image). See docs/runbooks/dependency-track.md.
       #
       # Registry credentials go in TRIVY_USERNAME/TRIVY_PASSWORD - the action exposes no
-      # input for them - because the ghcr packages are not necessarily public. The images
-      # are single-manifest arm64 (built on ubuntu-24.04-arm) and this job runs on amd64;
-      # no `--platform` is needed, because with no platform index there is no choice to
-      # make, and trivy inspects the image via the registry rather than running it.
+      # input for them - because the ghcr packages are not necessarily public. The backend
+      # and frontend images are single-manifest arm64 (built on ubuntu-24.04-arm) and this
+      # job runs on amd64; no `--platform` is needed for them, because with no platform index
+      # there is no choice to make, and trivy inspects the image via the registry rather than
+      # running it. The software-factory image IS a two-platform index, so its step scans one
+      # platform explicitly - see that step.
       # `version` is pinned to match the trivy-server in docker-compose.prod.yml.
       - name: Generate backend image SBOM
         uses: aquasecurity/trivy-action@v0.36.0
@@ -360,6 +614,15 @@ jobs:
           format: cyclonedx
           output: frontend-image-bom.json
 
+      # The software-factory image is an index of linux/arm64 and linux/amd64, and only ONE
+      # platform is scanned: the linux/amd64 manifest, addressed by its own digest (handed on
+      # by publish-software-factory, read from the published index). By digest rather than by
+      # tag plus a platform option, so the choice is explicit in the reference itself and
+      # trivy sees a single manifest exactly as it did before the image went multi-arch.
+      # amd64 because that is where the software factory itself runs (the NUC); the arm64
+      # half is the same Dockerfile from the same package snapshot, so its findings match
+      # apart from per-architecture builds of the same versions. The Dependency-Track
+      # project stays one project, `simonrowe-dev/software-factory-image`.
       - name: Generate software factory image SBOM
         uses: aquasecurity/trivy-action@v0.36.0
         env:
@@ -368,7 +631,7 @@ jobs:
         with:
           version: v0.74.0
           scan-type: image
-          image-ref: ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-software-factory:${{ github.sha }}
+          image-ref: ghcr.io/simonjamesrowe/simonrowe-dev-monorepo-software-factory@${{ needs.publish-software-factory.outputs.scan-digest }}
           format: cyclonedx
           output: software-factory-image-bom.json
 
