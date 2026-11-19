@@ -726,19 +726,33 @@ describe('NewsEventsPage', () => {
       })).toBeInTheDocument()
     })
 
-    it('offers the cold Listen invitation for an article with no audio', async () => {
+    /** Summarise is the one action: it asks for the audio too, so there is no cold Listen. */
+    it('offers only Summarise for an article with no audio', async () => {
       vi.mocked(fetchNews).mockResolvedValue(newsPage([article('a-1', 'First article')]))
 
       renderPage()
 
       await waitFor(() => expect(screen.getByText('First article')).toBeInTheDocument())
-      expect(screen.getByRole('button', {
+      expect(screen.queryByRole('button', {
         name: 'Generate an audio version of First article',
-      })).toBeInTheDocument()
+      })).not.toBeInTheDocument()
+      const actions = document.querySelector('.feed__card-actions')!
+      expect(actions.querySelectorAll('button')).toHaveLength(2)
+      expect(actions.querySelector('.listen-button')).not.toBeInTheDocument()
+      expect(actions.querySelector('.summary-button')).toBeInTheDocument()
     })
 
-    /** Three controls maximum: listen, summarise, favourite. */
-    it('sits alongside the summary and favourite controls, and no more', async () => {
+    /** Three controls maximum: play, summary, favourite. */
+    it('sits alongside the summary and favourite controls once there is audio', async () => {
+      narration = narrationAudioStub({
+        ready: {
+          'ARTICLE_SUMMARY:a-1': {
+            contentId: 'a-1',
+            audioUrl: '/uploads/narrations/a-1/narration.mp3',
+            durationSeconds: 180,
+          },
+        },
+      })
       vi.mocked(fetchNews).mockResolvedValue(newsPage([article('a-1', 'First article')]))
 
       renderPage()
@@ -789,7 +803,7 @@ describe('NewsEventsPage', () => {
 
       await waitFor(() => expect(screen.getByText('First article')).toBeInTheDocument())
       expect(screen.getByRole('button', {
-        name: 'Generate an AI summary of First article',
+        name: 'Generate an AI summary of First article, with audio for the playlist',
       })).toBeInTheDocument()
     })
 
@@ -809,7 +823,7 @@ describe('NewsEventsPage', () => {
         .toBeDisabled()
       // The rest of the list is unaffected.
       expect(screen.getByRole('button', {
-        name: 'Generate an audio version of Second article',
+        name: /Generate an AI summary of Second article/,
       })).toBeEnabled()
     })
 

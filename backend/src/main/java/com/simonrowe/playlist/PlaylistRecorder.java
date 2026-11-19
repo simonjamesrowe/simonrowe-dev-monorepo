@@ -12,7 +12,8 @@ public interface PlaylistRecorder {
 
   /**
    * Adds the content to the playlist if it is not on it already. Something already queued or
-   * already heard is left alone.
+   * already heard is left alone, except that a source which {@link PlaylistSource#asksForAudio()
+   * asks for audio} marks an item still queued as wanting it.
    *
    * <p><strong>Never throws.</strong> The caller's own action (the heart, the summary, the
    * audio) must succeed whether or not the playlist could be updated.

@@ -248,6 +248,51 @@ class PlaylistApiIntegrationTest extends AbstractIntegrationTest {
     assertThat(item.status()).isEqualTo(PlaylistItemStatus.LISTENED);
   }
 
+  /** Summarising and listening are one action: a summary asks for its audio as well. */
+  @Test
+  void summarisingAsksForTheAudioToo() {
+    article("a-1", "Summarised", true);
+
+    playlistService.record(PlaylistContentType.ARTICLE_SUMMARY, "a-1", PlaylistSource.SUMMARISED);
+
+    assertThat(item("ARTICLE_SUMMARY:a-1").voiceRequested()).isTrue();
+  }
+
+  @Test
+  void summarisingSomethingAlreadyQueuedAsksForItsAudio() {
+    article("a-1", "Hearted first", true);
+    playlistService.record(PlaylistContentType.ARTICLE_SUMMARY, "a-1", PlaylistSource.FAVOURITED);
+    assertThat(item("ARTICLE_SUMMARY:a-1").voiceRequested()).isFalse();
+
+    playlistService.record(PlaylistContentType.ARTICLE_SUMMARY, "a-1", PlaylistSource.SUMMARISED);
+
+    PlaylistItem item = item("ARTICLE_SUMMARY:a-1");
+    assertThat(item.voiceRequested()).isTrue();
+    assertThat(item.addedVia()).isEqualTo(PlaylistSource.FAVOURITED);
+  }
+
+  @Test
+  void summarisingSomethingAlreadyHeardDoesNotQueueItAgain() {
+    article("a-1", "Heard", true);
+    playlistService.record(PlaylistContentType.ARTICLE_SUMMARY, "a-1", PlaylistSource.FAVOURITED);
+    playlistService.markListened(PlaylistContentType.ARTICLE_SUMMARY, "a-1");
+
+    playlistService.record(PlaylistContentType.ARTICLE_SUMMARY, "a-1", PlaylistSource.SUMMARISED);
+
+    PlaylistItem item = item("ARTICLE_SUMMARY:a-1");
+    assertThat(item.status()).isEqualTo(PlaylistItemStatus.LISTENED);
+    assertThat(item.voiceRequested()).isFalse();
+  }
+
+  @Test
+  void heartingDoesNotAskForAudio() {
+    article("a-1", "Hearted", true);
+
+    playlistService.record(PlaylistContentType.ARTICLE_SUMMARY, "a-1", PlaylistSource.FAVOURITED);
+
+    assertThat(item("ARTICLE_SUMMARY:a-1").voiceRequested()).isFalse();
+  }
+
   @Test
   void recordingSomethingThatDoesNotExistAddsNothingAndDoesNotThrow() {
     playlistService.record(PlaylistContentType.BLOG, "missing", PlaylistSource.LISTENED);

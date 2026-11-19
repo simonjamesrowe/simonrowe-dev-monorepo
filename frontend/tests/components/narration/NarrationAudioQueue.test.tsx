@@ -76,7 +76,9 @@ function track(id: string, extra: Partial<NarrationTrack> = {}): NarrationTrack 
 const LIST = [track('a'), track('b', { resumeAt: 120 }), track('c')]
 
 function Probe() {
-  const { track: current, upNext, playQueue, next, previous, setJourney, notice } = useNarrationAudio()
+  const {
+    track: current, upNext, playQueue, next, previous, setJourney, notice, markListened,
+  } = useNarrationAudio()
   return (
     <div>
       <span data-testid="track">{current?.contentId ?? 'none'}</span>
@@ -85,6 +87,8 @@ function Probe() {
       <button onClick={() => playQueue(LIST, 0)} type="button">play list</button>
       <button onClick={() => playQueue(LIST, 1)} type="button">play second</button>
       <button onClick={next} type="button">next</button>
+      <button onClick={markListened} type="button">mark listened</button>
+      <button onClick={() => playQueue(LIST, 2)} type="button">play last</button>
       <button onClick={previous} type="button">previous</button>
       <button onClick={() => setJourney(20)} type="button">journey</button>
     </div>
@@ -150,6 +154,41 @@ describe('NarrationAudioProvider playing a list', () => {
     expect(markPlaylistListened).not.toHaveBeenCalled()
     expect(savePlaylistProgress).not.toHaveBeenCalled()
     expect(screen.getByTestId('track')).toHaveTextContent('b')
+  })
+
+  it('marks the current track heard part way through and moves on to the next', async () => {
+    render(<NarrationAudioProvider><Probe /></NarrationAudioProvider>)
+    await userEvent.click(screen.getByRole('button', { name: 'play list' }))
+    act(() => { audio().currentTime = 40 })
+
+    await userEvent.click(screen.getByRole('button', { name: 'mark listened' }))
+
+    expect(markPlaylistListened).toHaveBeenCalledWith(
+      getAccessToken, expect.objectContaining({ contentId: 'a' }))
+    expect(screen.getByTestId('track')).toHaveTextContent('b')
+    expect(screen.getByTestId('up-next')).toHaveTextContent('c')
+  })
+
+  it('stops after marking the last track heard', async () => {
+    render(<NarrationAudioProvider><Probe /></NarrationAudioProvider>)
+    await userEvent.click(screen.getByRole('button', { name: 'play last' }))
+
+    await userEvent.click(screen.getByRole('button', { name: 'mark listened' }))
+
+    expect(markPlaylistListened).toHaveBeenCalledWith(
+      getAccessToken, expect.objectContaining({ contentId: 'c' }))
+    expect(screen.getByTestId('track')).toHaveTextContent('none')
+  })
+
+  it('does not mark anything heard by hand for a signed-out listener', async () => {
+    auth.isAuthenticated = false
+    render(<NarrationAudioProvider><Probe /></NarrationAudioProvider>)
+    await userEvent.click(screen.getByRole('button', { name: 'play list' }))
+
+    await userEvent.click(screen.getByRole('button', { name: 'mark listened' }))
+
+    expect(markPlaylistListened).not.toHaveBeenCalled()
+    expect(screen.getByTestId('track')).toHaveTextContent('a')
   })
 
   it('resumes a part-heard track where it was left', async () => {

@@ -21,6 +21,8 @@ interface PlaylistQueueProps {
   canChange: boolean
   onPlay: (index: number) => void
   onPlayNext: (entry: PlaylistEntry) => void
+  /** Records it as heard, so it drops off the queue. */
+  onMarkListened: (entry: PlaylistEntry) => void
   onRemove: (entry: PlaylistEntry) => void
   onToggleHeart: (entry: PlaylistEntry) => void
 }
@@ -28,7 +30,7 @@ interface PlaylistQueueProps {
 /** Everything queued that has audio, in play order: "Play next" first, then newest first. */
 export function PlaylistQueue({
   entries, currentKey, playing, stopKey, beyondKeys, canChange,
-  onPlay, onPlayNext, onRemove, onToggleHeart,
+  onPlay, onPlayNext, onMarkListened, onRemove, onToggleHeart,
 }: PlaylistQueueProps) {
   const navigate = useNavigate()
 
@@ -50,6 +52,7 @@ export function PlaylistQueue({
           ? Math.max(0, seconds - entry.progressSeconds) : null
         const actions: RowMenuAction[] = [
           { label: 'Play next', onSelect: () => onPlayNext(entry), disabled: current },
+          { label: 'Mark as listened', onSelect: () => onMarkListened(entry) },
           { label: entry.external ? 'Open the original article' : 'Read the post', onSelect: () => open(entry) },
           { label: 'Remove from the playlist', onSelect: () => onRemove(entry) },
         ]

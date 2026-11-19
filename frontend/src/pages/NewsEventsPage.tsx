@@ -525,6 +525,7 @@ export function NewsEventsPage() {
                       contentType="ARTICLE_SUMMARY"
                       external
                       href={article.originalUrl}
+                      offerWhenCold={false}
                       title={article.title}
                     />
                     <SummaryButton
@@ -594,6 +595,7 @@ export function NewsEventsPage() {
                       contentType="ARTICLE_SUMMARY"
                       external
                       href={article.originalUrl}
+                      offerWhenCold={false}
                       title={article.title}
                     />
                     <SummaryButton

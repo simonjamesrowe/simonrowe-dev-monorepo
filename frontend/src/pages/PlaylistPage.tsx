@@ -45,7 +45,7 @@ export function PlaylistPage() {
   const actions = usePlaylistActions()
   const {
     track, playing, position, rate, journeyEndsAt, upNext: playerUpNext,
-    playQueue, togglePlay, setUpNext, setJourney, listen,
+    playQueue, togglePlay, setUpNext, setJourney, listen, markListened,
   } = useNarrationAudio()
 
   const items = useMemo(() => data?.items ?? [], [data])
@@ -210,6 +210,11 @@ export function PlaylistPage() {
               entries={queue}
               onPlay={play}
               onPlayNext={(entry) => { void actions.playNext(entry) }}
+              onMarkListened={(entry) => {
+                // The one playing moves the player on as well; any other just leaves the list.
+                if (itemKey(entry) === currentKey) markListened()
+                else void actions.markListened(entry)
+              }}
               onRemove={(entry) => { void actions.remove(entry) }}
               onToggleHeart={(entry) => { void actions.toggleFavourite(entry) }}
               playing={playing}

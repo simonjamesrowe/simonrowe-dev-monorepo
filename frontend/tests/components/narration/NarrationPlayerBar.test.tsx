@@ -321,6 +321,23 @@ describe('NarrationPlayerBar', () => {
       expect(screen.getByRole('link', { name: /Playlist · 1/ })).toHaveAttribute('href', '/playlist')
     })
 
+    it('marks what is playing as listened, which moves on to the next', async () => {
+      const value = narrationAudioStub({ track: first, stage: 'ready', upNext: [second] })
+      renderBar(value)
+
+      await userEvent.click(screen.getByRole('button', {
+        name: 'Mark as listened and play the next one',
+      }))
+
+      expect(value.markListened).toHaveBeenCalledOnce()
+    })
+
+    it('offers no way to mark a track that is not from the playlist', () => {
+      renderBar(narrationAudioStub({ track: blogTrack, stage: 'ready' }))
+
+      expect(screen.queryByRole('button', { name: /Mark as listened/ })).not.toBeInTheDocument()
+    })
+
     it('hearts the article it is playing', async () => {
       renderBar(narrationAudioStub({ track: first, stage: 'ready' }))
 

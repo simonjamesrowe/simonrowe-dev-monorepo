@@ -15,7 +15,8 @@ interface SummaryButtonProps {
  * - a summary exists → "Read summary", which opens the drawer immediately for everyone,
  *   signed in or not, because the artefact is globally shared
  * - no summary → "Summarise", which prompts for sign-in first, because generating one
- *   spends on the model
+ *   spends on the model. It also asks for the audio: summarising and listening are one action,
+ *   so the summary is read aloud and waiting on the playlist without a second press
  *
  * News only. Events are not summarised.
  */
@@ -31,7 +32,7 @@ export function SummaryButton({
     <button
       aria-label={hasSummary
         ? `Read the AI-generated summary of ${articleTitle}`
-        : `Generate an AI summary of ${articleTitle}`}
+        : `Generate an AI summary of ${articleTitle}, with audio for the playlist`}
       className={`summary-button${className ? ` ${className}` : ''}`}
       onClick={(e) => {
         // Cards are anchor elements — stop the click from opening the original article.

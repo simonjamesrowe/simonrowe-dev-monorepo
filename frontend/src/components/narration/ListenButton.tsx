@@ -13,6 +13,12 @@ interface ListenButtonProps {
   href: string
   /** True when `href` leaves the site. */
   external?: boolean
+  /**
+   * Whether to show the cold `Listen` invitation when there is no audio yet. News cards turn it
+   * off: there, Summarise is the one action, and it asks for the audio as well. Blog posts have
+   * no summary, so Listen is how their audio is made and they keep it.
+   */
+  offerWhenCold?: boolean
   className?: string
 }
 
@@ -40,6 +46,7 @@ export function ListenButton({
   title,
   href,
   external,
+  offerWhenCold = true,
   className,
 }: ListenButtonProps) {
   const { readyFor, stageFor, listen } = useNarrationAudio()
@@ -47,6 +54,7 @@ export function ListenButton({
   const ready = readyFor(contentType, contentId)
   const stage = stageFor(contentType, contentId)
   const busy = stage === 'summarising' || stage === 'narrating'
+  if (!busy && !ready && !offerWhenCold) return null
 
   // One branch per state, resolving everything the button needs at once. Deliberately not
   // nested ternaries in the JSX: three of them reading off two flags is the sort of thing you
