@@ -1044,7 +1044,15 @@ services:
       retries: 3
 
   nginx:
-    image: nginx:alpine
+    # Pinned, not `nginx:alpine`. A floating tag here never moved: nothing on the Pi
+    # re-pulls a stock image (compose's default pull policy is `missing`, and the deploy
+    # pulls only the three images CI builds), so the proxy sat on whatever `alpine`
+    # meant when it was first pulled - nginx 1.31.4 on 2026-11-20, inside the range hit by
+    # the NGINX2Root advisories (CVE-2026-123007 et al., fixed in 1.31.9). A pinned tag
+    # changes this service's config hash, so the next deploy recreates nginx (it is in
+    # FACTORY_DEPLOY_RECREATABLE) and the reconcile's `up -d` pulls the new image.
+    # The cost: a future nginx fix needs this line bumped by hand.
+    image: nginx:1.31.9-alpine
     restart: unless-stopped
     volumes:
       - ./config/nginx/nginx-proxy.conf:/etc/nginx/conf.d/default.conf:ro
