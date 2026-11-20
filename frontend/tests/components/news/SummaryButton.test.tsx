@@ -21,6 +21,36 @@ describe('SummaryButton', () => {
     })).toHaveTextContent('Read summary')
   })
 
+  it('reads "Summarising" while one is being written, and still opens on click', () => {
+    const onClick = vi.fn()
+    render(
+      <SummaryButton
+        articleTitle="Spring Boot 4"
+        generating
+        hasSummary={false}
+        onClick={onClick}
+      />)
+
+    const button = screen.getByRole('button', {
+      name: /summary of Spring Boot 4 is being written/,
+    })
+    expect(button).toHaveTextContent('Summarising')
+    expect(button).toHaveAttribute('aria-busy', 'true')
+    expect(button).toHaveClass('summary-button--busy')
+
+    fireEvent.click(button)
+    expect(onClick).toHaveBeenCalledTimes(1)
+  })
+
+  it('reads "Read summary" once one exists, even if a stale generating flag remains', () => {
+    render(
+      <SummaryButton articleTitle="Spring Boot 4" generating hasSummary onClick={vi.fn()} />)
+
+    const button = screen.getByRole('button')
+    expect(button).toHaveTextContent('Read summary')
+    expect(button).not.toHaveAttribute('aria-busy')
+  })
+
   it('reports the click', () => {
     const onClick = vi.fn()
     render(

@@ -1,6 +1,6 @@
 import { Client, IMessage, StompSubscription } from '@stomp/stompjs'
 
-import { API_BASE_URL } from '../config/api'
+import { buildWsUrl } from './stompEndpoint'
 
 export interface ChatRequest {
   sessionId: string
@@ -15,16 +15,6 @@ export interface ChatResponse {
   toolLabel?: string | null
   widgetKind?: string | null
   payload?: unknown
-}
-
-function buildWsUrl(): string {
-  if (API_BASE_URL) {
-    // API_BASE_URL is an absolute HTTP(S) URL, e.g. http://localhost:8080
-    return API_BASE_URL.replace(/^http:/, 'ws:').replace(/^https:/, 'wss:') + '/ws/chat'
-  }
-  // Relative-path fallback: derive from current page origin
-  const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  return `${wsProtocol}//${window.location.host}/ws/chat`
 }
 
 const WS_URL = buildWsUrl()

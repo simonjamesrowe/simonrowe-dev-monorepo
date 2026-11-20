@@ -20,11 +20,20 @@ import com.simonrowe.AbstractIntegrationTest;
 import com.simonrowe.aggregation.AggregatedArticle;
 import com.simonrowe.aggregation.AggregatedArticleRepository;
 import com.simonrowe.aggregation.ArticleSourceTextProvider;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.messaging.Message;
+import org.springframework.messaging.MessageChannel;
+import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
+import org.springframework.messaging.support.AbstractSubscribableChannel;
+import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /**
@@ -44,6 +53,9 @@ class ArticleSummaryApiIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired private AggregatedArticleRepository articleRepository;
   @Autowired private ArticleSummaryRepository summaryRepository;
+
+  /** The simple broker's inbound channel: everything sent to a {@code /topic} passes here. */
+  @Autowired @Qualifier("brokerChannel") private AbstractSubscribableChannel brokerChannel;
 
   private PromptRunner promptRunner;
 
@@ -176,6 +188,54 @@ class ArticleSummaryApiIntegrationTest extends AbstractIntegrationTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.length()").value(1))
         .andExpect(jsonPath("$[0]").value(ARTICLE_ID));
+  }
+
+  @Test
+  void generatingIsPublicAndEmptyWhenNothingIsInProgress() throws Exception {
+    // No token: it is the logged-out visitor's starting state.
+    mockMvc.perform(get("/api/news/summaries/generating"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.length()").value(0));
+
+    summaryRepository.insert(new ArticleSummary(
+        ArticleSummary.idFor(ArticleSummaryService.SUMMARY_FORMAT_VERSION, ARTICLE_ID),
+        ARTICLE_ID, Instant.now()));
+
+    mockMvc.perform(get("/api/news/summaries/generating"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.length()").value(1))
+        .andExpect(jsonPath("$[0]").value(ARTICLE_ID));
+  }
+
+  /**
+   * The real wiring, not a mock of the broadcaster: the update reaches the STOMP broker on
+   * {@code /topic/summaries}, serialised as the JSON the news page parses.
+   */
+  @Test
+  void generatingSummaryBroadcastsGeneratingThenReadyToTheSummariesTopic() throws Exception {
+    List<String> sent = new CopyOnWriteArrayList<>();
+    ChannelInterceptor capture = new ChannelInterceptor() {
+      @Override
+      public Message<?> preSend(final Message<?> message, final MessageChannel channel) {
+        if (SummaryStatusBroadcaster.TOPIC.equals(
+            SimpMessageHeaderAccessor.getDestination(message.getHeaders()))) {
+          sent.add(new String((byte[]) message.getPayload(), StandardCharsets.UTF_8));
+        }
+        return message;
+      }
+    };
+    brokerChannel.addInterceptor(capture);
+    try {
+      mockMvc.perform(post("/api/news/" + ARTICLE_ID + "/summary")
+              .with(jwt().jwt(j -> j.subject("reader"))))
+          .andExpect(status().isOk());
+    } finally {
+      brokerChannel.removeInterceptor(capture);
+    }
+
+    assertThat(sent).containsExactly(
+        "{\"articleId\":\"" + ARTICLE_ID + "\",\"state\":\"GENERATING\"}",
+        "{\"articleId\":\"" + ARTICLE_ID + "\",\"state\":\"READY\"}");
   }
 
   @Test

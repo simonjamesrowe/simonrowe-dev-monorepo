@@ -127,6 +127,21 @@ export async function fetchSummarisedArticleIds(): Promise<string[]> {
 }
 
 /**
+ * Article ids whose summary is being written right now. Public, like the ids above: it is
+ * the starting state for cards that are mid-summary, and `/topic/summaries` carries every
+ * change after that.
+ */
+export async function fetchGeneratingArticleIds(): Promise<string[]> {
+  const response = await fetch(`${NEWS_ENDPOINT}/summaries/generating`, {
+    headers: { Accept: 'application/json' },
+  })
+  if (!response.ok) {
+    throw new Error(SUMMARY_FALLBACK_MESSAGE)
+  }
+  return (await response.json()) as string[]
+}
+
+/**
  * Queues text-to-speech for a summary. Authenticated: a render is the more expensive of
  * the two operations and draws on a monthly character budget shared with blog narration.
  */

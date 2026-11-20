@@ -10716,6 +10716,22 @@ a:hover {
   outline-offset: 2px;
 }
 
+/* A summary is being written: still clickable (it opens the progress), but not an offer. */
+.summary-button--busy {
+  background: rgba(0, 0, 0, 0.3);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.summary-button__spinner {
+  animation: spin 1s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .summary-button__spinner {
+    animation: none;
+  }
+}
+
 .news-summary__meta {
   display: flex;
   align-items: center;

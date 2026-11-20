@@ -1,4 +1,5 @@
 import '@testing-library/jest-dom'
+import { vi } from 'vitest'
 
 function createMemoryStorage(): Storage {
   const values = new Map<string, string>()
@@ -35,3 +36,12 @@ window.getComputedStyle = ((element: Element, pseudoElement?: string | null) => 
     },
   })
 }) as typeof window.getComputedStyle
+
+// The news page follows summary state over a STOMP socket. The test environment's
+// VITE_API_BASE_URL is production, so an unmocked socket would connect to the live site from
+// every test that renders that page. Tests of the socket itself `vi.unmock` this.
+vi.mock('../services/summaryStatusSocket', () => ({
+  SUMMARY_TOPIC: '/topic/summaries',
+  parseUpdate: () => null,
+  subscribeToSummaryStatus: vi.fn(() => () => {}),
+}))

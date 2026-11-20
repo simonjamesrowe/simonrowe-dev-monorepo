@@ -35,6 +35,7 @@ vi.mock('../../src/services/articleSummaryApi', () => ({
     state: 'READY', version: 2, body: 'Generated prose.', retryable: false, message: '',
   }),
   fetchSummarisedArticleIds: vi.fn(() => Promise.resolve([])),
+  fetchGeneratingArticleIds: vi.fn(() => Promise.resolve([])),
   requestArticleSummary: vi.fn().mockResolvedValue({
     state: 'READY', version: 2, body: 'Generated prose.', retryable: false, message: '',
   }),
