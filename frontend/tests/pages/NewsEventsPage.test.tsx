@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -42,6 +42,7 @@ vi.mock('../../src/services/articleSummaryApi', () => ({
     state: 'NOT_REQUESTED', version: 0, retryable: false, message: '',
   }),
   fetchSummarisedArticleIds: vi.fn(() => Promise.resolve([...summarisedIds])),
+  fetchGeneratingArticleIds: vi.fn(() => Promise.resolve([])),
   requestArticleSummary: vi.fn().mockResolvedValue({
     state: 'READY', version: 2, body: 'Prose.', retryable: false, message: '',
   }),
@@ -73,6 +74,12 @@ vi.mock('../../src/services/snippetsApi', () => ({
 }))
 
 import { fetchSnippetCounts } from '../../src/services/snippetsApi'
+import {
+  fetchArticleSummary,
+  fetchGeneratingArticleIds,
+  requestArticleSummary,
+} from '../../src/services/articleSummaryApi'
+import { subscribeToSummaryStatus } from '../../src/services/summaryStatusSocket'
 import { fetchNews, fetchNewsSources } from '../../src/services/newsApi'
 import { fetchEvents } from '../../src/services/eventsApi'
 import { getFavourites } from '../../src/services/favouritesApi'
@@ -462,6 +469,47 @@ describe('NewsEventsPage', () => {
     expect(screen.getByRole('button', {
       name: /Read the AI-generated summary of Summarised article/,
     })).toHaveTextContent('Read summary')
+  })
+
+  it('shows a card as summarising when the socket says so, then as ready', async () => {
+    vi.mocked(fetchNews).mockResolvedValue(newsPage([article('a-1', 'First article')]))
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', {
+        name: /Generate an AI summary of First article/,
+      })).toBeInTheDocument()
+    })
+    const listener = vi.mocked(subscribeToSummaryStatus).mock.calls.at(-1)?.[0]
+    expect(listener).toBeDefined()
+
+    act(() => { listener?.onUpdate({ articleId: 'a-1', state: 'GENERATING' }) })
+    expect(screen.getByRole('button', {
+      name: /summary of First article is being written/,
+    })).toHaveTextContent('Summarising')
+
+    act(() => { listener?.onUpdate({ articleId: 'a-1', state: 'READY' }) })
+    expect(screen.getByRole('button', {
+      name: /Read the AI-generated summary of First article/,
+    })).toHaveTextContent('Read summary')
+  })
+
+  it('opens a summarising card by reading, never by asking for a second summary', async () => {
+    vi.mocked(fetchNews).mockResolvedValue(newsPage([article('a-1', 'First article')]))
+    vi.mocked(fetchGeneratingArticleIds).mockResolvedValueOnce(['a-1'])
+    vi.mocked(fetchArticleSummary).mockClear()
+    vi.mocked(requestArticleSummary).mockClear()
+
+    renderPage()
+
+    const button = await screen.findByRole('button', {
+      name: /summary of First article is being written/,
+    })
+    await userEvent.click(button)
+
+    await waitFor(() => expect(fetchArticleSummary).toHaveBeenCalled())
+    expect(requestArticleSummary).not.toHaveBeenCalled()
   })
 
   it('opens the summary drawer over the list without losing the page behind it', async () => {

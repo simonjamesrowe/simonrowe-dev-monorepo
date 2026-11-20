@@ -94,6 +94,7 @@ public class ArticleSummaryService {
   private final MongoTemplate mongoTemplate;
   private final MeterRegistry meterRegistry;
   private final ApplicationEventPublisher eventPublisher;
+  private final SummaryStatusBroadcaster broadcaster;
   private final String model;
   private final Duration generationTimeout;
 
@@ -105,6 +106,7 @@ public class ArticleSummaryService {
       final MongoTemplate mongoTemplate,
       final MeterRegistry meterRegistry,
       final ApplicationEventPublisher eventPublisher,
+      final SummaryStatusBroadcaster broadcaster,
       @Value("${aggregation.summary.model}") final String model,
       @Value("${aggregation.summary.generation-timeout}") final Duration generationTimeout
   ) {
@@ -115,6 +117,7 @@ public class ArticleSummaryService {
     this.mongoTemplate = mongoTemplate;
     this.meterRegistry = meterRegistry;
     this.eventPublisher = eventPublisher;
+    this.broadcaster = broadcaster;
     this.model = model;
     this.generationTimeout = generationTimeout;
   }
@@ -159,6 +162,7 @@ public class ArticleSummaryService {
       ArticleSummary theirs = summaryRepository.findById(id).orElseThrow();
       return new RequestResult(ArticleSummaryResponse.from(theirs), true);
     }
+    broadcaster.broadcast(articleId, ArticleSummaryResponse.PublicState.GENERATING);
     return new RequestResult(generate(summary, article), false);
   }
 
@@ -210,6 +214,25 @@ public class ArticleSummaryService {
   }
 
   /**
+   * Article ids whose summary is being written right now.
+   *
+   * <p>The other half of the page's starting state, beside {@link #summarisedArticleIds()}:
+   * a page opened while a summary is mid-generation shows that card as summarising, and the
+   * {@code /topic/summaries} broadcast takes it from there. A {@code GENERATING} document
+   * older than {@code generation-timeout} is left out, because its process has died and the
+   * next request will reclaim it; showing it as in progress would leave the card stuck.
+   *
+   * @return the ids, empty when nothing is being summarised
+   */
+  public Set<String> generatingArticleIds() {
+    Instant cutoff = Instant.now().minus(generationTimeout);
+    return summaryRepository.findByStatus(SummaryStatus.GENERATING).stream()
+        .filter(summary -> summary.updatedAt() != null && summary.updatedAt().isAfter(cutoff))
+        .map(ArticleSummary::articleId)
+        .collect(Collectors.toSet());
+  }
+
+  /**
    * The stored summaries for several articles at once, whatever their state.
    *
    * @param articleIds the aggregated article ids
@@ -252,6 +275,7 @@ public class ArticleSummaryService {
         }
         summary.markGenerating(Instant.now());
         summaryRepository.save(summary);
+        broadcaster.broadcast(summary.articleId(), ArticleSummaryResponse.PublicState.GENERATING);
         return new RequestResult(generate(summary, article), false);
       }
       case GENERATING -> {
@@ -259,6 +283,9 @@ public class ArticleSummaryService {
         if (reclaimed.isEmpty()) {
           return new RequestResult(ArticleSummaryResponse.from(summary), true);
         }
+        // Announced again: a stale generation is left out of generatingArticleIds, so a page
+        // opened since it went stale shows the card as not summarised.
+        broadcaster.broadcast(summary.articleId(), ArticleSummaryResponse.PublicState.GENERATING);
         return new RequestResult(generate(reclaimed.get(), article), false);
       }
       default -> throw new IllegalStateException("Unhandled status: " + summary.status());
@@ -343,6 +370,7 @@ public class ArticleSummaryService {
         .record(Duration.between(started, now));
     LOG.info("Article summary ready: articleId={}, sourceCharacters={}, bodyCharacters={}",
         summary.articleId(), sourceText.length(), body.length());
+    broadcaster.broadcast(summary.articleId(), ArticleSummaryResponse.PublicState.READY);
     eventPublisher.publishEvent(new ArticleSummaryReadyEvent(summary.articleId()));
     return ArticleSummaryResponse.from(summary);
   }
@@ -354,6 +382,7 @@ public class ArticleSummaryService {
   ) {
     summary.markFailed(code, retryable, Instant.now());
     summaryRepository.save(summary);
+    broadcaster.broadcast(summary.articleId(), ArticleSummaryResponse.PublicState.FAILED);
     meterRegistry.counter("article.summary.requests", "result", "failed",
         "reason", code).increment();
     return ArticleSummaryResponse.from(summary);

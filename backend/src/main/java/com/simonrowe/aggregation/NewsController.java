@@ -160,6 +160,20 @@ public class NewsController {
     return summaryService.summarisedArticleIds();
   }
 
+  /**
+   * Every article whose summary is being written right now.
+   *
+   * <p>Public, like {@link #listSummarisedArticleIds()}. It is the news page's starting state
+   * for cards that are mid-summary; changes after that arrive on the {@code /topic/summaries}
+   * STOMP topic.
+   *
+   * @return the article ids, empty when nothing is being summarised
+   */
+  @GetMapping("/summaries/generating")
+  public Set<String> listGeneratingArticleIds() {
+    return summaryService.generatingArticleIds();
+  }
+
   @GetMapping("/{id}")
   public ArticleResponse getById(@PathVariable final String id) {
     return articleRepository.findById(id)

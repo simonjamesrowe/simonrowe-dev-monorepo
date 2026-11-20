@@ -82,6 +82,8 @@ class SecurityConfigTest extends AbstractIntegrationTest {
   void summaryReadsArePublicBecauseTheArtefactIsGloballyShared() throws Exception {
     mockMvc.perform(get("/api/news/summaries/ids"))
         .andExpect(status().isOk());
+    mockMvc.perform(get("/api/news/summaries/generating"))
+        .andExpect(status().isOk());
   }
 
   @Test

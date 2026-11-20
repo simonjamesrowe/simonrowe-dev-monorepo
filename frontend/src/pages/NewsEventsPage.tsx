@@ -265,13 +265,14 @@ export function NewsEventsPage() {
 
   /**
    * Opens the summary drawer. An article that already has a summary just reads it — no
-   * session, no prompt, because the artefact is globally shared. One that does not runs
-   * the sign-in popup first, inside `requestSummary`.
+   * session, no prompt, because the artefact is globally shared. So does one whose summary is
+   * being written: reading follows the progress, and asking again would only be told to wait.
+   * Anything else runs the sign-in popup first, inside `requestSummary`.
    */
   const handleSummaryOpen = (article: ArticleResponse) => {
     setSummaryArticleId(article.id)
     track('Summary Opened', { articleId: article.id, ready: summaries.hasSummary(article.id) })
-    if (summaries.hasSummary(article.id)) {
+    if (summaries.hasSummary(article.id) || summaries.isGenerating(article.id)) {
       void summaries.loadSummary(article.id)
     } else {
       void summaries.requestSummary(article.id)
@@ -530,6 +531,7 @@ export function NewsEventsPage() {
                     />
                     <SummaryButton
                       articleTitle={article.title}
+                      generating={summaries.isGenerating(article.id)}
                       hasSummary={summaries.hasSummary(article.id)}
                       onClick={() => handleSummaryOpen(article)}
                     />
@@ -600,6 +602,7 @@ export function NewsEventsPage() {
                     />
                     <SummaryButton
                       articleTitle={article.title}
+                      generating={summaries.isGenerating(article.id)}
                       hasSummary={summaries.hasSummary(article.id)}
                       onClick={() => handleSummaryOpen(article)}
                     />

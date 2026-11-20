@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -26,6 +27,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
@@ -54,6 +56,7 @@ class ArticleSummaryServiceTest {
   @Mock private Ai ai;
   @Mock private MongoTemplate mongoTemplate;
   @Mock private ApplicationEventPublisher eventPublisher;
+  @Mock private SummaryStatusBroadcaster broadcaster;
 
   private PromptRunner promptRunner;
   private AssistantMessage assistantMessage;
@@ -73,7 +76,7 @@ class ArticleSummaryServiceTest {
         .thenAnswer(invocation -> invocation.getArgument(0));
     service = new ArticleSummaryService(
         articleRepository, summaryRepository, sourceTextProvider, ai, mongoTemplate,
-        new SimpleMeterRegistry(), eventPublisher, MODEL, TIMEOUT);
+        new SimpleMeterRegistry(), eventPublisher, broadcaster, MODEL, TIMEOUT);
   }
 
   // ---------------------------------------------------------------- generation
@@ -97,6 +100,53 @@ class ArticleSummaryServiceTest {
     assertThat(stored.sourceCharacterCount()).isEqualTo(USABLE_SOURCE.length());
     assertThat(stored.completedAt()).isNotNull();
     verify(eventPublisher).publishEvent(new ArticleSummaryReadyEvent(ARTICLE_ID));
+  }
+
+  @Test
+  void freshGenerationBroadcastsGeneratingThenReady() {
+    visibleArticle();
+    when(sourceTextProvider.sourceTextFor(any())).thenReturn(USABLE_SOURCE);
+
+    service.request(ARTICLE_ID);
+
+    // Generating is announced after the insert lands and before the model call, which is
+    // what lets every open card flip to "Summarising" while the 15-30s call runs.
+    InOrder order = inOrder(summaryRepository, broadcaster, promptRunner);
+    order.verify(summaryRepository).insert(any(ArticleSummary.class));
+    order.verify(broadcaster)
+        .broadcast(ARTICLE_ID, ArticleSummaryResponse.PublicState.GENERATING);
+    order.verify(promptRunner).respond(anyList());
+    order.verify(summaryRepository).save(any(ArticleSummary.class));
+    order.verify(broadcaster).broadcast(ARTICLE_ID, ArticleSummaryResponse.PublicState.READY);
+  }
+
+  @Test
+  void failedGenerationBroadcastsFailedSoCardsStopShowingProgress() {
+    visibleArticle();
+    when(sourceTextProvider.sourceTextFor(any())).thenReturn("too short");
+
+    service.request(ARTICLE_ID);
+
+    verify(broadcaster).broadcast(ARTICLE_ID, ArticleSummaryResponse.PublicState.GENERATING);
+    verify(broadcaster).broadcast(ARTICLE_ID, ArticleSummaryResponse.PublicState.FAILED);
+    verify(broadcaster, never())
+        .broadcast(ARTICLE_ID, ArticleSummaryResponse.PublicState.READY);
+  }
+
+  @Test
+  void requestThatLosesTheInsertRaceBroadcastsNothing() {
+    visibleArticle();
+    ArticleSummary theirs = summary();
+    when(summaryRepository.findById(anyString()))
+        .thenReturn(Optional.empty())
+        .thenReturn(Optional.of(theirs));
+    when(summaryRepository.insert(any(ArticleSummary.class)))
+        .thenThrow(new org.springframework.dao.DuplicateKeyException("taken"));
+
+    service.request(ARTICLE_ID);
+
+    // The winner already announced it; a second GENERATING from every loser is noise.
+    verify(broadcaster, never()).broadcast(anyString(), any());
   }
 
   @Test
@@ -266,6 +316,7 @@ class ArticleSummaryServiceTest {
     verify(summaryRepository, never()).insert(any(ArticleSummary.class));
     // Announced once, by the generation that wrote it, not again on every reuse.
     verify(eventPublisher, never()).publishEvent(any(Object.class));
+    verify(broadcaster, never()).broadcast(anyString(), any());
   }
 
   @Test
@@ -300,6 +351,8 @@ class ArticleSummaryServiceTest {
     assertThat(result.response().state())
         .isEqualTo(ArticleSummaryResponse.PublicState.READY);
     verify(promptRunner).respond(anyList());
+    verify(broadcaster).broadcast(ARTICLE_ID, ArticleSummaryResponse.PublicState.GENERATING);
+    verify(broadcaster).broadcast(ARTICLE_ID, ArticleSummaryResponse.PublicState.READY);
   }
 
   // ---------------------------------------------------------------- id derivation
@@ -386,6 +439,18 @@ class ArticleSummaryServiceTest {
         .thenReturn(List.of(ready));
 
     assertThat(service.summarisedArticleIds()).containsExactly("art-ready");
+  }
+
+  @Test
+  void generatingArticleIdsLeavesOutGenerationsThatHaveGoneStale() {
+    ArticleSummary live = new ArticleSummary("s1", "art-live", Instant.now());
+    ArticleSummary abandoned = new ArticleSummary(
+        "s2", "art-abandoned", Instant.now().minus(TIMEOUT).minusSeconds(1));
+    when(summaryRepository.findByStatus(SummaryStatus.GENERATING))
+        .thenReturn(List.of(live, abandoned));
+
+    // An abandoned generation would otherwise show its card as summarising for ever.
+    assertThat(service.generatingArticleIds()).containsExactly("art-live");
   }
 
   // ---------------------------------------------------------------- helpers
