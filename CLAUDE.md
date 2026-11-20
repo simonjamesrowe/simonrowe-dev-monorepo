@@ -101,7 +101,7 @@ deployed from `~/workspace/simonjamesrowe/simonrowe-dev-monorepo` (needs a `.env
 It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` out to Cloudflare
 (Cloudflare → pinggy tunnel → the `nginx` container), so the stack can run on any Docker host.
 
-- **Single `nginx:alpine` reverse proxy** (`config/nginx/nginx-proxy.conf`) fronts every public hostname:
+- **Single `nginx` reverse proxy, pinned (`nginx:1.31.9-alpine`; a floating tag was never re-pulled)** (`config/nginx/nginx-proxy.conf`) fronts every public hostname:
   `www/simonrowe.dev → frontend:80`, `api.simonrowe.dev → backend:8080`,
   `console.simonrowe.dev → portainer:9000` (Portainer has **no** published port — only reachable through nginx),
   `langfuse.simonrowe.dev → langfuse:3000`, `temporal.simonrowe.dev → temporal-ui:8080`,
