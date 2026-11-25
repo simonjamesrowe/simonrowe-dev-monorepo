@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -245,6 +246,31 @@ class PublicationJudgeServiceTest {
 
     verify(approvals).approve(anyString(), anyString());
     assertThat(docs.get(newsletter.id()).needsDecision()).isTrue();
+  }
+
+  @Test
+  void emailLeftForPersonIsNotAskedAgainEverySweep() {
+    add(email("m1", "Hmm"));
+    judgeSays(Verdict.UNSURE, 0.5);
+    final PublicationJudgeService auto = service(SchoolJudgeProperties.Mode.AUTO);
+
+    auto.sweep();
+    auto.sweep();
+
+    verify(judge, times(1)).judge(anyString(), anyString(), anyString());
+  }
+
+  @Test
+  void emailLeftForPersonIsAskedAgainWhenThePromptChanges() {
+    final SchoolDocument marginal = add(email("m1", "Hmm"));
+    stored.put(marginal.id(), new SchoolJudgement(marginal.id(), SchoolSourceType.EMAIL,
+        "Hmm", THIS_TERM, marginal.contentHash(), Verdict.UNSURE, 0.5, "older prompt", null,
+        null, true, Outcome.QUEUED, "m", "judge-v0", THIS_TERM));
+    judgeSays(Verdict.PUBLIC, 0.95);
+
+    service(SchoolJudgeProperties.Mode.AUTO).sweep();
+
+    verify(approvals).approve(marginal.id(), PublicationJudgeService.APPROVER);
   }
 
   @Test

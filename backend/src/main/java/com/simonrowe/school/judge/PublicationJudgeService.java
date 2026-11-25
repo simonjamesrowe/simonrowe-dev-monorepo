@@ -168,11 +168,22 @@ public class PublicationJudgeService {
     return result;
   }
 
+  /**
+   * Whether a waiting document should be judged (again).
+   *
+   * <p>A document left for a person (QUEUED) is not re-asked every sweep: that would be a model
+   * call per queued email every 30 minutes, for as long as it waits, to get the same answer. It
+   * is re-asked once when {@link PublicationJudge#VERSION} changes, so a better prompt gets a
+   * second look at the marginal cases the last one left behind.
+   */
   private boolean needsJudging(final SchoolDocument document, final SchoolJudgement previous) {
-    return previous == null
-        || !Objects.equals(previous.contentHash(), document.contentHash())
-        || previous.outcome() == Outcome.SHADOW
-            && properties.mode() == SchoolJudgeProperties.Mode.AUTO;
+    if (previous == null || !Objects.equals(previous.contentHash(), document.contentHash())) {
+      return true;
+    }
+    final boolean auto = properties.mode() == SchoolJudgeProperties.Mode.AUTO;
+    return auto && (previous.outcome() == Outcome.SHADOW
+        || previous.outcome() == Outcome.QUEUED
+            && !PublicationJudge.VERSION.equals(previous.version()));
   }
 
   private Optional<Outcome> judgeEmail(final SchoolDocument email, final LocalDate today)
@@ -233,6 +244,9 @@ public class PublicationJudgeService {
     if (!emailPublic && !emailDeclined) {
       return Optional.empty();
     }
+    // `true`, not `authenticated`: an attachment inherits its email's standing rather than being
+    // verified afresh. Its email is already public, so either the judge verified the sender or a
+    // person approved it, and an email approved by hand has no judgement to read a value from.
     return Optional.of(record(attachment, emailPublic ? Verdict.PUBLIC : Verdict.PRIVATE, 1,
         emailPublic ? "Follows its email, which is public"
             : "Follows its email, which was kept private",

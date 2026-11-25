@@ -382,7 +382,9 @@ Load-bearing details:
   account). If the school changes mailer, every broadcast lands in Approvals as "sender not
   verified": update that glob from a fresh header.
 - **A person's decision is never re-judged.** Revoke an automatic approval and it goes back to
-  Approvals for you, not to the judge. Only a changed text is judged again.
+  Approvals for you, not to the judge. Only a changed text is judged again, plus one second
+  look at emails left for you whenever `PublicationJudge.VERSION` changes (bump it with any
+  prompt change); otherwise a waiting email is not re-asked every sweep.
 - **Household names** (`SCHOOL_HOUSEHOLD_NAMES`, comma separated) live in `.env` only: the
   repository is public. Empty is safe, because in the backtest the model alone marked every
   family-specific email PRIVATE at 0.97 or above. The rule is a backstop.
