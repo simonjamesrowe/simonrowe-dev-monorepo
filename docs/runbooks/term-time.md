@@ -349,6 +349,53 @@ rather than an error:
 Approval is now the **only** control over what reaches the public tier. Nothing re-checks the
 text at approval time and nothing can refuse an approval — see below.
 
+## The publication judge
+
+School email no longer waits for the owner. After every mail sync (and from **Run the judge now**
+at `/admin/school/judge`) `PublicationJudgeService` sweeps the approval queue and decides each
+waiting email itself, through `SchoolApprovalService` like a click would (so events cascade and
+chunks re-embed). Each decision is recorded in `school_judgements` (backed up), keyed by
+document id, with the verdict, confidence, one-line reason and the rule or model that decided.
+The **Judge** page under Term Time summarises the last 30 days, flags every decision the owner
+has since reversed, and keeps Make public / Make private on every row.
+
+How an email is decided:
+
+1. **Rules** (`PublicationRules`) decline without asking a model: a sender other than `info@`,
+   a reply/forward/auto-reply subject, a quoted `From:`/`Sent:` block, a payment, balance or
+   booking notice, a household name outside a greeting line, or last school year's mail more
+   than 30 days old. Rules only ever decline.
+2. Otherwise the **model** (`PublicationJudge`, `SCHOOL_JUDGE_MODEL`, default `gpt-6-luna`)
+   answers PUBLIC, PRIVATE or UNSURE. PRIVATE at 0.9 or above declines. PUBLIC at 0.9 or above
+   publishes **only if the sender is verified**. Everything else, and any failure, stays in
+   Approvals.
+3. **Attachments follow their email** (the owner did so 46 times in 49), unless named like a
+   pupil's document (`Surname, Forename.pdf`) or naming the household, which keeps them private.
+
+Load-bearing details:
+
+- **The school's broadcasts fail DMARC.** 129 of 136 emails (measured 2026-11-24) arrive from
+  `info@` through Arbor's SendGrid account, signed only by `sendgrid.net`, `dmarc=fail` under
+  `p=NONE`. "Verified" therefore means: Google's own `Authentication-Results` shows DMARC pass
+  for the school's domain, **or** SPF pass for an envelope matching
+  `SCHOOL_JUDGE_TRUSTED_ENVELOPE_SENDERS` (`bounces+189724-*@sendgrid.net`, the school's SendGrid
+  account). If the school changes mailer, every broadcast lands in Approvals as "sender not
+  verified": update that glob from a fresh header.
+- **A person's decision is never re-judged.** Revoke an automatic approval and it goes back to
+  Approvals for you, not to the judge. Only a changed text is judged again.
+- **Household names** (`SCHOOL_HOUSEHOLD_NAMES`, comma separated) live in `.env` only: the
+  repository is public. Empty is safe, because in the backtest the model alone marked every
+  family-specific email PRIVATE at 0.97 or above. The rule is a backstop.
+- **Modes**: `SCHOOL_JUDGE_MODE` is `auto` in production, `off` in `application.yml` so no test
+  calls a model, and `shadow` records verdicts without deciding. Switching shadow to auto decides
+  what shadow recorded.
+- **Backtest, 2026-11-24**, against every decision in the production backup: since 10 September
+  rules plus model agreed with every decline, and returned 3 of 101 approvals to the queue. The
+  11 July broadcasts declined on 9 September are what the previous-year rule is for. The prompt
+  was written after reading the declines, so watch the "You overrode" count for the first weeks.
+- The accepted cost, recorded in `PublicationJudgeService`: an automatic approval is revocable,
+  but an answer already served from it is not.
+
 ## Name suppression was removed
 
 Term Time used to carry a `StaffNameGate`: a heuristic that compared capitalised word pairs

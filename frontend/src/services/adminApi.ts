@@ -1316,6 +1316,65 @@ export async function decideSchoolApproval(
   return handleResponse<SchoolApprovalItem>(response)
 }
 
+/** What the publication judge did with one document, beside that document's state now. */
+export interface SchoolJudgementItem {
+  id: string
+  title: string
+  sourceType: string | null
+  publishedAt: string | null
+  verdict: 'PUBLIC' | 'PRIVATE' | 'UNSURE'
+  confidence: number
+  reason: string
+  rule: string | null
+  followsDocumentId: string | null
+  senderAuthenticated: boolean
+  outcome: 'APPROVED' | 'DECLINED' | 'QUEUED' | 'SHADOW'
+  judgedAt: string
+  currentState: 'PUBLIC' | 'PRIVATE' | 'WAITING' | 'MISSING'
+  overridden: boolean
+  preview: string
+}
+
+/** The judge's admin summary: counts are for the last 30 days. */
+export interface SchoolJudgeSummary {
+  mode: 'OFF' | 'SHADOW' | 'AUTO'
+  model: string
+  version: string
+  approved: number
+  declined: number
+  queued: number
+  shadow: number
+  overridden: number
+  items: SchoolJudgementItem[]
+}
+
+export interface SchoolJudgeSweepResult {
+  ran: boolean
+  approved: number
+  declined: number
+  queued: number
+  shadowed: number
+  skipped: number
+  detail: string
+}
+
+export async function fetchSchoolJudgeSummary(
+  getAccessToken: GetAccessToken,
+): Promise<SchoolJudgeSummary> {
+  const token = await getAccessToken()
+  const response = await authFetch(`${ADMIN_URL}/school/judge`, token)
+  return handleResponse<SchoolJudgeSummary>(response)
+}
+
+/** Runs the judge over everything waiting now, rather than after the next mail sync. */
+export async function runSchoolJudge(
+  getAccessToken: GetAccessToken,
+): Promise<SchoolJudgeSweepResult> {
+  const token = await getAccessToken()
+  const response = await authFetch(`${ADMIN_URL}/school/judge/run`, token, { method: 'POST' })
+  return handleResponse<SchoolJudgeSweepResult>(response)
+}
+
 /* ---------------------------------------------------------------------------
    Term Time admin
    --------------------------------------------------------------------------- */

@@ -11,7 +11,6 @@ import static org.mockito.Mockito.when;
 import com.simonrowe.school.SchoolProperties;
 import com.simonrowe.school.admin.SchoolLinkFetcher;
 import com.simonrowe.school.classify.SchoolEventExtractor;
-import com.simonrowe.school.classify.TierClassifier;
 import com.simonrowe.school.model.SchoolDocument;
 import com.simonrowe.school.model.SchoolLink;
 import com.simonrowe.school.model.SchoolLinkRepository;
@@ -76,7 +75,7 @@ class GmailLinkRetryTest {
         .thenReturn(new SchoolDocumentWriter.WriteResult(email(), false));
 
     service = new GmailIngestService(
-        properties(), gmail, mock(TierClassifier.class), documentWriter,
+        properties(), gmail, documentWriter,
         mock(SchoolSyncStateRepository.class), mock(SchoolIngestService.class),
         mock(SchoolPdfExtractor.class), eventExtractor, mock(SchoolEventWriter.class),
         mock(SchoolAttachmentStore.class), links, linkFilter, linkFetcher);

@@ -46,6 +46,7 @@ import com.simonrowe.migration.changeunits.V053ReserveInvitedCoparents;
 import com.simonrowe.migration.changeunits.V054CreateCoparentStatements;
 import com.simonrowe.migration.changeunits.V055CreateCoparentSettlements;
 import com.simonrowe.narration.NarrationRestoreValidator;
+import com.simonrowe.school.judge.SchoolJudgement;
 import com.simonrowe.school.news.NewsletterSummary;
 import com.simonrowe.snippet.Snippet;
 import org.bson.Document;
@@ -106,6 +107,8 @@ public class RestoreService {
       SCHOOL_LINKS,
       // Keyed by school_documents id, but by plain id, so order is free like the rest.
       NewsletterSummary.COLLECTION,
+      // Also keyed by plain school_documents id.
+      SchoolJudgement.COLLECTION,
       // One document with a fixed id and no references. A backup taken before it existed has
       // no entry for it, and a missing entry is skipped rather than dropped, so the copy
       // already on the target survives such a restore.

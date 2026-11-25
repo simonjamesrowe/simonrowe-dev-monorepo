@@ -3,7 +3,6 @@ package com.simonrowe.school.ingest;
 import com.simonrowe.school.SchoolProperties;
 import com.simonrowe.school.admin.SchoolLinkFetcher;
 import com.simonrowe.school.classify.SchoolEventExtractor;
-import com.simonrowe.school.classify.TierClassifier;
 import com.simonrowe.school.model.SchoolDocument;
 import com.simonrowe.school.model.SchoolEvent;
 import com.simonrowe.school.model.SchoolLink;
@@ -26,8 +25,9 @@ import org.springframework.stereotype.Service;
  * party already sets to the school's own name, and not a full-text search for the school's name,
  * which also matches a local street and so picks up estate agents.
  *
- * <p>Every message enters at {@link Visibility#RESTRICTED}. The classifier's answer is recorded as
- * a proposal and the name gate can veto it, but nothing here can make anything public.
+ * <p>Every message enters at {@link Visibility#RESTRICTED} and nothing here can make anything
+ * public. Deciding the tier is the publication judge's job ({@code PublicationJudgeService}),
+ * which runs over the approval queue after each sync.
  */
 @Service
 public class GmailIngestService {
@@ -37,7 +37,6 @@ public class GmailIngestService {
 
   private final SchoolProperties properties;
   private final GmailClient gmail;
-  private final TierClassifier classifier;
   private final SchoolDocumentWriter documentWriter;
   private final SchoolSyncStateRepository syncState;
   private final SchoolIngestService ingestService;
@@ -53,7 +52,6 @@ public class GmailIngestService {
   public GmailIngestService(
       final SchoolProperties properties,
       final GmailClient gmail,
-      final TierClassifier classifier,
       final SchoolDocumentWriter documentWriter,
       final SchoolSyncStateRepository syncState,
       final SchoolIngestService ingestService,
@@ -66,7 +64,6 @@ public class GmailIngestService {
       final SchoolLinkFetcher linkFetcher) {
     this.properties = properties;
     this.gmail = gmail;
-    this.classifier = classifier;
     this.documentWriter = documentWriter;
     this.syncState = syncState;
     this.ingestService = ingestService;
@@ -161,21 +158,7 @@ public class GmailIngestService {
       return false;
     }
 
-    SchoolDocument document = result.document();
-
-    // Only classify what a human has not already ruled on. Re-proposing a document that was
-    // approved or declined last week would churn the queue and could quietly reverse a decision.
-    //
-    // There is no name check here any more, on the owner's explicit instruction: personal names,
-    // pupils' included, are no longer suppressed anywhere in Term Time. Approval is now the only
-    // control over what reaches the public tier, which is what it was always doing the real work
-    // of anyway — the gate blocked 98 of 99 broadcasts and could not tell a catering company
-    // from a child.
-    if (document.approvedAt() == null) {
-      final Visibility proposed = classifier.propose(document.title(), document.body());
-      document = documentWriter.save(
-          document.withProposal(proposed, "classifier proposed " + proposed));
-    }
+    final SchoolDocument document = result.document();
 
     ingestService.embed(document);
 
@@ -328,7 +311,7 @@ public class GmailIngestService {
           List.of(),
           parent.visibility());
 
-      SchoolDocument pdf = result.document();
+      final SchoolDocument pdf = result.document();
       // Keep the original so an answer can link to it rather than only paraphrasing. Served
       // by SchoolAttachmentController, which refuses anything not in the public tier.
       //
@@ -339,10 +322,6 @@ public class GmailIngestService {
 
       if (!result.changed()) {
         continue;
-      }
-      if (pdf.approvedAt() == null) {
-        pdf = documentWriter.save(
-            pdf.withProposal(classifier.propose(pdf.title(), pdf.body()), "classifier proposal"));
       }
       ingestService.embed(pdf);
       for (SchoolEvent event : eventExtractor.extract(pdf)) {

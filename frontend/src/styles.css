@@ -13152,6 +13152,60 @@ body[data-narration-bar] .app-layout__main {
   color: var(--color-text-muted);
 }
 
+/* Term Time judge: what it decided automatically, at a glance. */
+.school-judge__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.school-judge__tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.75rem;
+  margin: 0.75rem 0 0.5rem;
+}
+
+.school-judge__tile {
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  background: var(--color-surface);
+}
+
+.school-judge__tile dt {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.school-judge__tile dd {
+  margin: 0.2rem 0 0;
+  font-size: 1.6rem;
+  font-weight: 600;
+}
+
+.school-judge__outcome--APPROVED {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.school-judge__outcome--DECLINED {
+  border-color: #b3541e;
+  color: #b3541e;
+}
+
+.school-judge__item--overridden {
+  border-left: 3px solid #b3541e;
+}
+
+.school-judge__override {
+  margin: 0.25rem 0 0.5rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #b3541e;
+}
+
 /* Inline document editing: the card's title and preview become the form, in place. */
 .school-admin__edit-title {
   flex: 1;

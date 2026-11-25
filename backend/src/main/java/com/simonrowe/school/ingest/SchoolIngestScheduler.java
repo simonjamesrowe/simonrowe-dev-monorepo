@@ -1,5 +1,6 @@
 package com.simonrowe.school.ingest;
 
+import com.simonrowe.school.judge.PublicationJudgeService;
 import com.simonrowe.school.news.SchoolNewsService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,14 +50,17 @@ public class SchoolIngestScheduler {
   private final GmailIngestService gmailIngestService;
   private final SchoolNewsletterPoller newsletterPoller;
   private final SchoolNewsService newsService;
+  private final PublicationJudgeService judgeService;
 
   public SchoolIngestScheduler(
       final SchoolIngestService ingestService, final GmailIngestService gmailIngestService,
-      final SchoolNewsletterPoller newsletterPoller, final SchoolNewsService newsService) {
+      final SchoolNewsletterPoller newsletterPoller, final SchoolNewsService newsService,
+      final PublicationJudgeService judgeService) {
     this.ingestService = ingestService;
     this.gmailIngestService = gmailIngestService;
     this.newsletterPoller = newsletterPoller;
     this.newsService = newsService;
+    this.judgeService = judgeService;
   }
 
   /**
@@ -100,6 +104,13 @@ public class SchoolIngestScheduler {
       gmailIngestService.sync();
     } catch (RuntimeException e) {
       LOG.warn("Gmail ingest failed: {}", e.getMessage());
+    }
+    // After the sync, and even when it failed: the queue may hold mail from an earlier run.
+    // A no-op while the judge is off.
+    try {
+      judgeService.sweep();
+    } catch (RuntimeException e) {
+      LOG.warn("Publication judge failed: {}", e.getMessage());
     }
   }
 
