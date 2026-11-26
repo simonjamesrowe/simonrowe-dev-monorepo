@@ -906,6 +906,13 @@ services:
       # `claude-code` uses software-factory's content-writing queue with OpenAI as the fallback,
       # `openai` is OpenAI alone.
       SCHOOL_NEWSLETTER_SUMMARY_WRITER: ${SCHOOL_NEWSLETTER_SUMMARY_WRITER:-claude-code}
+      # The publication judge decides waiting school email itself (PublicationJudgeService).
+      # Repeats a default rather than `${VAR:-}`, which would pass an empty string and bind
+      # the mode to null, i.e. off. `shadow` records verdicts without deciding; `off` stops it.
+      SCHOOL_JUDGE_MODE: ${SCHOOL_JUDGE_MODE:-auto}
+      # Names of this mailbox's family, from .env only (the repository is public). A backstop
+      # rule; the judge still reads every email when it is empty.
+      SCHOOL_HOUSEHOLD_NAMES: ${SCHOOL_HOUSEHOLD_NAMES:-}
       SCHOOL_GMAIL_CLIENT_ID: ${SCHOOL_GMAIL_CLIENT_ID:-}
       SCHOOL_GMAIL_CLIENT_SECRET: ${SCHOOL_GMAIL_CLIENT_SECRET:-}
       SCHOOL_GMAIL_REFRESH_TOKEN: ${SCHOOL_GMAIL_REFRESH_TOKEN:-}

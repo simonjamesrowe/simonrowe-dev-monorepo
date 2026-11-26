@@ -86,6 +86,16 @@ class BackupCollectionsTest {
   }
 
   @Test
+  void publicationJudgementsAreBackedUpAndRestored() throws ReflectiveOperationException {
+    // Nothing re-derives a model's past answer, and the admin page reads these to show which
+    // Term Time decisions were automatic.
+    assertThat(readList(BackupService.class, "BACKUP_COLLECTIONS"))
+        .contains("school_judgements");
+    assertThat(readList(RestoreService.class, "IMPORT_ORDER_INDEPENDENT"))
+        .contains("school_judgements");
+  }
+
+  @Test
   void newsletterReviewDecisionsAreBackedUpAndRestored() throws ReflectiveOperationException {
     assertThat(readList(BackupService.class, "BACKUP_COLLECTIONS"))
         .contains("newsletter_candidates");

@@ -281,6 +281,21 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- termtime-publication-judge: **Term Time decides school email itself.** `PublicationJudgeService`
+  sweeps the approval queue after every mail sync and publishes or declines through
+  `SchoolApprovalService`; attachments follow their email. `TierClassifier` (PUBLIC for 4 of
+  the 101 emails the owner published) is deleted. Load-bearing bits:
+  - **Rules decline before any model** (`PublicationRules`, possessive or bounded regexes, a
+    100k-char test), and never publish. The model needs 0.9 either way; below that, or UNSURE,
+    or any failure, the email stays in Approvals.
+  - **Publishing needs a verified sender, and the school's broadcasts fail DMARC** (Arbor sends
+    through SendGrid). `SenderAuthentication` accepts DMARC pass for the school's domain, or SPF
+    pass for the school's SendGrid envelope glob, read from Google's own header only.
+  - **Judgements are their own collection** (`school_judgements`, backed up), not fields on the
+    16-component `SchoolDocument` record. A person's decision is never re-judged.
+  - `SCHOOL_JUDGE_MODE` is `off` in yml and `auto` in prod compose; `SCHOOL_HOUSEHOLD_NAMES` goes
+    in `.env` only (public repo). The admin summary is `/admin/school/judge`.
+  See `docs/runbooks/term-time.md` ("The publication judge").
 - langfuse-retention: **ClickHouse's own diagnostics were 26GB of the Pi's disk; Langfuse's data
   was 340MB.** Measured 2026-11-07, the day after the Pi's USB SSD stopped accepting writes
   (`emergency_ro`; see `docs/runbooks/prod-monitoring.md`, "Filesystem gone read-only"):

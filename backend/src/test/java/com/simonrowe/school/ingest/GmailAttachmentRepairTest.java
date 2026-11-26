@@ -12,7 +12,6 @@ import static org.mockito.Mockito.when;
 import com.simonrowe.school.SchoolProperties;
 import com.simonrowe.school.admin.SchoolLinkFetcher;
 import com.simonrowe.school.classify.SchoolEventExtractor;
-import com.simonrowe.school.classify.TierClassifier;
 import com.simonrowe.school.model.SchoolDocument;
 import com.simonrowe.school.model.SchoolLinkRepository;
 import com.simonrowe.school.model.SchoolSourceType;
@@ -85,7 +84,7 @@ class GmailAttachmentRepairTest {
         .thenReturn(new SchoolDocumentWriter.WriteResult(pdf(), false));
 
     service = new GmailIngestService(
-        properties(), gmail, mock(TierClassifier.class), documentWriter,
+        properties(), gmail, documentWriter,
         mock(SchoolSyncStateRepository.class), ingestService, pdfExtractor, eventExtractor,
         mock(SchoolEventWriter.class), attachmentStore, mock(SchoolLinkRepository.class),
         linkFilter, mock(SchoolLinkFetcher.class));

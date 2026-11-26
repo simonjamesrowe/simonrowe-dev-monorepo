@@ -2,6 +2,7 @@ package com.simonrowe.school;
 
 import com.simonrowe.chat.ToolFilteringChatMemory;
 import com.simonrowe.school.chat.BoundedChatMemoryRepository;
+import com.simonrowe.school.judge.SchoolJudgeProperties;
 import java.time.Clock;
 import java.time.Duration;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -19,7 +20,8 @@ import org.springframework.context.annotation.Configuration;
  * the feature is off, so the disabled-path branches can read the flag they are gating on.
  */
 @Configuration
-@EnableConfigurationProperties({SchoolProperties.class, SchoolGmailProperties.class})
+@EnableConfigurationProperties({
+    SchoolProperties.class, SchoolGmailProperties.class, SchoolJudgeProperties.class})
 public class SchoolConfiguration {
 
   /** Ten exchanges, matching the portfolio chat's window. */

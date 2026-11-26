@@ -12,6 +12,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -161,6 +162,30 @@ public class GmailClient {
    */
   public Optional<JsonNode> fetchRawMessage(final String messageId) throws GmailAuthException {
     return get(BASE + "/messages/" + messageId + "?format=full");
+  }
+
+  /**
+   * Fetches only the headers the publication judge needs to know who really sent a message:
+   * {@code From} and every {@code Authentication-Results}. A metadata fetch, so it does not
+   * download the body again.
+   *
+   * @param messageId the Gmail message id
+   * @return the header name and value pairs in Gmail's order, or empty when unreadable
+   * @throws GmailAuthException when the credential will not authenticate
+   */
+  public Optional<List<Map.Entry<String, String>>> fetchSenderHeaders(final String messageId)
+      throws GmailAuthException {
+    final String query = "format=metadata&metadataHeaders=From"
+        .concat("&metadataHeaders=Authentication-Results");
+    return get(BASE + "/messages/" + enc(messageId) + "?" + query)
+        .map(node -> {
+          final List<Map.Entry<String, String>> headers = new ArrayList<>();
+          for (JsonNode header : node.path("payload").path("headers")) {
+            headers.add(Map.entry(header.path("name").asString(""),
+                header.path("value").asString("")));
+          }
+          return List.copyOf(headers);
+        });
   }
 
   /**

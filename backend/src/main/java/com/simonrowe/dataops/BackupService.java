@@ -72,6 +72,9 @@ public class BackupService {
       // Newsletter summaries cost a model call each, and the page shows a newsletter with no
       // summary until the hourly run gets to it, at most three an hour.
       "school_newsletter_summaries",
+      // What the publication judge decided and why. Nothing re-derives a model's past answer,
+      // and without it the admin page could no longer show which decisions were automatic.
+      "school_judgements",
       // The home page hero's copy, edited in the CMS. Nothing re-derives it: without it a
       // restore silently falls back to the built-in default wording.
       "home_page",

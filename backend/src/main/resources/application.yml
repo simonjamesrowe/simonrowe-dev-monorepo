@@ -776,6 +776,24 @@ school:
   newsletters:
     writer: ${SCHOOL_NEWSLETTER_SUMMARY_WRITER:openai}
     claude-code-max-wait: ${SCHOOL_NEWSLETTER_SUMMARY_CLAUDE_CODE_MAX_WAIT:30m}
+  # The publication judge decides each school email into the public or private tier, so the
+  # owner no longer approves every one by hand. `off` here so no test ever calls a model;
+  # production sets `auto` in docker-compose.prod.yml. `shadow` records verdicts and decides
+  # nothing. See PublicationJudgeService and docs/runbooks/term-time.md ("The publication judge").
+  judge:
+    mode: ${SCHOOL_JUDGE_MODE:off}
+    model: ${SCHOOL_JUDGE_MODEL:gpt-6-luna}
+    approve-threshold: ${SCHOOL_JUDGE_APPROVE_THRESHOLD:0.9}
+    decline-threshold: ${SCHOOL_JUDGE_DECLINE_THRESHOLD:0.9}
+    # Whole-group mail comes from info@. Every email from attendance@, accounts@ or wrap@ the
+    # owner ever decided was about one family.
+    broadcast-senders: ${SCHOOL_JUDGE_BROADCAST_SENDERS:info@kilmorie.lewisham.sch.uk}
+    school-domain: ${SCHOOL_JUDGE_SCHOOL_DOMAIN:kilmorie.lewisham.sch.uk}
+    # The school's broadcasts go out through Arbor's SendGrid account and fail the school's own
+    # DMARC, so this is how publishing knows they are real. See SenderAuthentication.
+    trusted-envelope-senders: ${SCHOOL_JUDGE_TRUSTED_ENVELOPE_SENDERS:bounces+189724-*@sendgrid.net}
+    # This mailbox's family, comma separated. Set in .env, NEVER here: the repository is public.
+    household-names: ${SCHOOL_HOUSEHOLD_NAMES:}
   # Minted by scripts/termtime-gmail-auth.py. All three empty means Gmail ingestion simply does
   # not run - the public tier is unaffected. A password change on the Google account revokes any
   # refresh token carrying Gmail scopes, silently, so expect to re-mint occasionally.
