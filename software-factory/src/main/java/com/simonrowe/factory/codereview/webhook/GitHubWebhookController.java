@@ -6,7 +6,9 @@ import tools.jackson.databind.ObjectMapper;
 import com.simonrowe.factory.codereview.api.ReviewAccepted;
 import com.simonrowe.factory.codereview.api.ReviewWorkflowService;
 import com.simonrowe.factory.codereview.config.CodeReviewProperties;
+import com.simonrowe.factory.codereview.domain.GateRequest;
 import com.simonrowe.factory.codereview.domain.ReviewRequest;
+import com.simonrowe.factory.codereview.github.ReviewMarkdownRenderer;
 import com.simonrowe.factory.deploy.api.DeployAccepted;
 import com.simonrowe.factory.deploy.api.DeployWorkflowService;
 import com.simonrowe.factory.deploy.config.DeployProperties;
@@ -99,6 +101,13 @@ public class GitHubWebhookController {
     if ("workflow_run".equals(event)) {
       try {
         return handleWorkflowRun(readPayload(body));
+      } catch (IllegalArgumentException exception) {
+        return ResponseEntity.badRequest().body(new WebhookResponse("malformed"));
+      }
+    }
+    if ("pull_request_review_thread".equals(event)) {
+      try {
+        return handleReviewThread(readPayload(body));
       } catch (IllegalArgumentException exception) {
         return ResponseEntity.badRequest().body(new WebhookResponse("malformed"));
       }
@@ -267,6 +276,41 @@ public class GitHubWebhookController {
                 owner, repository, pullNumber, url,
                 payload.path("pull_request").path("merged").asBoolean(false)));
     return ResponseEntity.accepted().body(accepted);
+  }
+
+  /**
+   * A person resolved a review conversation: if it is one of this reviewer's, recompute the gate.
+   *
+   * <p>Three filters before anything starts, each cheap and each load-bearing. Only
+   * {@code resolved}: re-opening a thread never needs the check to change now, the next review
+   * will see it. Never a bot: this reviewer resolves its own threads when a finding goes, and each
+   * of those would otherwise start a run. Only threads this reviewer opened: Brunel, once it
+   * subscribed to these events, ran a full review whenever anyone resolved another bot's thread.
+   * Whether the person may decline is checked in the activity, against the repository.
+   */
+  private ResponseEntity<?> handleReviewThread(final JsonNode payload) {
+    if (!"resolved".equals(payload.path("action").asText())
+        || "Bot".equals(payload.path("sender").path("type").asText())) {
+      return ResponseEntity.accepted().body(new WebhookResponse("ignored"));
+    }
+    JsonNode thread = payload.path("thread");
+    String rootBody = thread.path("comments").path(0).path("body").asText("");
+    if (!ReviewMarkdownRenderer.FINDING_MARKER_PATTERN.matcher(rootBody).find()) {
+      return ResponseEntity.accepted().body(new WebhookResponse("ignored"));
+    }
+    String owner = ownerOf(payload);
+    String repository = repositoryOf(payload);
+    int pullNumber = payload.path("pull_request").path("number").asInt();
+    String threadNodeId = thread.path("node_id").asText("");
+    if (owner.isBlank() || repository.isBlank() || pullNumber < 1 || threadNodeId.isBlank()) {
+      return ResponseEntity.badRequest().body(new WebhookResponse("malformed"));
+    }
+    boolean started =
+        workflowService.startGate(
+            new GateRequest(owner, repository, pullNumber, installationIdOf(payload)),
+            threadNodeId);
+    return ResponseEntity.accepted()
+        .body(new WebhookResponse(started ? "gate-recompute" : "duplicate"));
   }
 
   /**

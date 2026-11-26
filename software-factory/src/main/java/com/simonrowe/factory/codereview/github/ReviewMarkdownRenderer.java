@@ -5,6 +5,7 @@ import com.simonrowe.factory.codereview.domain.MergeDecision;
 import com.simonrowe.factory.codereview.domain.ReviewFailure;
 import com.simonrowe.factory.codereview.domain.ReviewFinding;
 import com.simonrowe.factory.codereview.domain.ReviewReport;
+import com.simonrowe.factory.codereview.domain.Severity;
 import java.util.List;
 import java.util.regex.Pattern;
 import org.springframework.stereotype.Component;
@@ -32,6 +33,11 @@ public class ReviewMarkdownRenderer {
    */
   public static final Pattern FINDING_MARKER_PATTERN =
       Pattern.compile("<!-- temporal-code-review-finding:([0-9a-f]{64}) -->");
+
+  /** Separates severity from title in a finding comment's heading. */
+  private static final String TITLE_SEPARATOR = " — ";
+
+  private static final String RECOMMENDATION_LABEL = "_Recommendation:_ ";
 
   /**
    * States what the reviewer now does to a merge.
@@ -142,6 +148,10 @@ public class ReviewMarkdownRenderer {
     return "<!-- temporal-code-review-finding:" + fingerprint + " -->";
   }
 
+  /**
+   * Renders one inline finding. {@link #parseFindingComment} reads this shape back, so a change
+   * here needs the same change there; {@code ReviewMarkdownRendererTest} round-trips the two.
+   */
   public String renderFindingComment(final ReviewFinding finding) {
     return """
         %s
@@ -157,6 +167,69 @@ public class ReviewMarkdownRenderer {
             finding.title(),
             finding.explanation(),
             finding.recommendation());
+  }
+
+  /**
+   * Reads a finding back out of a comment {@link #renderFindingComment} wrote, or returns null.
+   *
+   * <p>The next review needs the finding's title and severity: the title so the model can reuse it
+   * and keep the fingerprint, the severity so a declined or carried finding counts correctly.
+   * Line-by-line string work rather than a regex, because a comment body is unbounded input.
+   *
+   * @param body the root comment's body
+   * @param path the thread's file, which the comment body does not repeat
+   * @param line the thread's line, or 0 when GitHub no longer anchors it
+   */
+  public static ReviewFinding parseFindingComment(
+      final String body, final String path, final int line) {
+    if (body == null || path == null || path.isBlank()) {
+      return null;
+    }
+    List<String> lines = body.lines().toList();
+    int heading = -1;
+    Severity severity = null;
+    String title = null;
+    for (int index = 0; index < lines.size() && heading < 0; index++) {
+      String candidate = lines.get(index).strip();
+      int separator = candidate.indexOf(TITLE_SEPARATOR);
+      if (candidate.startsWith("**") && candidate.endsWith("**") && separator > 2) {
+        severity = severityOf(candidate.substring(2, separator));
+        title = candidate.substring(separator + TITLE_SEPARATOR.length(), candidate.length() - 2);
+        if (severity != null && !title.isBlank()) {
+          heading = index;
+        }
+      }
+    }
+    if (heading < 0) {
+      return null;
+    }
+    StringBuilder explanation = new StringBuilder();
+    String recommendation = "";
+    for (int index = heading + 1; index < lines.size(); index++) {
+      String text = lines.get(index);
+      if (text.startsWith(RECOMMENDATION_LABEL)) {
+        recommendation = text.substring(RECOMMENDATION_LABEL.length()).strip();
+        break;
+      }
+      explanation.append(text).append('\n');
+    }
+    String explained = explanation.toString().strip();
+    return new ReviewFinding(
+        severity,
+        path,
+        Math.max(line, 1),
+        title.strip(),
+        explained.isEmpty() ? title.strip() : explained,
+        recommendation.isEmpty() ? "See the original comment." : recommendation);
+  }
+
+  private static Severity severityOf(final String value) {
+    for (Severity severity : Severity.values()) {
+      if (severity.toJson().equals(value)) {
+        return severity;
+      }
+    }
+    return null;
   }
 
   public String renderAck(final String marker, final String headSha) {

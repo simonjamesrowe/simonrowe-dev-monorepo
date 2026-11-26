@@ -207,4 +207,52 @@ class ReviewMarkdownRendererTest {
     assertThat(body).doesNotContain("a ``` b");
     assertThat(body).contains("a ''' b");
   }
+
+  /** The next review reads its own findings back, so render and parse must agree exactly. */
+  @Test
+  void renderedFindingParsesBackToItself() {
+    ReviewFinding finding =
+        new ReviewFinding(
+            Severity.CRITICAL,
+            "src/App.java",
+            42,
+            "Retry — loop never ends",
+            "First paragraph.\n\nSecond paragraph.",
+            "Bound the retries.");
+
+    ReviewFinding parsed =
+        ReviewMarkdownRenderer.parseFindingComment(
+            new ReviewMarkdownRenderer().renderFindingComment(finding), "src/App.java", 42);
+
+    assertThat(parsed).isEqualTo(finding);
+  }
+
+  @Test
+  void commentThatIsNotFindingParsesToNothing() {
+    assertThat(ReviewMarkdownRenderer.parseFindingComment("Why is this here?", "a.java", 1))
+        .isNull();
+    assertThat(ReviewMarkdownRenderer.parseFindingComment("**unknown — Title**", "a.java", 1))
+        .isNull();
+    assertThat(ReviewMarkdownRenderer.parseFindingComment("**warning — Title**", "", 1)).isNull();
+  }
+
+  @Test
+  void outdatedThreadWithNoLineStillParsesToValidFinding() {
+    ReviewFinding parsed =
+        ReviewMarkdownRenderer.parseFindingComment("**warning — Title**", "a.java", 0);
+
+    assertThat(parsed.line()).isEqualTo(1);
+    assertThat(parsed.explanation()).isEqualTo("Title");
+  }
+
+  /** A comment body is unbounded input; parsing it must stay linear. */
+  @Test
+  void hugeBodyParsesQuickly() {
+    String body = "**warning — " + "x".repeat(100_000) + "\n" + "*".repeat(100_000);
+
+    long started = System.nanoTime();
+    ReviewMarkdownRenderer.parseFindingComment(body, "a.java", 1);
+
+    assertThat(System.nanoTime() - started).isLessThan(2_000_000_000L);
+  }
 }

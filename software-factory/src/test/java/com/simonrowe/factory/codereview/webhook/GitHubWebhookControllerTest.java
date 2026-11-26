@@ -13,6 +13,7 @@ import tools.jackson.databind.ObjectMapper;
 import com.simonrowe.factory.codereview.api.ReviewAccepted;
 import com.simonrowe.factory.codereview.api.ReviewWorkflowService;
 import com.simonrowe.factory.codereview.config.CodeReviewProperties;
+import com.simonrowe.factory.codereview.domain.GateRequest;
 import com.simonrowe.factory.codereview.domain.ReviewRequest;
 import com.simonrowe.factory.deploy.api.DeployAccepted;
 import com.simonrowe.factory.deploy.api.DeployWorkflowService;
@@ -243,6 +244,75 @@ class GitHubWebhookControllerTest {
     assertThat(started.repository()).isEqualTo("project");
     assertThat(started.pullNumber()).isEqualTo(42);
     assertThat(started.installationId()).isEqualTo(999L);
+  }
+
+  private static String reviewThreadPayload(
+      final String action, final String senderType, final String rootBody) throws Exception {
+    return """
+        {
+          "action": "%s",
+          "thread": {"node_id": "PRRT_1", "comments": [{"body": %s}]},
+          "pull_request": {"number": 42},
+          "repository": {"name": "project", "owner": {"login": "example"}},
+          "sender": {"login": "simonrowe", "type": "%s"},
+          "installation": {"id": 999}
+        }
+        """
+        .formatted(action, new ObjectMapper().writeValueAsString(rootBody), senderType);
+  }
+
+  private static String findingBody() {
+    return """
+        %s
+        **critical — Bad**"""
+        .formatted(
+            com.simonrowe.factory.codereview.github.ReviewMarkdownRenderer.findingMarker(
+                "f".repeat(64)));
+  }
+
+  /** Resolving one of this reviewer's threads recomputes the gate without running a review. */
+  @Test
+  void resolvingThisReviewersThreadStartsGateRecompute() throws Exception {
+    when(workflowService.startGate(any(), any())).thenReturn(true);
+    String payload = reviewThreadPayload("resolved", "User", findingBody());
+
+    deliver(payload, sign(payload), "pull_request_review_thread")
+        .andExpect(status().isAccepted())
+        .andExpect(jsonPath("$.status").value("gate-recompute"));
+
+    ArgumentCaptor<GateRequest> captor = ArgumentCaptor.forClass(GateRequest.class);
+    verify(workflowService).startGate(captor.capture(), org.mockito.ArgumentMatchers.eq("PRRT_1"));
+    assertThat(captor.getValue())
+        .isEqualTo(new GateRequest("example", "project", 42, 999L));
+    verify(workflowService, never()).start(any());
+  }
+
+  /**
+   * This reviewer resolves its own threads when a finding goes, and Brunel ran a full review every
+   * time anyone resolved another bot's thread. Neither may start anything.
+   */
+  @Test
+  void botResolutionsOtherPeoplesThreadsAndReopeningsAreIgnored() throws Exception {
+    for (String payload :
+        List.of(
+            reviewThreadPayload("resolved", "Bot", findingBody()),
+            reviewThreadPayload("resolved", "User", "Why is this here?"),
+            reviewThreadPayload("unresolved", "User", findingBody()))) {
+      deliver(payload, sign(payload), "pull_request_review_thread")
+          .andExpect(status().isAccepted())
+          .andExpect(jsonPath("$.status").value("ignored"));
+    }
+
+    verify(workflowService, never()).startGate(any(), any());
+  }
+
+  @Test
+  void unsignedReviewThreadEventStartsNothing() throws Exception {
+    String payload = reviewThreadPayload("resolved", "User", findingBody());
+
+    deliver(payload, null, "pull_request_review_thread").andExpect(status().isUnauthorized());
+
+    verify(workflowService, never()).startGate(any(), any());
   }
 
   @Test

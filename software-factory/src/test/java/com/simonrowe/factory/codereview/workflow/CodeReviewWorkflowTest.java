@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.simonrowe.factory.codereview.config.CodeReviewTaskQueues;
+import com.simonrowe.factory.codereview.domain.GateRequest;
 import com.simonrowe.factory.codereview.domain.MergeDecision;
 import com.simonrowe.factory.codereview.domain.PullRequestContext;
 import com.simonrowe.factory.codereview.domain.ReviewFailure;
@@ -652,6 +653,12 @@ class CodeReviewWorkflowTest {
         throw failArmWith;
       }
       return armDecision;
+    }
+
+    @Override
+    public String recomputeGate(final GateRequest request) {
+      calls.add("recomputeGate");
+      return "left alone";
     }
   }
 }

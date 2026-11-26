@@ -1,9 +1,11 @@
 package com.simonrowe.factory.codereview.api;
 
 import com.simonrowe.factory.codereview.config.CodeReviewTaskQueues;
+import com.simonrowe.factory.codereview.domain.GateRequest;
 import com.simonrowe.factory.codereview.domain.ReviewProgress;
 import com.simonrowe.factory.codereview.domain.ReviewRequest;
 import com.simonrowe.factory.codereview.workflow.CodeReviewWorkflow;
+import com.simonrowe.factory.codereview.workflow.ReviewGateWorkflow;
 import io.temporal.api.enums.v1.WorkflowIdReusePolicy;
 import io.temporal.client.WorkflowClient;
 import io.temporal.client.WorkflowExecutionAlreadyStarted;
@@ -37,6 +39,40 @@ public class ReviewWorkflowService {
       return new ReviewAccepted(workflowId, true);
     } catch (WorkflowExecutionAlreadyStarted exception) {
       return new ReviewAccepted(workflowId, false);
+    }
+  }
+
+  /**
+   * Starts a gate recompute for one resolved thread.
+   *
+   * <p>Keyed on the thread, so a delivery GitHub sends twice runs once, while resolving the same
+   * thread again after re-opening it runs again: the earlier run has finished by then, and the
+   * reuse policy allows a closed id to start anew.
+   *
+   * @return whether a new run started
+   */
+  public boolean startGate(final GateRequest request, final String threadNodeId) {
+    String workflowId =
+        "code-review-gate-%s-%s-%s-%s"
+            .formatted(
+                safe(request.owner()),
+                safe(request.repository()),
+                request.pullNumber(),
+                safe(threadNodeId));
+    ReviewGateWorkflow workflow =
+        workflowClient.newWorkflowStub(
+            ReviewGateWorkflow.class,
+            WorkflowOptions.newBuilder()
+                .setTaskQueue(CodeReviewTaskQueues.REVIEWS)
+                .setWorkflowId(workflowId)
+                .setWorkflowIdReusePolicy(
+                    WorkflowIdReusePolicy.WORKFLOW_ID_REUSE_POLICY_ALLOW_DUPLICATE)
+                .build());
+    try {
+      WorkflowClient.start(workflow::recompute, request);
+      return true;
+    } catch (WorkflowExecutionAlreadyStarted exception) {
+      return false;
     }
   }
 

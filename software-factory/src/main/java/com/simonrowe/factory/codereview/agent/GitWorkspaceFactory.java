@@ -142,6 +142,77 @@ public class GitWorkspaceFactory {
     }
   }
 
+  /**
+   * A file as it stands at the pull request's base commit, or null when it is absent there or
+   * cannot be read.
+   *
+   * <p>The base, never the head: this is how review guidance reaches the agent, and a pull request
+   * must not be able to rewrite the rules it is reviewed against. The base is code that has
+   * already been through review.
+   */
+  public String readAtBase(
+      final Workspace workspace,
+      final PullRequestContext pullRequest,
+      final String path,
+      final Consumer<String> heartbeat) {
+    if (!isSafeReviewPath(path) || path.startsWith("-") || !isCommitId(pullRequest.baseSha())) {
+      return null;
+    }
+    try {
+      return runGit(
+              List.of("git", "show", pullRequest.baseSha() + ":" + path),
+              workspace.repository(),
+              pullRequest,
+              heartbeat)
+          .standardOutput();
+    } catch (IllegalStateException exception) {
+      return null;
+    }
+  }
+
+  /**
+   * The files that differ between {@code commit} and the head under review, or null when that
+   * cannot be told, for instance because a force-push left {@code commit} out of this clone.
+   *
+   * <p>Null means "unknown", and callers must treat it as "changed": the cost of that is the old
+   * behaviour, a thread resolved as no longer reported, never a finding kept open for ever.
+   */
+  public Set<String> changedSince(
+      final Workspace workspace,
+      final PullRequestContext pullRequest,
+      final String commit,
+      final Consumer<String> heartbeat) {
+    if (!isCommitId(commit) || !isCommitId(pullRequest.headSha())) {
+      return null;
+    }
+    try {
+      return runGit(
+              List.of("git", "diff", "--name-only", commit, pullRequest.headSha()),
+              workspace.repository(),
+              pullRequest,
+              heartbeat)
+          .standardOutput()
+          .lines()
+          .filter(line -> !line.isBlank())
+          .collect(java.util.stream.Collectors.toUnmodifiableSet());
+    } catch (IllegalStateException exception) {
+      return null;
+    }
+  }
+
+  /** A full hex object id, so a value from GitHub can never be read by git as an option. */
+  static boolean isCommitId(final String value) {
+    if (value == null || value.length() < 40 || value.length() > 64) {
+      return false;
+    }
+    for (int index = 0; index < value.length(); index++) {
+      if (Character.digit(value.charAt(index), 16) < 0) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   private ProcessRunner.ProcessResult runGit(
       final List<String> command,
       final Path directory,

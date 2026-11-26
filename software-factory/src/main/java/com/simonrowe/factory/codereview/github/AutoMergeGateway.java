@@ -110,6 +110,18 @@ public class AutoMergeGateway {
   }
 
   /**
+   * Any user's permission on the pull request's repository: {@code admin}, {@code write}, {@code
+   * read} or {@code none}. A failed lookup reads as {@code none}, which can only withhold trust.
+   *
+   * <p>The same read as the author check below, and for the same reason: {@code
+   * author_association} is computed for the viewer, and an App token sees a private organisation
+   * member as a {@code CONTRIBUTOR}.
+   */
+  public String permission(final PullRequestContext pullRequest, final String login) {
+    return authorPermission(pullRequest, login == null ? "" : login, token(pullRequest));
+  }
+
+  /**
    * The author's permission from {@code /collaborators/{login}/permission}, the one read GitHub
    * answers the same way for every viewer.
    *
