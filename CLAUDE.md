@@ -281,6 +281,35 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- reviewer-lifecycle-from-brunel: **The code reviewer keeps a finding's identity across pushes,
+  honours a person's decline, and reads the written standards**, four lessons taken from Brunel
+  (global-engineering-shared/brunel), still on Claude Code. Load-bearing bits:
+  - **A person with write access replying in a thread and resolving it declines the finding**:
+    it is never posted again on that pull request and no longer counts toward `Code Review`. It
+    used to come back on the next push as a "regression" and re-block the merge. The reply is
+    required because push-then-resolve, with no reply, is the documented way to clear a *fixed*
+    finding (pr-review-loop), and that must stay re-checkable: otherwise a fix that did not work is
+    never flagged again, and resolving a critical clears the gate on an unverified fix. "Person" is
+    GraphQL `resolvedBy` (the App's own resolutions read as `simonrowe-software-factory[bot]`,
+    which is cleared), and write access is `/collaborators/{login}/permission`, because a pull
+    request author without it may resolve their own conversations.
+  - **Resolving a thread recomputes the gate with no model run** (`ReviewGateWorkflow`, from the
+    `pull_request_review_thread` webhook). It only ever turns a failed run green, and only when
+    the run's hidden `code-review-gating` list of critical fingerprints is all declined, so a
+    failed review (no list) or an unanchored critical (no thread) stays red. **Operator action:**
+    subscribe the App to Pull request review thread events, or declines wait for the next push.
+  - **The model is shown its open and declined findings with a 12-hex id and echoes it as
+    `priorId`**; the engine then reuses the prior title, so the fingerprint and thread survive a
+    rewording. Brunel saw one issue get a new identity on eleven pushes without this.
+  - **An open finding the model leaves out is carried forward when its file has not changed since
+    the thread's `originalCommit`**; only a changed file earns "No longer reported". Unknown (a
+    force-push dropped the commit) counts as changed.
+  - **`--safe-mode` meant the reviewer had never read `CLAUDE.md`**, nor any lesson the feedback
+    loop writes there. `ReviewGuidance` now gives it `Code Style` and `Key Design Decisions` from
+    `CLAUDE.md` at the **base** commit, plus `Non-negotiables` and `Code quality` from agent-setup's
+    `global.md`, 12,000 characters each. A lesson filed under another heading does not reach it.
+  - Everything is inside the existing activities, so `CodeReviewWorkflowImpl` replays unchanged.
+  See `docs/runbooks/pr-governance.md` ("A finding's life across pushes").
 - coparent-school-events: **Term Time's school events are offered to CoParent families as
   suggestions a parent approves** (`com.simonrowe.coparent.school`, `school_event_suggestions`,
   `V067CreateCoparentSchoolSuggestions`). A child is linked in Family setup with their class (the

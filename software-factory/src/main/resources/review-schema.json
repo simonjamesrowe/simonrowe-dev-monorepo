@@ -39,6 +39,10 @@
           "recommendation": {
             "type": "string",
             "minLength": 1
+          },
+          "priorId": {
+            "type": "string",
+            "description": "The id of the earlier finding this repeats, if any"
           }
         },
         "required": [

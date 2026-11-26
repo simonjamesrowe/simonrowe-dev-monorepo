@@ -7,6 +7,7 @@ import com.simonrowe.factory.codereview.agent.ReviewEngine;
 import com.simonrowe.factory.codereview.github.AutoMergeGateway;
 import com.simonrowe.factory.codereview.github.CheckRunGateway;
 import com.simonrowe.factory.codereview.github.GitHubGateway;
+import com.simonrowe.factory.codereview.github.PriorReviewReader;
 import com.simonrowe.factory.feedback.config.FeedbackProperties;
 import com.simonrowe.factory.codereview.workflow.ReviewActivitiesImpl;
 import io.temporal.spring.boot.ActivityImpl;
@@ -117,6 +118,11 @@ class ReviewWorkerRegistrationTest {
     @Bean
     AutoMergeGateway autoMergeGateway() {
       return mock(AutoMergeGateway.class);
+    }
+
+    @Bean
+    PriorReviewReader priorReviewReader() {
+      return mock(PriorReviewReader.class);
     }
 
     @Bean

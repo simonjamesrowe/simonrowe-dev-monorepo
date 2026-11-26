@@ -6,7 +6,10 @@ import com.simonrowe.factory.codereview.config.CodeReviewProperties;
 import com.simonrowe.factory.codereview.config.CodeReviewTaskQueues;
 import com.simonrowe.factory.codereview.domain.AutoMergePolicy;
 import com.simonrowe.factory.codereview.domain.AutoMergeState;
+import com.simonrowe.factory.codereview.domain.GateRequest;
 import com.simonrowe.factory.codereview.domain.MergeDecision;
+import com.simonrowe.factory.codereview.domain.PriorFinding;
+import com.simonrowe.factory.codereview.domain.PriorReview;
 import com.simonrowe.factory.codereview.domain.PullRequestContext;
 import com.simonrowe.factory.codereview.domain.ReviewFailure;
 import com.simonrowe.factory.codereview.domain.ReviewReport;
@@ -14,10 +17,17 @@ import com.simonrowe.factory.codereview.domain.ReviewRequest;
 import com.simonrowe.factory.codereview.github.AutoMergeGateway;
 import com.simonrowe.factory.codereview.github.CheckRunGateway;
 import com.simonrowe.factory.codereview.github.GitHubGateway;
+import com.simonrowe.factory.codereview.github.PriorReviewReader;
 import com.simonrowe.factory.feedback.config.FeedbackProperties;
 import com.simonrowe.factory.feedback.domain.GuidancePaths;
 import io.temporal.activity.Activity;
 import io.temporal.spring.boot.ActivityImpl;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -75,6 +85,7 @@ public class ReviewActivitiesImpl implements ReviewActivities {
   private final AutoMergeGateway autoMergeGateway;
   private final AutoMergeProperties autoMergeProperties;
   private final FeedbackProperties feedbackProperties;
+  private final PriorReviewReader priorReviewReader;
 
   public ReviewActivitiesImpl(
       final GitHubGateway gitHubGateway,
@@ -82,13 +93,15 @@ public class ReviewActivitiesImpl implements ReviewActivities {
       final ReviewEngine reviewEngine,
       final AutoMergeGateway autoMergeGateway,
       final AutoMergeProperties autoMergeProperties,
-      final FeedbackProperties feedbackProperties) {
+      final FeedbackProperties feedbackProperties,
+      final PriorReviewReader priorReviewReader) {
     this.gitHubGateway = gitHubGateway;
     this.checkRunGateway = checkRunGateway;
     this.reviewEngine = reviewEngine;
     this.autoMergeGateway = autoMergeGateway;
     this.autoMergeProperties = autoMergeProperties;
     this.feedbackProperties = feedbackProperties;
+    this.priorReviewReader = priorReviewReader;
   }
 
   @Override
@@ -103,8 +116,25 @@ public class ReviewActivitiesImpl implements ReviewActivities {
 
   @Override
   public ReviewReport runReview(final PullRequestContext pullRequest) {
-    return reviewEngine.review(
-        pullRequest, detail -> Activity.getExecutionContext().heartbeat(detail));
+    Consumer<String> heartbeat = detail -> Activity.getExecutionContext().heartbeat(detail);
+    heartbeat.accept("Reading earlier findings");
+    return reviewEngine.review(pullRequest, priorFindings(pullRequest), heartbeat);
+  }
+
+  /**
+   * Best-effort: a pull request whose conversations cannot be read is still reviewed, as if for
+   * the first time. Publishing reads them again and fails loudly if they are still unreadable.
+   */
+  private List<PriorFinding> priorFindings(final PullRequestContext pullRequest) {
+    try {
+      return priorReviewReader.read(pullRequest).findings();
+    } catch (RuntimeException exception) {
+      LOGGER.warn(
+          "Could not read earlier findings on {}; reviewing without them",
+          pullRequest.slug(),
+          exception);
+      return List.of();
+    }
   }
 
   @Override
@@ -113,7 +143,77 @@ public class ReviewActivitiesImpl implements ReviewActivities {
       final ReviewReport report,
       final String statusCommentId,
       final MergeDecision autoMerge) {
-    gitHubGateway.publishReview(pullRequest, report, statusCommentId, autoMerge);
+    gitHubGateway.publishReview(
+        pullRequest, report, statusCommentId, autoMerge, priorReviewReader.read(pullRequest));
+  }
+
+  @Override
+  public String recomputeGate(final GateRequest request) {
+    PullRequestContext pullRequest =
+        gitHubGateway.loadPullRequest(
+            new ReviewRequest(
+                request.owner(),
+                request.repository(),
+                request.pullNumber(),
+                null,
+                request.installationId(),
+                true));
+    Optional<CheckRunGateway.Gate> latest = checkRunGateway.latest(pullRequest);
+    PriorReview[] read = new PriorReview[1];
+    Supplier<PriorReview> prior =
+        () -> {
+          if (read[0] == null) {
+            read[0] = priorReviewReader.read(pullRequest);
+          }
+          return read[0];
+        };
+    String outcome = gateOutcome(latest, prior);
+    if (outcome == null) {
+      checkRunGateway.declined(pullRequest, decliners(prior.get(), latest.orElseThrow()));
+      outcome = "turned green: every critical finding was declined";
+    }
+    LOGGER.info("Recomputed the Code Review check on {}: {}", pullRequest.slug(), outcome);
+    return outcome;
+  }
+
+  /**
+   * Why the check must be left as it is, or null when it should turn green.
+   *
+   * <p>Only a completed run that failed on findings, and records which, can turn green, and only
+   * when every one of those findings was declined. A run in progress belongs to a review that will
+   * read the decline itself; a failed review recorded no findings and must stay red.
+   */
+  static String gateOutcome(
+      final Optional<CheckRunGateway.Gate> latest, final Supplier<PriorReview> prior) {
+    if (latest.isEmpty()) {
+      return "left alone: no Code Review check on the head commit";
+    }
+    CheckRunGateway.Gate gate = latest.get();
+    if (!gate.completed()) {
+      return "left alone: a review is in progress";
+    }
+    if (!"failure".equals(gate.conclusion())) {
+      return "left alone: the check is not failing";
+    }
+    if (gate.gating() == null || gate.gating().isEmpty()) {
+      return "left alone: the check failed for a reason a decline cannot clear";
+    }
+    Set<String> remaining = new LinkedHashSet<>(gate.gating());
+    remaining.removeAll(prior.get().declinedFingerprints());
+    return remaining.isEmpty()
+        ? null
+        : "left alone: " + remaining.size() + " critical finding(s) not declined";
+  }
+
+  private static List<String> decliners(final PriorReview prior, final CheckRunGateway.Gate gate) {
+    Set<String> people = new LinkedHashSet<>();
+    for (PriorFinding finding : prior.findings()) {
+      if (finding.state() == PriorFinding.State.DECLINED
+          && gate.gating().contains(finding.fingerprint())) {
+        people.add(finding.resolvedBy());
+      }
+    }
+    return List.copyOf(people);
   }
 
   @Override

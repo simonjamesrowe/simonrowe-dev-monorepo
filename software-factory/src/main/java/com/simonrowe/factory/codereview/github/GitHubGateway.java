@@ -7,6 +7,7 @@ import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 import com.simonrowe.factory.codereview.config.CodeReviewProperties;
 import com.simonrowe.factory.codereview.domain.MergeDecision;
+import com.simonrowe.factory.codereview.domain.PriorReview;
 import com.simonrowe.factory.codereview.domain.PullRequestContext;
 import com.simonrowe.factory.codereview.domain.ReviewFailure;
 import com.simonrowe.factory.codereview.domain.ReviewFinding;
@@ -170,12 +171,32 @@ public class GitHubGateway {
       final ReviewReport report,
       final String statusCommentId,
       final MergeDecision autoMerge) {
+    publishReview(
+        pullRequest,
+        report,
+        statusCommentId,
+        autoMerge,
+        new PriorReview(reviewThreadGateway.fetchThreads(pullRequest), List.of()));
+  }
+
+  /**
+   * As {@link #publishReview(PullRequestContext, ReviewReport, String, MergeDecision)}, against
+   * conversations already read, so a finding a person declined is never posted again.
+   *
+   * @param prior the pull request's conversations, read just before publishing
+   */
+  public void publishReview(
+      final PullRequestContext pullRequest,
+      final ReviewReport report,
+      final String statusCommentId,
+      final MergeDecision autoMerge,
+      final PriorReview prior) {
     List<ReviewFinding> unanchored = new ArrayList<>();
     String accessToken = requireAccessToken(pullRequest);
 
     List<ThreadAction> actions =
         ReviewThreadGateway.reconcile(
-            reviewThreadGateway.fetchThreads(pullRequest), report.findings());
+            prior.threads(), report.findings(), prior.declinedFingerprints());
 
     String path =
         findingCommentsPath(

@@ -1,5 +1,6 @@
 package com.simonrowe.factory.codereview.workflow;
 
+import com.simonrowe.factory.codereview.domain.GateRequest;
 import com.simonrowe.factory.codereview.domain.MergeDecision;
 import com.simonrowe.factory.codereview.domain.PullRequestContext;
 import com.simonrowe.factory.codereview.domain.ReviewFailure;
@@ -67,6 +68,16 @@ public interface ReviewActivities {
   /** Decides without acting: reads GitHub and applies the rules, but arms nothing. */
   @ActivityMethod
   MergeDecision decideAutoMerge(PullRequestContext pullRequest, ReviewReport report);
+
+  /**
+   * Works the {@code Code Review} check out again after a person resolved one of this reviewer's
+   * threads, without running a review. Turns a failed check green only when a person with write
+   * access declined every critical finding that failed it; never turns anything red.
+   *
+   * @return what it did, for the workflow's result
+   */
+  @ActivityMethod
+  String recomputeGate(GateRequest request);
 
   /**
    * Decides, then arms squash auto-merge if every rule passes. Returns what actually happened.

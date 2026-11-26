@@ -217,6 +217,98 @@ class CheckRunGatewayTest {
 
   // --- fixtures ------------------------------------------------------------------------------
 
+  /**
+   * A decline can turn the check green only if the run says which findings failed it, including a
+   * critical one that never got a thread because its line did not anchor.
+   */
+  @Test
+  void completedRunRecordsTheCriticalFindingsThatFailedIt() {
+    gateway().complete(pullRequest(), "7", report(Verdict.APPROVE, List.of(WARNING, CRITICAL)));
+
+    String text = outputText();
+    assertThat(CheckRunGateway.parseGating(text))
+        .containsExactly(com.simonrowe.factory.codereview.domain.FindingFingerprint.of(CRITICAL));
+  }
+
+  @Test
+  void cleanRunRecordsAnEmptyGatingList() {
+    gateway().complete(pullRequest(), "7", report(Verdict.APPROVE, List.of(WARNING)));
+
+    String text = outputText();
+    assertThat(CheckRunGateway.parseGating(text)).isEmpty();
+  }
+
+  /** A failed review lists nothing, so no decline can ever turn its check green. */
+  @Test
+  void failedReviewRecordsNoGatingList() {
+    gateway().fail(pullRequest(), "7", new ReviewFailure(ReviewPhase.REVIEWING, "boom", "wf"));
+
+    JsonNode output = parse(sentBodies.get("PATCH " + CHECK_RUN_7)).path("output");
+    assertThat(output.has("text")).isFalse();
+    assertThat(CheckRunGateway.parseGating(output.path("text").asText(""))).isNull();
+  }
+
+  @Test
+  void gatingListIgnoresAnythingThatIsNotFingerprint() {
+    String fingerprint = "a".repeat(64);
+    assertThat(
+            CheckRunGateway.parseGating(
+                CheckRunGateway.GATING_PREFIX + fingerprint + ",nonsense, -->"))
+        .containsExactly(fingerprint);
+    assertThat(CheckRunGateway.parseGating(CheckRunGateway.GATING_PREFIX + "unterminated"))
+        .isNull();
+  }
+
+  @Test
+  void latestPicksTheNewestCodeReviewRunOnTheHead() {
+    responses.put(
+        "GET /repos/example/project/commits/head-sha/check-runs",
+        """
+        {"check_runs": [
+          {"id": 5, "name": "Code Review", "status": "completed", "conclusion": "success",
+           "output": {"text": ""}},
+          {"id": 9, "name": "Code Review", "status": "completed", "conclusion": "failure",
+           "output": {"text": "%s%s -->"}},
+          {"id": 11, "name": "Backend", "status": "completed", "conclusion": "failure"}
+        ]}
+        """
+            .formatted(CheckRunGateway.GATING_PREFIX, "b".repeat(64)));
+
+    CheckRunGateway.Gate gate = gateway().latest(pullRequest()).orElseThrow();
+
+    assertThat(gate.id()).isEqualTo(9);
+    assertThat(gate.completed()).isTrue();
+    assertThat(gate.conclusion()).isEqualTo("failure");
+    assertThat(gate.gating()).containsExactly("b".repeat(64));
+  }
+
+  @Test
+  void latestIsEmptyWhenTheHeadHasNoCodeReviewRun() {
+    responses.put(
+        "GET /repos/example/project/commits/head-sha/check-runs", "{\"check_runs\": []}");
+
+    assertThat(gateway().latest(pullRequest())).isEmpty();
+  }
+
+  /** A new run, so the failed one stays in the history beside the reason it no longer holds. */
+  @Test
+  void declineCreatesNewGreenRunOnTheHeadNamingWhoDeclined() {
+    gateway().declined(pullRequest(), List.of("simonrowe"));
+
+    JsonNode payload = parse(sentBodies.get("POST " + CHECK_RUNS));
+    assertThat(payload.path("name").asText()).isEqualTo("Code Review");
+    assertThat(payload.path("head_sha").asText()).isEqualTo("head-sha");
+    assertThat(payload.path("status").asText()).isEqualTo("completed");
+    assertThat(payload.path("conclusion").asText()).isEqualTo("success");
+    assertThat(payload.path("output").path("summary").asText()).contains("@simonrowe");
+    assertThat(CheckRunGateway.parseGating(payload.path("output").path("text").asText()))
+        .isEmpty();
+  }
+
+  private String outputText() {
+    return parse(sentBodies.get("PATCH " + CHECK_RUN_7)).path("output").path("text").asText();
+  }
+
   private JsonNode parse(final String json) {
     try {
       return objectMapper.readTree(json);

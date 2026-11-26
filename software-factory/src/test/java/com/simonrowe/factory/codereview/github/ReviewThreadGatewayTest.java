@@ -10,6 +10,7 @@ import com.simonrowe.factory.codereview.domain.ReviewFinding;
 import com.simonrowe.factory.codereview.domain.Severity;
 import com.simonrowe.factory.codereview.domain.ThreadAction;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -52,6 +53,26 @@ class ReviewThreadGatewayTest {
 
     assertThat(actions)
         .containsExactly(new ThreadAction.Leave("T1"), new ThreadAction.PostNew(FINDING));
+  }
+
+  /** A person resolving the thread declined the finding; posting it again would overrule them. */
+  @Test
+  void declinedFindingStillReportedIsNeitherPostedAgainNorReopened() {
+    List<ThreadAction> actions =
+        ReviewThreadGateway.reconcile(
+            List.of(thread("T1", FINDING_FP, true)), List.of(FINDING), Set.of(FINDING_FP));
+
+    assertThat(actions).containsExactly(new ThreadAction.Leave("T1"));
+  }
+
+  @Test
+  void declineOfOneFindingDoesNotCoverAnother() {
+    List<ThreadAction> actions =
+        ReviewThreadGateway.reconcile(
+            List.of(thread("T1", FINDING_FP, true)), List.of(FINDING, OTHER), Set.of(FINDING_FP));
+
+    assertThat(actions)
+        .containsExactly(new ThreadAction.Leave("T1"), new ThreadAction.PostNew(OTHER));
   }
 
   @Test
@@ -201,6 +222,64 @@ class ReviewThreadGatewayTest {
       assertThat(thread.legacyMarker()).isFalse();
       assertThat(thread.reviewerOwned()).isTrue();
     });
+  }
+
+  /** What the next review needs: who resolved it, where it was raised, and the finding itself. */
+  @Test
+  void mapsResolverOriginCommitAndTheFindingFromTheRootComment() throws Exception {
+    String body = new ReviewMarkdownRenderer().renderFindingComment(FINDING);
+    JsonNode node =
+        graphQl(
+            """
+            {"reviewThreads": {"nodes": [
+              {"id": "T1", "isResolved": true, "path": "src/App.java", "line": null,
+               "originalLine": 9, "resolvedBy": {"login": "simonrowe"},
+               "comments": {"nodes": [
+                {"body": %s, "author": {"login": "bot", "__typename": "Bot"},
+                 "originalCommit": {"oid": "abc123"}}
+              ]}}
+            ]}}
+            """
+                .formatted(objectMapper.writeValueAsString(body)));
+
+    assertThat(ReviewThreadGateway.toExistingThreads(node))
+        .singleElement()
+        .satisfies(thread -> {
+          assertThat(thread.resolvedBy()).isEqualTo("simonrowe");
+          assertThat(thread.resolvedByPerson()).isTrue();
+          assertThat(thread.raisedAt()).isEqualTo("abc123");
+          assertThat(thread.finding().title()).isEqualTo(FINDING.title());
+          assertThat(thread.finding().severity()).isEqualTo(FINDING.severity());
+          assertThat(thread.finding().file()).isEqualTo("src/App.java");
+          assertThat(thread.finding().line()).isEqualTo(9);
+        });
+  }
+
+  /** This reviewer resolving its own thread must never read as a person declining it. */
+  @Test
+  void botResolverIsNotPerson() throws Exception {
+    JsonNode node =
+        graphQl(
+            """
+            {"reviewThreads": {"nodes": [
+              {"id": "T1", "isResolved": true, "path": "src/App.java",
+               "resolvedBy": {"login": "simonrowe-software-factory[bot]"},
+               "comments": {"nodes": [
+                {"body": "%s", "author": {"login": "bot", "__typename": "Bot"}}
+              ]}},
+              {"id": "T2", "isResolved": true, "path": "src/App.java", "resolvedBy": null,
+               "comments": {"nodes": [
+                {"body": "%s", "author": {"login": "bot", "__typename": "Bot"}}
+              ]}}
+            ]}}
+            """
+                .formatted(
+                    ReviewMarkdownRenderer.findingMarker(FINDING_FP),
+                    ReviewMarkdownRenderer.findingMarker(FINDING_FP)));
+
+    assertThat(ReviewThreadGateway.toExistingThreads(node))
+        .hasSize(2)
+        .allSatisfy(thread -> assertThat(thread.resolvedByPerson()).isFalse());
   }
 
   @Test

@@ -8,6 +8,10 @@ Two independent blocking mechanisms guard `main`, doing different jobs:
 - **Required conversation resolution** makes every `WARNING` / `SUGGESTION` block until it is
   either fixed (the bot resolves it) or declined with a stated reason (a person resolves it).
 
+Declining works for a `CRITICAL` too: a person with write access replying with the reason and then
+resolving its thread clears it from the check. See
+[A finding's life across pushes](#a-findings-life-across-pushes).
+
 The split is deliberate. A suggestion cannot be silently ignored, but the gate does not depend on
 the model grading severity correctly.
 
@@ -205,6 +209,62 @@ ruleset and the live one identical, so nothing but rule insights will tell you i
 nothing at all, so the signal that most needed to block a merge was the one that could not.
 
 ---
+
+## A finding's life across pushes
+
+Every push is a fresh Claude Code run, so the reviewer is told what it said before and decides
+what happens to each earlier finding from GitHub's own thread state. Brought over from Brunel, which
+hit each of these failures first.
+
+| Earlier thread | This push | What happens |
+|---|---|---|
+| open | the model reports it again | left alone. The model is given each open finding's id and asked to echo it as `priorId`; its title is kept, so the fingerprint and the thread stay the same even when the wording changes |
+| open | not reported, **file changed** since the thread was raised | replied "No longer reported as of `<sha>`" and resolved |
+| open | not reported, **file unchanged** since then | carried forward: the thread stays open and the finding still counts toward the check. The model leaving it out is not evidence it was fixed |
+| resolved by the reviewer | reported again | a fresh thread: it regressed |
+| **replied to and resolved by a person with write access** | anything | **declined**. Never posted again on this pull request, and it no longer counts toward the `Code Review` check |
+| resolved by a person with **no reply** in the thread | reported again | treated as "resolved as fixed": a fresh thread, and it still gates. Push-then-resolve is the documented way to clear a fixed finding, so it must stay re-checkable |
+| resolved by someone without write access (a pull request author can resolve their own) | reported again | not declined: a fresh thread, and it still gates |
+
+"Changed since" is `git diff --name-only <originalCommit>..<head>` on the thread's own file. When the
+commit has gone (a force-push), the answer is "changed", which only ever costs the old behaviour.
+
+**Declining a critical finding.** Reply with the reason, *then* resolve the thread. The reply is
+what makes it a decline; resolving first starts the recompute before the reply exists, and it will
+leave the check red until the next push or until you resolve again. software-factory
+receives the `pull_request_review_thread` webhook, and a small `ReviewGateWorkflow` (queue
+`code-review`, no model run) checks the latest `Code Review` run on the head: if it failed on
+findings and a person with write access has declined every one of them, it posts a new green run.
+It never turns a check red, never touches a run whose review *failed* (that lists no findings, so
+there is nothing to decline), and does nothing while a review is in progress. It does not arm
+auto-merge: merge by hand, or push to re-review. Each completed run records the fingerprints of
+the findings that failed it in a hidden `<!-- code-review-gating:… -->` line of its output text;
+that is what lets a decline be checked against GitHub alone, including a critical finding whose line
+did not anchor and so has no thread to resolve (it stays red).
+
+**Operator action:** the GitHub App must be subscribed to **Pull request review thread** events
+(App settings → Permissions & events → Subscribe to events). Without it, a decline still takes
+effect, but only at the next push.
+
+### Written standards reach the reviewer
+
+The reviewer runs Claude Code with `--safe-mode`, which loads no `CLAUDE.md`, so that a pull request
+cannot rewrite its own review instructions. Until this change that also meant it had never read the
+repository's standards, nor any lesson the feedback loop distils into `CLAUDE.md` and agent-setup's
+`global.md`. `ReviewGuidance` now puts named sections of both into the prompt, read from places a
+pull request cannot change:
+
+- `CLAUDE.md` **at the base commit** (`git show <base>:CLAUDE.md`): `Code Style` and
+  `Key Design Decisions`;
+- `simonjamesrowe/agent-setup` `components/instructions/global.md` at its default branch, for
+  `simonjamesrowe` repositories only: `Non-negotiables` and `Code quality`.
+
+Each is capped at 12,000 characters, cut at a line. Named sections rather than whole files because
+this `CLAUDE.md` is mostly a change log, hundreds of kilobytes long. Everything is best-effort: an
+unreadable source is logged and the review runs without it. Configure under
+`factory.codereview.guidance` (`FACTORY_CODEREVIEW_GUIDANCE_ENABLED=false` switches it off). A
+lesson the feedback loop files under any other heading does not reach the reviewer; add the
+heading to the list if that matters.
 
 ## Auto-merge policy
 

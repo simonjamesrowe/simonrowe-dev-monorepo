@@ -6,17 +6,25 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 import com.simonrowe.factory.codereview.config.CodeReviewProperties;
 import com.simonrowe.factory.codereview.domain.CheckRunConclusion;
+import com.simonrowe.factory.codereview.domain.FindingFingerprint;
 import com.simonrowe.factory.codereview.domain.PullRequestContext;
 import com.simonrowe.factory.codereview.domain.ReviewFailure;
+import com.simonrowe.factory.codereview.domain.ReviewFinding;
 import com.simonrowe.factory.codereview.domain.ReviewReport;
 import com.simonrowe.factory.codereview.domain.Severity;
 import java.io.IOException;
 import java.net.URI;
+import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.TreeSet;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -42,6 +50,12 @@ public class CheckRunGateway {
   public static final String CHECK_NAME = "Code Review";
 
   private static final String API_VERSION = "2026-03-10";
+
+  /**
+   * Starts the hidden list of fingerprints that failed a completed review's check run. Only a run
+   * carrying it can be turned green by a decline: a failed review writes none.
+   */
+  static final String GATING_PREFIX = "<!-- code-review-gating:";
 
   private final CodeReviewProperties properties;
   private final GitHubCredentials credentials;
@@ -121,7 +135,13 @@ public class CheckRunGateway {
       final PullRequestContext pullRequest, final String checkRunId, final ReviewReport report) {
     CheckRunConclusion conclusion =
         CheckRunConclusion.from(report.verdict(), report.findings());
-    complete(pullRequest, checkRunId, conclusion, completedTitle(report), report.summary());
+    complete(
+        pullRequest,
+        checkRunId,
+        conclusion,
+        completedTitle(report),
+        report.summary(),
+        gatingMarker(gatingFingerprints(report)));
   }
 
   private void complete(
@@ -129,12 +149,29 @@ public class CheckRunGateway {
       final String checkRunId,
       final CheckRunConclusion conclusion,
       final String title,
-      final String summary) {
+      final String summary,
+      final String text) {
+    ObjectNode payload = completedPayload(conclusion, title, summary, text);
+    sendJson(
+        "PATCH",
+        checkRunPath(pullRequest.owner(), pullRequest.repository(), checkRunId),
+        payload,
+        pullRequest);
+  }
+
+  private ObjectNode completedPayload(
+      final CheckRunConclusion conclusion,
+      final String title,
+      final String summary,
+      final String text) {
     ObjectNode output =
         objectMapper
             .createObjectNode()
             .put("title", title)
             .put("summary", summary == null || summary.isBlank() ? title : summary);
+    if (text != null) {
+      output.put("text", text);
+    }
     ObjectNode payload =
         objectMapper
             .createObjectNode()
@@ -142,12 +179,120 @@ public class CheckRunGateway {
             .put("conclusion", conclusion.toJson())
             .put("completed_at", now());
     payload.set("output", output);
+    return payload;
+  }
 
+  /**
+   * The latest {@code Code Review} check run on the pull request's head, or empty when there is
+   * none this reviewer wrote.
+   */
+  public Optional<Gate> latest(final PullRequestContext pullRequest) {
+    JsonNode runs =
+        sendJson(
+            "GET",
+            "/repos/%s/%s/commits/%s/check-runs?check_name=%s&filter=latest"
+                .formatted(
+                    pullRequest.owner(),
+                    pullRequest.repository(),
+                    pullRequest.headSha(),
+                    URLEncoder.encode(CHECK_NAME, StandardCharsets.UTF_8).replace("+", "%20")),
+            null,
+            pullRequest)
+            .path("check_runs");
+    Gate latest = null;
+    for (JsonNode run : runs) {
+      Gate gate = toGate(run);
+      if (gate != null && (latest == null || gate.id() > latest.id())) {
+        latest = gate;
+      }
+    }
+    return Optional.ofNullable(latest);
+  }
+
+  /** Maps one check run, or null when it is not a {@code Code Review} run. Pure, for tests. */
+  static Gate toGate(final JsonNode run) {
+    if (!CHECK_NAME.equals(run.path("name").asText(""))) {
+      return null;
+    }
+    return new Gate(
+        run.path("id").asLong(),
+        "completed".equals(run.path("status").asText("")),
+        run.path("conclusion").asText(""),
+        parseGating(run.path("output").path("text").asText("")));
+  }
+
+  /**
+   * Turns a failed check green because a person declined every finding that failed it.
+   *
+   * <p>A new completed run rather than an edit of the old one: GitHub gates on the latest run of a
+   * name, and the failed run stays in the history beside the reason it no longer holds.
+   */
+  public void declined(final PullRequestContext pullRequest, final List<String> declinedBy) {
+    String people =
+        declinedBy.isEmpty() ? "a maintainer" : "@" + String.join(", @", declinedBy);
+    String title = "approve — critical findings declined";
+    ObjectNode payload =
+        completedPayload(
+            CheckRunConclusion.SUCCESS,
+            title,
+            """
+            Every critical finding that failed this check was declined by %s, by resolving its \
+            conversation. Auto-merge is not armed by this; merge by hand, or push to re-review."""
+                .formatted(people),
+            gatingMarker(Set.of()));
+    payload.put("name", CHECK_NAME).put("head_sha", pullRequest.headSha());
     sendJson(
-        "PATCH",
-        checkRunPath(pullRequest.owner(), pullRequest.repository(), checkRunId),
-        payload,
-        pullRequest);
+        "POST", checkRunsPath(pullRequest.owner(), pullRequest.repository()), payload, pullRequest);
+  }
+
+  /**
+   * The fingerprints of the findings that fail a report's check: its critical ones.
+   *
+   * <p>Written into the check run so a later decline can tell, from GitHub alone, whether every
+   * reason for the failure has gone. That includes a critical finding that never got a thread
+   * because its line did not anchor: it cannot be resolved, so it keeps the check red.
+   */
+  static Set<String> gatingFingerprints(final ReviewReport report) {
+    Set<String> gating = new TreeSet<>();
+    for (ReviewFinding finding : report.findings()) {
+      if (finding.severity() == Severity.CRITICAL) {
+        gating.add(FindingFingerprint.of(finding));
+      }
+    }
+    return gating;
+  }
+
+  static String gatingMarker(final Set<String> fingerprints) {
+    return GATING_PREFIX + String.join(",", new TreeSet<>(fingerprints)) + " -->";
+  }
+
+  /** The fingerprints in a check run's text, or null when it carries no gating marker. */
+  static Set<String> parseGating(final String text) {
+    int start = text == null ? -1 : text.indexOf(GATING_PREFIX);
+    if (start < 0) {
+      return null;
+    }
+    int end = text.indexOf(" -->", start);
+    if (end < 0) {
+      return null;
+    }
+    Set<String> fingerprints = new TreeSet<>();
+    for (String value : text.substring(start + GATING_PREFIX.length(), end).split(",")) {
+      String fingerprint = value.strip();
+      if (fingerprint.length() == 64) {
+        fingerprints.add(fingerprint);
+      }
+    }
+    return fingerprints;
+  }
+
+  /**
+   * The latest {@code Code Review} run on a commit, as a decline needs it.
+   *
+   * @param gating the fingerprints that failed it, or null for a run written before they were
+   *     recorded, or by a failed review, either of which a decline must never turn green
+   */
+  public record Gate(long id, boolean completed, String conclusion, Set<String> gating) {
   }
 
   /**
@@ -165,7 +310,8 @@ public class CheckRunGateway {
         checkRunId,
         CheckRunConclusion.FAILURE,
         "Review failed in " + failure.phase(),
-        failureSummary(failure));
+        failureSummary(failure),
+        null);
   }
 
   static String completedTitle(final ReviewReport report) {
@@ -239,11 +385,16 @@ public class CheckRunGateway {
               .timeout(properties.github().requestTimeout())
               .header("Accept", "application/vnd.github+json")
               .header("X-GitHub-Api-Version", API_VERSION)
-              .header("User-Agent", "temporal-code-reviewer")
-              .header("Content-Type", "application/json")
-              .method(
-                  method,
-                  HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(payload)));
+              .header("User-Agent", "temporal-code-reviewer");
+      if (payload == null) {
+        request.method(method, HttpRequest.BodyPublishers.noBody());
+      } else {
+        request
+            .header("Content-Type", "application/json")
+            .method(
+                method,
+                HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(payload)));
+      }
       if (accessToken != null && !accessToken.isBlank()) {
         request.header("Authorization", "Bearer " + accessToken);
       }

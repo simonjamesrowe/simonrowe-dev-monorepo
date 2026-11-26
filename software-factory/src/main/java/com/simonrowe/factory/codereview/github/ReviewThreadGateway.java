@@ -62,8 +62,12 @@ public class ReviewThreadGateway {
               nodes {
                 id
                 isResolved
+                path
+                line
+                originalLine
+                resolvedBy { login }
                 comments(first: 50) {
-                  nodes { body author { login __typename } }
+                  nodes { body author { login __typename } originalCommit { oid } }
                 }
               }
             }
@@ -140,7 +144,11 @@ public class ReviewThreadGateway {
    *   <caption>The reconcile contract</caption>
    *   <tr><th>Thread</th><th>Fingerprint in new report</th><th>Action</th></tr>
    *   <tr><td>open</td><td>yes</td><td>leave untouched</td></tr>
-   *   <tr><td>resolved</td><td>yes</td><td>post a fresh thread — it regressed</td></tr>
+   *   <tr><td>resolved by this reviewer</td><td>yes</td><td>post a fresh thread — it
+   *       regressed</td></tr>
+   *   <tr><td>declined: resolved by a person with write access</td><td>yes</td><td>leave — a
+   *       person decided it, and posting it again would re-block the merge on the same
+   *       question</td></tr>
    *   <tr><td>open</td><td>no</td><td>reply, then resolve</td></tr>
    *   <tr><td>resolved</td><td>no</td><td>leave — already resolved</td></tr>
    *   <tr><td>none</td><td>yes</td><td>post a new thread</td></tr>
@@ -151,6 +159,23 @@ public class ReviewThreadGateway {
    */
   static List<ThreadAction> reconcile(
       final List<ExistingThread> threads, final List<ReviewFinding> findings) {
+    return reconcile(threads, findings, Set.of());
+  }
+
+  /**
+   * As {@link #reconcile(List, List)}, honouring findings a person declined.
+   *
+   * <p>The engine already drops a declined finding from its report, so this is the backstop for
+   * the one case it cannot see: a thread resolved after the engine read the threads and before
+   * this publish. Without it that finding would be posted again as a regression.
+   *
+   * @param declined fingerprints a person with write access resolved, from {@code
+   *     PriorReview.declinedFingerprints()}
+   */
+  static List<ThreadAction> reconcile(
+      final List<ExistingThread> threads,
+      final List<ReviewFinding> findings,
+      final Set<String> declined) {
     Set<String> reported = new LinkedHashSet<>();
     for (ReviewFinding finding : findings) {
       reported.add(FindingFingerprint.of(finding));
@@ -173,8 +198,12 @@ public class ReviewThreadGateway {
         covered.add(thread.fingerprint());
         actions.add(new ThreadAction.Leave(thread.nodeId()));
       } else if (thread.resolved()) {
-        // Already resolved. If the finding is back it gets a fresh thread below, because
-        // reopening a resolved conversation hides the fact that it regressed.
+        // Already resolved. If this reviewer resolved it and the finding is back, it gets a fresh
+        // thread below, because reopening a resolved conversation hides the fact that it
+        // regressed. If a person declined it, it is covered and is never posted again.
+        if (stillReported && declined.contains(thread.fingerprint())) {
+          covered.add(thread.fingerprint());
+        }
         actions.add(new ThreadAction.Leave(thread.nodeId()));
       } else {
         // Open, and this reviewer no longer reports it — including every legacy bare-marker
@@ -239,13 +268,25 @@ public class ReviewThreadGateway {
         }
       }
 
+      String fingerprint = fingerprintOf(rootBody);
+      String path = node.path("path").asText("");
+      int line = node.path("line").asInt(node.path("originalLine").asInt(0));
+      String raisedAt =
+          comments.isArray() && !comments.isEmpty()
+              ? comments.get(0).path("originalCommit").path("oid").asText("")
+              : "";
       threads.add(
           new ExistingThread(
               node.path("id").asText(""),
-              fingerprintOf(rootBody),
+              fingerprint,
               rootBody.contains(ReviewMarkdownRenderer.LEGACY_FINDING_MARKER),
               node.path("isResolved").asBoolean(false),
-              nonBotReply));
+              nonBotReply,
+              node.path("resolvedBy").path("login").asText(""),
+              raisedAt.isBlank() ? null : raisedAt,
+              fingerprint == null
+                  ? null
+                  : ReviewMarkdownRenderer.parseFindingComment(rootBody, path, line)));
     }
     return threads;
   }
