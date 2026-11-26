@@ -5,10 +5,14 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
@@ -56,8 +60,8 @@ final class SuggestionDetails {
     final String location = ordered.stream().map(SchoolEvent::location)
         .filter(value -> value != null && !value.isBlank()).findFirst().map(String::strip)
         .orElse(null);
-    final String chosenTitle = plausibleTitle(title) ? cap(title.strip(), MAX_TITLE)
-        : tidyTitle(first.title());
+    final String chosenTitle = plausibleTitle(title) && groundedIn(title, rows)
+        ? cap(title.strip(), MAX_TITLE) : tidyTitle(first.title());
     final boolean timed = times.isPresent() && first.startDate().equals(first.endDate());
     return new SchoolEventSuggestion.Details(
         chosenTitle,
@@ -84,6 +88,48 @@ final class SuggestionDetails {
     return title != null && !title.isBlank() && title.length() <= MAX_TITLE
         && !UNTITLE_LIKE.matcher(title).find();
   }
+
+  /**
+   * Whether every word of a title is one the school used in these rows' titles. A model asked
+   * for a tidy title reads the descriptions too, and on its first day in production it titled
+   * an art competition with the winning pupil's name, taken from the description. Reordering,
+   * dropping words and changing case are all fine; adding a word is not. A trailing "s" and a
+   * possessive are ignored, so "Clubs" matches "club" and "Vicky's" matches "Vicky".
+   *
+   * @param title a title, possibly null
+   * @param rows the rows it is meant to name
+   * @return true when every word in it appears in some row's title
+   */
+  static boolean groundedIn(final String title, final List<SchoolEvent> rows) {
+    if (title == null) {
+      return false;
+    }
+    final Set<String> allowed = new HashSet<>();
+    rows.forEach(row -> allowed.addAll(words(row.title())));
+    return allowed.containsAll(words(title));
+  }
+
+  private static Set<String> words(final String text) {
+    final Set<String> words = new HashSet<>();
+    if (text == null) {
+      return words;
+    }
+    final Matcher matcher = WORD.matcher(cap(text, 300));
+    while (matcher.find()) {
+      String word = matcher.group().toLowerCase(Locale.ROOT);
+      if (word.length() == 1 && Character.isLetter(word.charAt(0))) {
+        continue; // the "s" of a possessive
+      }
+      if (word.length() > 3 && word.endsWith("s")) {
+        word = word.substring(0, word.length() - 1);
+      }
+      words.add(word);
+    }
+    return words;
+  }
+
+  /** A run of letters or digits, ending before any possessive. */
+  private static final Pattern WORD = Pattern.compile("[\\p{L}\\p{N}]++");
 
   /** A link, a web or email address, markup, or a control character. */
   private static final Pattern UNTITLE_LIKE = Pattern.compile(

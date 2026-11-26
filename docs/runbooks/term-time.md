@@ -1246,7 +1246,9 @@ rules the chat uses, now public), only among rows for the same children; then, w
 times, also offering existing suggestions on the same days so a later copy joins the one already
 offered. The model only proposes: a merge across days or across different children is refused,
 a title or time that does not check out is replaced by the rule-built one, and any failure falls
-back to the rules. Structured output, no tools, content suppressed from Langfuse.
+back to the rules. **A title may only use words from the school's own titles for those rows**
+(`SuggestionDetails.groundedIn`): on its first production run the model titled an art
+competition with the winning pupil's name, taken from the description. Structured output, no tools, content suppressed from Langfuse.
 
 **The ledger.** A unique index on `(familyId, sourceEventIds)` keeps each school row in one
 suggestion per family whatever was decided, so a dismissed event never comes back and two runs
@@ -1255,7 +1257,11 @@ puts the indexes back.
 
 **When the school changes something.** Each suggestion keeps a fingerprint of its rows' dates,
 times and places (not descriptions, which the extractor rewords on every read).
-- Pending: follows the change silently, or is withdrawn if every row is gone.
+- Pending: follows the change silently, or is withdrawn if every row is gone. **Its children are
+  worked out again on every run**, so a child linked after their sibling joins the whole-school
+  events already waiting (the first production sync offered every whole-school event to the child
+  linked first only, because a row is offered to a family once). A title that is not made of the
+  school's own words is put right on the next run too.
 - Accepted: never changed behind the family's back. A changed date, time or place comes back as
   *The school changed this* (**Update calendar** / **Keep as it is**); a removal as *No longer on
   the school calendar* (**Remove from calendar** / **Keep it**). Updating keeps what the family set

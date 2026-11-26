@@ -221,7 +221,7 @@ public class SchoolSuggestionSync {
           }
         });
     for (final SchoolEventSuggestion suggestion : open) {
-      review(suggestion, rowsOf(suggestion, members)).ifPresent(notices::add);
+      review(suggestion, rowsOf(suggestion, members), children).ifPresent(notices::add);
     }
     final int flagged = notices.size();
 
@@ -269,23 +269,17 @@ public class SchoolSuggestionSync {
    *
    * @return the suggestion when a parent now needs to look at it again
    */
-  private Optional<SchoolEventSuggestion> review(
-      final SchoolEventSuggestion suggestion, final List<SchoolEvent> rows) {
+  private Optional<SchoolEventSuggestion> review(final SchoolEventSuggestion suggestion,
+      final List<SchoolEvent> rows, final List<Child> children) {
     final String fingerprint = SuggestionDetails.fingerprint(rows);
+    if (suggestion.status() == SchoolEventSuggestion.Status.PENDING) {
+      reviewPending(suggestion, rows, children, fingerprint);
+      return Optional.empty();
+    }
     if (fingerprint.equals(suggestion.sourceFingerprint())) {
       return Optional.empty();
     }
     final Instant now = Instant.now(clock);
-    if (suggestion.status() == SchoolEventSuggestion.Status.PENDING) {
-      final Update update = rows.isEmpty()
-          ? new Update().set("status", SchoolEventSuggestion.Status.WITHDRAWN)
-          : new Update().set("details",
-              SuggestionDetails.from(rows, suggestion.details().title()));
-      coparent.updateFirst(byIdAndStatus(suggestion), update
-          .set("sourceFingerprint", fingerprint).set("updatedAt", now),
-          SchoolEventSuggestion.class);
-      return Optional.empty();
-    }
     final boolean onCalendar = suggestion.calendarEventId() != null && coparent.exists(
         Query.query(Criteria.where("_id").is(suggestion.calendarEventId())
             .and("familyId").is(suggestion.familyId()).and("deletedAt").is(null)),
@@ -313,6 +307,47 @@ public class SchoolSuggestionSync {
         && (review != suggestion.review() || !Objects.equals(proposed, suggestion.proposed()));
     return saved != null && newQuestion ? Optional.of(saved)
         : Optional.empty();
+  }
+
+  /**
+   * Brings a suggestion nobody has answered yet up to date, silently: the school's details, the
+   * children it is for, and a title that must come from the school's own words.
+   *
+   * <p>The children are worked out again on every run, not only when the rows change. A row is
+   * offered to a family once (the ledger), so without this a child linked after their sibling
+   * never got the whole-school events the sibling's first run had already offered: on the first
+   * day in production every whole-school event read "For" the child linked first. An accepted
+   * event is left alone, because changing it would change the calendar behind the family's back.
+   */
+  private void reviewPending(final SchoolEventSuggestion suggestion,
+      final List<SchoolEvent> rows, final List<Child> children, final String fingerprint) {
+    final List<ObjectId> forChildren = children.stream()
+        .filter(child -> rows.stream().anyMatch(row -> SchoolEventMatcher.isFor(row, child)))
+        .map(Child::id).toList();
+    final Instant now = Instant.now(clock);
+    if (rows.isEmpty() || forChildren.isEmpty()) {
+      coparent.updateFirst(byIdAndStatus(suggestion), new Update()
+              .set("status", SchoolEventSuggestion.Status.WITHDRAWN)
+              .set("sourceFingerprint", fingerprint).set("updatedAt", now),
+          SchoolEventSuggestion.class);
+      return;
+    }
+    final boolean rowsChanged = !fingerprint.equals(suggestion.sourceFingerprint());
+    SchoolEventSuggestion.Details details = suggestion.details();
+    if (rowsChanged) {
+      details = SuggestionDetails.from(rows, details.title());
+    } else if (!SuggestionDetails.groundedIn(details.title(), rows)) {
+      // Kept times the model read; only a title that is not the school's own words goes.
+      details = details.withTitle(SuggestionDetails.from(rows, null).title());
+    }
+    if (!rowsChanged && details.equals(suggestion.details())
+        && Set.copyOf(forChildren).equals(Set.copyOf(suggestion.childIds()))) {
+      return;
+    }
+    coparent.updateFirst(byIdAndStatus(suggestion), new Update()
+            .set("details", details).set("childIds", forChildren)
+            .set("sourceFingerprint", fingerprint).set("updatedAt", now),
+        SchoolEventSuggestion.class);
   }
 
   /** New suggestions made, and how many rows joined an existing one. */

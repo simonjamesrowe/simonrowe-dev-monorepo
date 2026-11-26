@@ -231,6 +231,57 @@ class SchoolSuggestionIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  void childLinkedAfterTheirSiblingJoinsTheEventsAlreadyWaiting() throws Exception {
+    final Fixture f = family();
+    final Child younger = children.findById(new ObjectId(f.younger())).orElseThrow();
+    children.save(withLink(younger, null));
+    schoolEvents.save(event("a", "Winter Fair", List.of(), "2:00pm – 5:00pm"));
+    sync.run();
+    final String fair = suggestionId(f, "Winter Fair");
+    assertThat(childIdsOf(fair)).containsExactly(new ObjectId(f.older()));
+
+    children.save(withLink(younger, younger.schoolCalendar()));
+    reset(mailer);
+    sync.run();
+
+    assertThat(childIdsOf(fair))
+        .containsExactlyInAnyOrder(new ObjectId(f.older()), new ObjectId(f.younger()));
+    // Still the one suggestion, already announced: nothing new to email.
+    verify(mailer, never()).needsApproval(anyList(), anyList(), anyMap());
+  }
+
+  @Test
+  void waitingTitleNotMadeOfTheSchoolsWordsIsPutRight() throws Exception {
+    final Fixture f = family();
+    schoolEvents.save(event("a", "Kilmorie Winter Fair", List.of(), "2:00pm – 5:00pm"));
+    sync.run();
+    final String fair = suggestionId(f, "Winter Fair");
+    coparent.getCollection(V067CreateCoparentSchoolSuggestions.SUGGESTIONS).updateOne(
+        new Document("_id", new ObjectId(fair)),
+        new Document("$set", new Document("details.title", "Robin Example Winter Fair")
+            .append("details.startTime", "14:05")));
+
+    sync.run();
+
+    final SchoolEventSuggestion after =
+        coparent.findById(new ObjectId(fair), SchoolEventSuggestion.class);
+    assertThat(after.details().title()).isEqualTo("Winter Fair");
+    // Only the title goes; a time the model read is kept.
+    assertThat(after.details().startTime()).isEqualTo("14:05");
+  }
+
+  private List<ObjectId> childIdsOf(final String suggestionId) {
+    return coparent.findById(new ObjectId(suggestionId), SchoolEventSuggestion.class)
+        .childIds();
+  }
+
+  private static Child withLink(final Child child, final Child.SchoolCalendarLink link) {
+    return new Child(child.id(), child.familyId(), child.fullName(), child.dateOfBirth(),
+        child.school(), child.medicalNotes(), child.avatarUrl(), child.deletedAt(),
+        child.createdAt(), child.updatedAt(), link);
+  }
+
+  @Test
   void calendarWriteThatFailsLeavesTheReviewToBeAnsweredAgain() throws Exception {
     final Fixture f = family();
     schoolEvents.save(event("a", "Harriet's class trip", List.of(), "9:15am"));

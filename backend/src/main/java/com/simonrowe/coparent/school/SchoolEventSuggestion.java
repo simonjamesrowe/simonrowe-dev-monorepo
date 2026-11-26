@@ -108,6 +108,12 @@ public record SchoolEventSuggestion(
       return startTime == null;
     }
 
+    /** The same details under another title. */
+    Details withTitle(final String newTitle) {
+      return new Details(newTitle, startDate, endDate, startTime, endTime, location, notes,
+          sourceTime);
+    }
+
     /** Whether a parent would see a difference on the calendar. */
     boolean sameOnCalendar(final Details other) {
       return other != null && Objects.equals(startDate, other.startDate)
