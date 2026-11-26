@@ -206,3 +206,86 @@ describe('FamilySetupHub child editor', () => {
     await user.click(within(editor as HTMLElement).getByRole('button', { name: 'Cancel' }));
   });
 });
+
+describe('FamilySetupHub school calendar link', () => {
+  const linkToggle = "Suggest events from Term Time's school calendar";
+  const classField = "Class (teacher's first name)";
+
+  const renderEditor = (editing: Child) => {
+    const onSaveSchoolCalendar = vi.fn();
+    render(
+      <FamilySetupHub
+        families={[family]}
+        parents={[parent]}
+        children={[editing]}
+        invitations={[] as Invitation[]}
+        activeFamilyId="fam-1"
+        childIdToEdit="chi-1"
+        onUpdateChild={vi.fn()}
+        onSaveSchoolCalendar={onSaveSchoolCalendar}
+      />,
+    );
+    const editor = within(screen.getByRole('dialog', { name: 'Theo Rowe' }));
+    return { onSaveSchoolCalendar, editor };
+  };
+
+  it('links a child with their class and the year from their date of birth', async () => {
+    const user = userEvent.setup();
+    const { onSaveSchoolCalendar, editor } = renderEditor(child);
+
+    expect(editor.queryByLabelText(classField)).not.toBeInTheDocument();
+    await user.click(editor.getByLabelText(linkToggle));
+    await user.type(editor.getByLabelText(classField), 'Harriet ');
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    expect(onSaveSchoolCalendar).toHaveBeenCalledWith('chi-1', {
+      classTeacher: 'Harriet',
+      yearGroup: '',
+    });
+  });
+
+  it('unlinks a linked child, and leaves an unchanged link alone', async () => {
+    const user = userEvent.setup();
+    const { onSaveSchoolCalendar, editor } = renderEditor({
+      ...child,
+      schoolCalendar: {
+        classTeacher: 'Harriet',
+        yearGroup: null,
+        academicYear: '2026/27',
+        currentYearGroup: 'Year 3',
+        classIsCurrent: true,
+      },
+    });
+
+    expect(
+      editor.getByRole('option', { name: 'From date of birth (Year 3)' }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+    expect(onSaveSchoolCalendar).not.toHaveBeenCalled();
+
+    await user.click(editor.getByLabelText(linkToggle));
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+    expect(onSaveSchoolCalendar).toHaveBeenCalledWith('chi-1', null);
+  });
+
+  it('asks about a class entered last school year, and saving confirms it', async () => {
+    const user = userEvent.setup();
+    const { onSaveSchoolCalendar, editor } = renderEditor({
+      ...child,
+      schoolCalendar: {
+        classTeacher: 'Harriet',
+        yearGroup: null,
+        academicYear: '2025/26',
+        currentYearGroup: 'Year 4',
+        classIsCurrent: false,
+      },
+    });
+
+    expect(editor.getByText(/This class was entered for 2025\/26/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+    expect(onSaveSchoolCalendar).toHaveBeenCalledWith('chi-1', {
+      classTeacher: 'Harriet',
+      yearGroup: '',
+    });
+  });
+});

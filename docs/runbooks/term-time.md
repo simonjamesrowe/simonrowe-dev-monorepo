@@ -1200,6 +1200,75 @@ It is one indexed read of `school_events`, with no model call behind it.
   letter asks a parent to do, so the pane has no such data. It needs a new extracted field on
   `SchoolEvent`, checked against the source text the way `verbatimUrl` checks links.
 
+## CoParent: school events on the family calendar
+
+Term Time's events reach a CoParent family calendar as **suggestions a parent approves**
+(`com.simonrowe.coparent.school`, collection `school_event_suggestions` in the CoParent database,
+`V067CreateCoparentSchoolSuggestions`). Nothing is written to a calendar without a parent pressing
+**Add to calendar**, and one parent is enough: a school event is a fact about the children's day,
+not a change to who has them.
+
+**Linking a child.** In Family setup, a child's editor has a *School calendar* section: a toggle,
+the class (as the school writes it, usually the teacher's first name) and an optional year group.
+The year group otherwise comes from the date of birth by the English rule (age on the 31 August
+before the school year), so it moves up every September by itself. The class does not: it is
+stored with the academic year it was entered for, and a class from an earlier year is treated as
+unknown until a parent saves it again (the editor says so). Children's and teachers' names live
+only in the CoParent database, never in this repository.
+
+**When it runs.** `SchoolIngestScheduler` publishes `SchoolEventsRefreshed` after each calendar,
+mail (after the publication judge), website and newsletter pass; `SchoolSuggestionSync` listens,
+on its own thread, one run at a time, with requests during a run collapsing into one more. Linking
+a child also asks for a run. Inert unless both `school.enabled` and `coparent.enabled` are on.
+
+**What is offered, by rule.**
+- Upcoming events within `coparent.school-calendar.horizon-days` (60), shorter than 14 days
+  (term-long rows such as "Autumn Term 2" are not calendar events).
+- Only `PUBLIC` events, except for the family named by `COPARENT_SCHOOL_MAILBOX_FAMILY_ID` (set in
+  `.env` only), which also gets events from school email that has not been published to everyone,
+  because Term Time reads that family's own mailbox. So events extracted from email reach a family
+  once the email is published (by a person or the publication judge), and reach the mailbox family
+  straight away.
+- `SchoolEventMatcher` decides who an event is for. The child's year must be one the event names
+  (its tags, or for an untagged event the years in its title); an event naming none is
+  whole-school. **A title naming a class as a possessive ("Elis's class trip", "Wills' Class
+  Trip") makes it that class's only**, because the school files most class events as
+  whole-school: on 2026-11-26 the feed had "Elis's class trip" and "Vicky's class trip" both with
+  no year group. A possessive is required so "Dance class" is never taken for a class; one trailing
+  "s" is ignored so "Wills'" and "Will's" match. A child with no current class gets a class event
+  only when it names their year.
+
+**Duplicates.** The school states one event in several places ("Elis's class trip" and "Year 3
+Local Area Walk – Elis's class"). Rows are first grouped by `EventDuplicates.groups` (the read-time
+rules the chat uses, now public), only among rows for the same children; then, when
+`coparent.school-calendar.ai-enabled` is on (it follows `COPARENT_ASSISTANT_ENABLED`),
+`SchoolEventMerger` asks the model which groups are one event and for a clean title and `HH:mm`
+times, also offering existing suggestions on the same days so a later copy joins the one already
+offered. The model only proposes: a merge across days or across different children is refused,
+a title or time that does not check out is replaced by the rule-built one, and any failure falls
+back to the rules. Structured output, no tools, content suppressed from Langfuse.
+
+**The ledger.** A unique index on `(familyId, sourceEventIds)` keeps each school row in one
+suggestion per family whatever was decided, so a dismissed event never comes back and two runs
+cannot offer one row twice. In the backup and restore; `RestoreService.ensureCoparentIndexes()`
+puts the indexes back.
+
+**When the school changes something.** Each suggestion keeps a fingerprint of its rows' dates,
+times and places (not descriptions, which the extractor rewords on every read).
+- Pending: follows the change silently, or is withdrawn if every row is gone.
+- Accepted: never changed behind the family's back. A changed date, time or place comes back as
+  *The school changed this* (**Update calendar** / **Keep as it is**); a removal as *No longer on
+  the school calendar* (**Remove from calendar** / **Keep it**). Updating keeps what the family set
+  on the event (parents, title, notes).
+- **Limit:** Term Time never deletes calendar-feed rows, and a row's id includes its date, so an
+  event the school *moves* in its feed arrives as a new suggestion while the old accepted one stays
+  on the calendar. Only rows Term Time does delete (a letter edited or read again) report as
+  removed.
+
+**Email.** One per sync per family, to every active parent, only when that run added something to
+approve or put an accepted event back for review; it lists each item and links to
+`/calendar?school=1`, which opens the *From school* drawer. A read with nothing new sends nothing.
+
 ## Evals
 
 `evals/termtime.yaml`, driven by `evals/termTimeProvider.js` — the same custom-provider mechanism

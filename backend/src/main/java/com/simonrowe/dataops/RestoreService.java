@@ -45,6 +45,7 @@ import com.simonrowe.migration.changeunits.V052CreateCoparentExpenses;
 import com.simonrowe.migration.changeunits.V053ReserveInvitedCoparents;
 import com.simonrowe.migration.changeunits.V054CreateCoparentStatements;
 import com.simonrowe.migration.changeunits.V055CreateCoparentSettlements;
+import com.simonrowe.migration.changeunits.V067CreateCoparentSchoolSuggestions;
 import com.simonrowe.narration.NarrationRestoreValidator;
 import com.simonrowe.school.judge.SchoolJudgement;
 import com.simonrowe.school.news.NewsletterSummary;
@@ -153,7 +154,8 @@ public class RestoreService {
       V052CreateCoparentExpenses.EXPENSES,
       V054CreateCoparentStatements.TRANSACTIONS,
       V054CreateCoparentStatements.UPLOADS,
-      V055CreateCoparentSettlements.SETTLEMENTS);
+      V055CreateCoparentSettlements.SETTLEMENTS,
+      V067CreateCoparentSchoolSuggestions.SUGGESTIONS);
 
   private static final List<String> IMPORT_ORDER_DEPENDENT = List.of(
       "skill_groups", "jobs", "blogs", "code_examples", "narrations"
@@ -555,6 +557,7 @@ public class RestoreService {
     V053ReserveInvitedCoparents.createIndexes(coparentMongoTemplate);
     V054CreateCoparentStatements.createIndexes(coparentMongoTemplate);
     V055CreateCoparentSettlements.createIndexes(coparentMongoTemplate);
+    V067CreateCoparentSchoolSuggestions.createIndexes(coparentMongoTemplate);
     LOG.info("Recreated CoParent indexes after restore");
   }
 

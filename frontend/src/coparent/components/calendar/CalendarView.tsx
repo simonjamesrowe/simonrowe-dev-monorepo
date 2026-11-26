@@ -20,6 +20,8 @@ export function CalendarView({
   onViewEvent,
   onCreateEvent,
   onViewRequest,
+  schoolSuggestionCount = 0,
+  onViewSchoolSuggestions,
   onChangeView,
   onNavigateDate,
 }: CalendarSchedulingProps) {
@@ -127,6 +129,15 @@ export function CalendarView({
             </div>
 
             <div className="flex items-center gap-3">
+              {schoolSuggestionCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => onViewSchoolSuggestions?.()}
+                  className="cp-button cp-button--secondary"
+                >
+                  From school ({schoolSuggestionCount})
+                </button>
+              )}
               {/* Pending Requests Badge */}
               {scheduleChangeRequests.length > 0 && incomingRequests.length === 0 && (
                 <button

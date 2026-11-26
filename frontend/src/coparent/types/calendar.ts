@@ -101,6 +101,12 @@ export interface CalendarSchedulingProps {
   /** Called when user wants to view request details */
   onViewRequest?: (requestId?: string) => void;
 
+  // School events offered from Term Time
+  /** How many school events wait for a decision */
+  schoolSuggestionCount?: number;
+  /** Called when user wants to see the school events */
+  onViewSchoolSuggestions?: () => void;
+
   // View actions
   /** Called when user changes the calendar view */
   onChangeView?: (view: 'month' | 'week' | 'day') => void;

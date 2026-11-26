@@ -6,11 +6,14 @@ import com.simonrowe.coparent.persistence.ChildRepository;
 import com.simonrowe.coparent.persistence.CoparentAuditService;
 import com.simonrowe.coparent.persistence.FamilyRepository;
 import com.simonrowe.coparent.shared.CoparentAccessPolicy;
+import com.simonrowe.school.model.AcademicYear;
+import com.simonrowe.school.model.YearGroups;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 import org.bson.types.ObjectId;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -19,6 +22,10 @@ import org.springframework.web.server.ResponseStatusException;
 /** Family-scoped child profile operations. */
 @Service
 public class ChildService {
+
+  /** A first name or a class name: letters, spaces, hyphens and apostrophes, bounded. */
+  private static final Pattern CLASS_NAME =
+      Pattern.compile("[\\p{L}][\\p{L} '’-]{0,39}+");
 
   private final ChildRepository children;
   private final FamilyRepository families;
@@ -93,10 +100,58 @@ public class ChildService {
     final Child saved = children.save(new Child(current.id(), current.familyId(), name, birthDate,
         school == null ? current.school() : blankToNull(school),
         medicalNotes == null ? current.medicalNotes() : blankToNull(medicalNotes),
-        current.avatarUrl(), null, current.createdAt(), Instant.now()));
+        current.avatarUrl(), null, current.createdAt(), Instant.now(),
+        current.schoolCalendar()));
     audits.record(saved.familyId(), "child", saved.id(), "update",
         Map.of("fullName", name, "dateOfBirth", birthDate.toString()));
     return saved;
+  }
+
+  /**
+   * Links a child to the school calendar, or updates the link, so school events can be offered
+   * for them. The class is recorded against the current academic year, because it changes every
+   * September and last year's class must not decide this year's events.
+   *
+   * @param childId the child
+   * @param classTeacher the class's name as the school writes it, usually the teacher's first
+   *     name; blank when not known
+   * @param yearGroup an explicit year group, or blank to work it out from the date of birth
+   * @param today the date, for the academic year
+   * @return the child as saved
+   */
+  public Child linkSchoolCalendar(final ObjectId childId, final String classTeacher,
+      final String yearGroup, final LocalDate today) {
+    final Child current = get(childId);
+    final String className = classTeacher == null || classTeacher.isBlank() ? null
+        : classTeacher.strip();
+    if (className != null && !CLASS_NAME.matcher(className).matches()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+          "Write the class as the school does, such as the teacher's first name");
+    }
+    final String year = yearGroup == null || yearGroup.isBlank() ? null : yearGroup.strip();
+    if (year != null && !YearGroups.isValid(year)) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown year group");
+    }
+    final Child.SchoolCalendarLink link =
+        new Child.SchoolCalendarLink(className, year, AcademicYear.current(today));
+    final Child saved = children.save(withSchoolCalendar(current, link));
+    audits.record(saved.familyId(), "child", saved.id(), "link_school_calendar",
+        Map.of("yearGroup", year == null ? "from date of birth" : year));
+    return saved;
+  }
+
+  /** Stops offering school events for a child. Suggestions already made stay as they are. */
+  public Child unlinkSchoolCalendar(final ObjectId childId) {
+    final Child saved = children.save(withSchoolCalendar(get(childId), null));
+    audits.record(saved.familyId(), "child", saved.id(), "unlink_school_calendar", Map.of());
+    return saved;
+  }
+
+  private static Child withSchoolCalendar(final Child child,
+      final Child.SchoolCalendarLink link) {
+    return new Child(child.id(), child.familyId(), child.fullName(), child.dateOfBirth(),
+        child.school(), child.medicalNotes(), child.avatarUrl(), child.deletedAt(),
+        child.createdAt(), Instant.now(), link);
   }
 
   /** Soft-deletes a child and removes its active family reference. */
@@ -104,7 +159,8 @@ public class ChildService {
     final Child child = get(childId);
     final Instant now = Instant.now();
     children.save(new Child(child.id(), child.familyId(), child.fullName(), child.dateOfBirth(),
-        child.school(), child.medicalNotes(), child.avatarUrl(), now, child.createdAt(), now));
+        child.school(), child.medicalNotes(), child.avatarUrl(), now, child.createdAt(), now,
+        child.schoolCalendar()));
     final Family family = requireFamily(child.familyId());
     final List<ObjectId> childIds = family.childIds().stream()
         .filter(id -> !id.equals(child.id())).toList();

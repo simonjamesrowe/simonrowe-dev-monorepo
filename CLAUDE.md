@@ -281,6 +281,29 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- coparent-school-events: **Term Time's school events are offered to CoParent families as
+  suggestions a parent approves** (`com.simonrowe.coparent.school`, `school_event_suggestions`,
+  `V067CreateCoparentSchoolSuggestions`). A child is linked in Family setup with their class (the
+  teacher's first name, as the school writes it); the year comes from the date of birth. After
+  every school sync, upcoming events are matched to children by rule, offered in the calendar's
+  *From school* drawer, and both parents get one email when something new needs approving.
+  Load-bearing bits:
+  - **A possessive class in a title makes the event that class's only.** The school files most
+    class events as whole-school ("Elis's class trip", no year group), so the year alone would
+    put the other class's trip on the calendar. `SchoolEventMatcher`, rules only.
+  - **The class is stored with its academic year** and is treated as unknown from the next
+    September until a parent saves it again; the year group moves up by itself.
+  - **The model only merges and tidies** (`SchoolEventMerger`, structured output, no tools). A
+    merge across days or across different children is refused, and any failure falls back to the
+    rule grouping (`EventDuplicates.groups`, made public for this).
+  - **The unique `(familyId, sourceEventIds)` index is the ledger**: a dismissed school row is
+    never offered again. In the backup, and re-created on restore.
+  - **An accepted event is never changed behind the family's back**: a change or removal at the
+    school comes back for review. Calendar-feed rows are never deleted by Term Time, so a moved
+    feed event arrives as a new suggestion instead.
+  - Email events reach a family once the email is published; the family in
+    `COPARENT_SCHOOL_MAILBOX_FAMILY_ID` (`.env` only) gets them straight away.
+  See `docs/runbooks/term-time.md` ("CoParent: school events on the family calendar").
 - termtime-publication-judge: **Term Time decides school email itself.** `PublicationJudgeService`
   sweeps the approval queue after every mail sync and publishes or declines through
   `SchoolApprovalService`; attachments follow their email. `TierClassifier` (PUBLIC for 4 of

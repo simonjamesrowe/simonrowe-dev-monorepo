@@ -51,6 +51,19 @@ coparent:
     # both spend on the same OpenAI key.
     ai-enabled: ${COPARENT_STATEMENTS_AI_ENABLED:${COPARENT_ASSISTANT_ENABLED:false}}
     model: ${COPARENT_STATEMENTS_MODEL:${COPARENT_ASSISTANT_MODEL:gpt-6-luna}}
+  school-calendar:
+    # Offers Term Time's school events to families whose children are linked to the school,
+    # after every school sync. Inert unless school.enabled is on too, since nothing syncs.
+    enabled: ${COPARENT_SCHOOL_CALENDAR_ENABLED:true}
+    # The model only merges the school's duplicate rows and tidies titles and times; without it
+    # each group the rules find is offered as written. Off unless the assistant is on, since both
+    # spend on the same OpenAI key.
+    ai-enabled: ${COPARENT_SCHOOL_CALENDAR_AI_ENABLED:${COPARENT_ASSISTANT_ENABLED:false}}
+    model: ${COPARENT_SCHOOL_CALENDAR_MODEL:${COPARENT_ASSISTANT_MODEL:gpt-6-luna}}
+    horizon-days: ${COPARENT_SCHOOL_CALENDAR_HORIZON_DAYS:60}
+    # The family whose own mailbox Term Time reads also gets events from school email that has
+    # not been published to everyone. Set in .env only: it names a real family.
+    mailbox-family-id: ${COPARENT_SCHOOL_MAILBOX_FAMILY_ID:}
 
 mongock:
   enabled: ${MONGOCK_ENABLED:true}

@@ -25,6 +25,10 @@ vi.mock('../hooks/api', () => ({
   useDeleteScheduleChangeRequest: vi.fn(() => ({ mutateAsync: vi.fn() })),
   useApproveScheduleChangeRequest: vi.fn(),
   useDeclineScheduleChangeRequest: vi.fn(),
+  useSchoolSuggestions: vi.fn(() => ({ data: [] })),
+  useAcceptSchoolSuggestion: vi.fn(() => ({ mutateAsync: vi.fn() })),
+  useDismissSchoolSuggestion: vi.fn(() => ({ mutateAsync: vi.fn() })),
+  useReviewSchoolSuggestion: vi.fn(() => ({ mutateAsync: vi.fn() })),
 }));
 
 const mockedUseFamilies = vi.mocked(apiHooks.useFamilies);
@@ -158,5 +162,47 @@ describe('CalendarPage', () => {
     await waitFor(() => {
       expect(createEventMutate).toHaveBeenCalled();
     });
+  });
+
+  it('opens the school events Term Time found from the header', async () => {
+    const user = userEvent.setup();
+    const acceptMutate = vi.fn().mockResolvedValue({});
+    vi.mocked(apiHooks.useAcceptSchoolSuggestion).mockReturnValue({
+      mutateAsync: acceptMutate,
+    } as unknown as ReturnType<typeof apiHooks.useAcceptSchoolSuggestion>);
+    vi.mocked(apiHooks.useSchoolSuggestions).mockReturnValue({
+      data: [
+        {
+          id: 'sugg-1',
+          status: 'pending',
+          review: null,
+          childIds: ['child-1'],
+          details: {
+            title: 'Winter Sing Along',
+            startDate: '2026-12-10',
+            endDate: '2026-12-10',
+            startTime: '15:00',
+            endTime: null,
+            location: null,
+            notes: null,
+            sourceTime: '3 PM',
+          },
+          proposed: null,
+          sourceTitles: ['Year 5 and Year 6 Winter Sing Along'],
+          calendarEventId: null,
+        },
+      ],
+    } as unknown as ReturnType<typeof apiHooks.useSchoolSuggestions>);
+
+    render(
+      <MemoryRouter>
+        <CalendarPage />
+      </MemoryRouter>,
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'From school (1)' }));
+    expect(await screen.findByText('For Theo')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Add to calendar' }));
+    expect(acceptMutate).toHaveBeenCalledWith({ familyId: 'fam-1', id: 'sugg-1' });
   });
 });

@@ -174,6 +174,9 @@ export const handlers = [
     return HttpResponse.json(family, { status: 201 });
   }),
 
+  // School events from Term Time: none unless a test overrides this.
+  http.get('*/families/:familyId/school-suggestions', () => HttpResponse.json([])),
+
   http.get('*/families/:familyId/children', ({ params }) => {
     const familyId = params.familyId as string;
     return HttpResponse.json(childrenByFamily[familyId] ?? []);

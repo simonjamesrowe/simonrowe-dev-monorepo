@@ -84,6 +84,20 @@ export interface Parent {
   lastSignedInAt?: string;
 }
 
+/** How a child is linked to Term Time's school calendar. */
+export interface SchoolCalendarLink {
+  /** The class as the school writes it, usually the teacher's first name. */
+  classTeacher?: string | null;
+  /** An explicit year group, or null when it comes from the date of birth. */
+  yearGroup?: string | null;
+  /** The school year the class was entered for, e.g. 2026/27. */
+  academicYear?: string | null;
+  /** The year group the child is in today. */
+  currentYearGroup?: string | null;
+  /** False when the class was entered for an earlier school year. */
+  classIsCurrent: boolean;
+}
+
 export interface Child {
   id: string;
   familyId: string;
@@ -91,6 +105,8 @@ export interface Child {
   dateOfBirth: string;
   school?: string;
   medicalNotes?: string;
+  /** Null or absent when the child is not linked to the school calendar. */
+  schoolCalendar?: SchoolCalendarLink | null;
 }
 
 export interface Invitation {
