@@ -347,6 +347,9 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   - **An accepted event is never changed behind the family's back**: a change or removal at the
     school comes back for review. Calendar-feed rows are never deleted by Term Time, so a moved
     feed event arrives as a new suggestion instead.
+  - **A pending suggestion's children are recomputed every run**, so a child linked after a
+    sibling joins events already waiting; **a model title may only use the school's own title
+    words** (it once put a pupil's name from a description into one).
   - Email events reach a family once the email is published; the family in
     `COPARENT_SCHOOL_MAILBOX_FAMILY_ID` (`.env` only) gets them straight away.
   See `docs/runbooks/term-time.md` ("CoParent: school events on the family calendar").

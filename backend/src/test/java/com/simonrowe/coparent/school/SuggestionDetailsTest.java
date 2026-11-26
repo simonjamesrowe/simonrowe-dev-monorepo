@@ -9,6 +9,7 @@ import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class SuggestionDetailsTest {
@@ -82,10 +83,39 @@ class SuggestionDetailsTest {
   }
 
   @Test
-  void keepsAnOrdinaryModelTitle() {
+  void keepsModelTitleMadeOfTheSchoolsOwnWords() {
     assertThat(SuggestionDetails.from(List.of(
-        row("a", "Harriet's class trip", SchoolSourceType.CALENDAR_FEED, null, null)),
+        row("a", "Harriet's class trip", SchoolSourceType.CALENDAR_FEED, null, null),
+        row("b", "Year 3 Local Area Walk – Harriet's class", SchoolSourceType.EMAIL, null,
+            null)),
         "Local Area Walk – Harriet's class").title())
         .isEqualTo("Local Area Walk – Harriet's class");
+  }
+
+  @Test
+  void refusesModelTitleThatAddsWordsTheSchoolDidNotUse() {
+    // From production: the model took the winner's name from the description.
+    final List<SchoolEvent> rows = List.of(row("a",
+        "Kilmorie Primary School UK Parliament Week Art Competition winners announcement",
+        SchoolSourceType.CALENDAR_FEED, null, null));
+
+    assertThat(SuggestionDetails.groundedIn(
+        "Robin Example Art Competition Winners Announcement", rows)).isFalse();
+    assertThat(SuggestionDetails.from(rows,
+        "Robin Example Art Competition Winners Announcement").title())
+        .isEqualTo("UK Parliament Week Art Competition winners announcement");
+  }
+
+  @ParameterizedTest
+  @CsvSource(delimiter = '|', value = {
+      "Enrichment Clubs Start|Enrichment clubs start",
+      "INSET Day|Inset Day",
+      "Harriet's Class Trip|Harriet's class trip",
+      "Year 5 & 6 Winter Sing Along|Kilmorie Primary School Year 5 and Year 6 Winter Sing Along",
+      "New Year's Day|New Year’s Day",
+  })
+  void acceptsReorderedOrShortenedSchoolWords(final String title, final String source) {
+    assertThat(SuggestionDetails.groundedIn(title,
+        List.of(row("a", source, SchoolSourceType.CALENDAR_FEED, null, null)))).isTrue();
   }
 }
