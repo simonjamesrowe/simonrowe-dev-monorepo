@@ -60,15 +60,18 @@ public class UptimeService {
     }
     Instant windowStart = days.getFirst().atStartOfDay(ZONE).toInstant();
 
+    List<String> targets = properties.uptime().targets().stream()
+        .map(DashboardProperties.Target::name)
+        .toList();
+    // Only configured targets: a hostname dropped from the list keeps its hours until the TTL
+    // expires them, and they would be read here only to be thrown away.
     List<UptimeHour> hours = mongoTemplate.find(
-        Query.query(Criteria.where("hourStart").gte(windowStart)), UptimeHour.class);
+        Query.query(Criteria.where("hourStart").gte(windowStart).and("target").in(targets)),
+        UptimeHour.class);
     UptimeHour first = mongoTemplate.findOne(
         new Query().with(Sort.by(Sort.Direction.ASC, "hourStart")).limit(1), UptimeHour.class);
     Instant probingSince = first == null ? null : first.hourStart();
 
-    List<String> targets = properties.uptime().targets().stream()
-        .map(DashboardProperties.Target::name)
-        .toList();
     Incidents incidents = outageIssues.recent();
     List<Incident> overlapping = incidents.items().stream()
         .filter(i -> i.closedAt() == null || !i.closedAt().isBefore(windowStart))

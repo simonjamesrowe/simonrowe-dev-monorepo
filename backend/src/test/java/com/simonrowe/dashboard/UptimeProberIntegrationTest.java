@@ -13,6 +13,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import org.bson.Document;
 import org.junit.jupiter.api.AfterEach;
@@ -32,6 +34,7 @@ class UptimeProberIntegrationTest extends AbstractIntegrationTest {
   @Autowired
   private MongoTemplate mongoTemplate;
 
+  private final ExecutorService executor = Executors.newCachedThreadPool();
   private HttpServer server;
   private String base;
 
@@ -62,6 +65,9 @@ class UptimeProberIntegrationTest extends AbstractIntegrationTest {
       exchange.sendResponseHeaders(200, -1);
       exchange.close();
     });
+    // The probes run in parallel. HttpServer's default executor is one thread, which would queue
+    // /moved behind /slow's three seconds and time it out: a race in the stub, not the prober.
+    server.setExecutor(executor);
     server.start();
     base = "http://127.0.0.1:" + server.getAddress().getPort();
   }
@@ -69,6 +75,7 @@ class UptimeProberIntegrationTest extends AbstractIntegrationTest {
   @AfterEach
   void tearDown() {
     server.stop(0);
+    executor.shutdownNow();
     mongoTemplate.getCollection(UptimeHour.COLLECTION).drop();
   }
 
