@@ -65,7 +65,15 @@ public class SchoolSuggestionController {
         CoparentIds.parse(suggestionId), request.action()));
   }
 
-  /** Links a child, then looks for school events for them straight away. */
+  /**
+   * Links a child, then looks for school events for them straight away.
+   *
+   * <p>Not throttled, deliberately (raised in review on #311). Requests collapse into at most one
+   * waiting run, and a run only calls the model for school rows no suggestion holds yet: after
+   * the first, every matched row is in the ledger, so saving the link again costs two Mongo reads
+   * and no model call. Only rows newly matched by a changed class or year reach the model, once
+   * each, which is bounded by the school's own calendar.
+   */
   @PutMapping("/children/{childId}/school-calendar")
   ChildController.ChildResponse link(@PathVariable final String childId,
       @RequestBody final LinkRequest request) {

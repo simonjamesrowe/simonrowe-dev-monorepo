@@ -8,6 +8,8 @@ import com.simonrowe.school.model.Visibility;
 import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class SuggestionDetailsTest {
 
@@ -66,5 +68,24 @@ class SuggestionDetailsTest {
     return new SchoolEvent(id, title, DAY, DAY, time == null, SchoolEvent.EventType.TRIP,
         List.of(), "2026/27", source, "doc", Visibility.PUBLIC, "About it", location, time,
         null);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {
+      "Click https://example.com to book", "Visit www.example.com", "Email head@example.com",
+      "<b>Trip</b>", "Trip\u0007", ""})
+  void refusesModelTitleThatIsNotJustName(final String title) {
+    assertThat(SuggestionDetails.plausibleTitle(title)).isFalse();
+    assertThat(SuggestionDetails.from(List.of(
+        row("a", "Kilmorie Winter Fair", SchoolSourceType.CALENDAR_FEED, null, null)), title)
+        .title()).isEqualTo("Winter Fair");
+  }
+
+  @Test
+  void keepsAnOrdinaryModelTitle() {
+    assertThat(SuggestionDetails.from(List.of(
+        row("a", "Harriet's class trip", SchoolSourceType.CALENDAR_FEED, null, null)),
+        "Local Area Walk – Harriet's class").title())
+        .isEqualTo("Local Area Walk – Harriet's class");
   }
 }

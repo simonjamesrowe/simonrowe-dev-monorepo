@@ -56,8 +56,8 @@ final class SuggestionDetails {
     final String location = ordered.stream().map(SchoolEvent::location)
         .filter(value -> value != null && !value.isBlank()).findFirst().map(String::strip)
         .orElse(null);
-    final String chosenTitle = title == null || title.isBlank() ? tidyTitle(first.title())
-        : cap(title.strip(), MAX_TITLE);
+    final String chosenTitle = plausibleTitle(title) ? cap(title.strip(), MAX_TITLE)
+        : tidyTitle(first.title());
     final boolean timed = times.isPresent() && first.startDate().equals(first.endDate());
     return new SchoolEventSuggestion.Details(
         chosenTitle,
@@ -70,6 +70,24 @@ final class SuggestionDetails {
         ordered.stream().map(SchoolEvent::time).filter(Objects::nonNull).findFirst()
             .orElse(null));
   }
+
+  /**
+   * Whether a title a model wrote may go on a calendar. Its input includes school letters, which
+   * anyone could have written, so a title carrying a link, an address, markup or control
+   * characters is refused and the school's own title is used instead. A title is a few words; it
+   * has no reason to hold any of those.
+   *
+   * @param title a proposed title, possibly null
+   * @return true when it is non-blank and holds none of them
+   */
+  static boolean plausibleTitle(final String title) {
+    return title != null && !title.isBlank() && title.length() <= MAX_TITLE
+        && !UNTITLE_LIKE.matcher(title).find();
+  }
+
+  /** A link, a web or email address, markup, or a control character. */
+  private static final Pattern UNTITLE_LIKE = Pattern.compile(
+      "://|www\\.|@|[<>]|\\p{Cntrl}", Pattern.CASE_INSENSITIVE);
 
   /**
    * The school's title without the school's own name in front of it.
