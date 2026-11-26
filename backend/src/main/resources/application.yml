@@ -705,6 +705,46 @@ platform:
     timeout: 1s
     cache-ttl: 60s
 
+# The admin dashboard (/admin/dashboard). See docs/runbooks/admin-dashboard.md.
+dashboard:
+  # The backend requests every public hostname once a minute, through the internet and back in
+  # through Cloudflare, pinggy and nginx, and keeps hourly counts in uptime_hours. Off by default
+  # so a laptop's backend does not add its own traffic to the production nginx logs; production
+  # switches it on in docker-compose.prod.yml. The URLs match scripts/prod-heartbeat.sh.
+  uptime:
+    enabled: ${DASHBOARD_UPTIME_ENABLED:false}
+    timeout: 20s
+    targets:
+      - name: www
+        url: https://www.simonrowe.dev/
+      - name: api
+        url: https://api.simonrowe.dev/api/profile
+      - name: term-time
+        url: https://term-time.simonrowe.dev/
+      - name: coparents
+        url: https://coparents.simonrowe.dev/
+      - name: meals
+        url: https://meals.simonrowe.dev/
+      - name: console
+        url: https://console.simonrowe.dev/
+      - name: langfuse
+        url: https://langfuse.simonrowe.dev/
+      - name: temporal
+        url: https://temporal.simonrowe.dev/
+      - name: dependency-track
+        url: https://dependency-track.simonrowe.dev/api/version
+  # The same key software-factory's CVE scan uses; the backend reads it from .env. Production
+  # points the base URL at the API server on the compose network.
+  dependency-track:
+    base-url: ${DASHBOARD_DEPENDENCYTRACK_BASE_URL:https://dependency-track.simonrowe.dev}
+    api-key: ${DEPENDENCYTRACK_API_KEY:}
+    timeout: 15s
+  # The off-Pi heartbeat's outage issues are the incident list. Anonymous, like the changelog.
+  alerts:
+    repository: simonjamesrowe/simonrowe-dev-monorepo
+    label: prod-down
+    cache-for: 5m
+
 factory-admin:
   factory-base-url: ${PLATFORM_FACTORY_URL:http://software-factory:8090}
   deployer-base-url: ${PLATFORM_DEPLOYER_URL:http://deployer:8090}

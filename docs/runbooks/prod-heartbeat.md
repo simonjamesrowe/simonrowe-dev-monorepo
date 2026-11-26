@@ -79,9 +79,13 @@ done'
 
 ## Limits
 
-- GitHub delays scheduled runs under load, typically by 5-15 minutes, so detection
-  takes 30-60 minutes rather than 15. That is fine for the outages this exists
-  for, which lasted days.
+- **GitHub runs the schedule far less often than it says.** Measured on 26 November
+  2026: 292 runs since the workflow was added, and three to five a day through
+  November, not 96. So detection can take hours, not 15 minutes. That is still
+  fine for the outages this exists for, which lasted days, but the runs are no
+  uptime measure: the admin dashboard probes from inside the stack instead (see
+  [admin-dashboard.md](admin-dashboard.md)). A tighter alarm would need a
+  scheduler GitHub does not throttle.
 - GitHub disables scheduled workflows in a repository with no activity for 60
   days. That is not a risk for this repository today, but a disabled heartbeat is
   silent too. The workflow page says so.
