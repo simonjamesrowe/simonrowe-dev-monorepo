@@ -135,6 +135,28 @@ class DependencyTrackReaderTest {
   void anUnreachableServerIsUnavailable() {
     server.stop(0);
 
-    assertThat(reader(KEY).read().status()).isEqualTo(Status.UNAVAILABLE);
+    VulnerabilityReport report = reader(KEY).read();
+
+    assertThat(report.status()).isEqualTo(Status.UNAVAILABLE);
+    assertThat(report.detail()).startsWith("Dependency-Track could not be read (")
+        .endsWith(" from /api/v1/project)");
+  }
+
+  @Test
+  void unparseableBodyNamesTheErrorTypeButNeverEchoesTheBody() {
+    server.removeContext("/api/v1/project");
+    server.createContext("/api/v1/project", exchange -> {
+      byte[] bytes = "<html>internal-host-10.0.0.7 secret-ish</html>"
+          .getBytes(StandardCharsets.UTF_8);
+      exchange.sendResponseHeaders(200, bytes.length);
+      try (OutputStream out = exchange.getResponseBody()) {
+        out.write(bytes);
+      }
+    });
+
+    VulnerabilityReport report = reader(KEY).read();
+
+    assertThat(report.status()).isEqualTo(Status.UNAVAILABLE);
+    assertThat(report.detail()).doesNotContain("internal-host").doesNotContain("secret");
   }
 }

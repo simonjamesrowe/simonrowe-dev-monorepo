@@ -79,7 +79,7 @@ public class DependencyTrackReader {
       List<TrendPoint> trend = trend(get("/api/v1/metrics/portfolio/" + TREND_DAYS + "/days"));
       return new VulnerabilityReport(Status.OK, null, projects, trend, now);
     } catch (DependencyTrackException e) {
-      LOG.warn("Dependency-Track read failed: {}", e.getMessage());
+      LOG.warn("Dependency-Track panel unavailable: {}", e.getMessage());
       return new VulnerabilityReport(Status.UNAVAILABLE, e.getMessage(), List.of(), List.of(), now);
     }
   }
@@ -100,7 +100,11 @@ public class DependencyTrackReader {
       }
       return MAPPER.readTree(response.body());
     } catch (IOException | JacksonException e) {
-      throw new DependencyTrackException("Dependency-Track could not be read: " + e.getMessage());
+      // The panel gets the exception's type only. Its message can carry part of a response body
+      // or an internal address, so that goes to the log, not to the browser.
+      LOG.warn("Dependency-Track GET {} failed: {}", pathOnly(path), e.getMessage());
+      throw new DependencyTrackException("Dependency-Track could not be read (%s from %s)"
+          .formatted(e.getClass().getSimpleName(), pathOnly(path)));
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       throw new DependencyTrackException("Interrupted reading Dependency-Track");

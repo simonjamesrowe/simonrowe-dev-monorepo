@@ -11,6 +11,7 @@ import com.simonrowe.dashboard.UptimeReport.Incident;
 import com.simonrowe.dashboard.UptimeReport.Incidents;
 import com.simonrowe.migration.changeunits.V068CreateUptimeHourIndexes;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -73,6 +74,26 @@ class AdminDashboardControllerTest extends AbstractIntegrationTest {
         // The 2025 issue closed before the window and is left out.
         .andExpect(jsonPath("$.incidents.items.length()").value(1))
         .andExpect(jsonPath("$.incidents.items[0].number").value(306));
+  }
+
+  @Test
+  void eachHostnameCountsGapsOnlyFromItsOwnFirstProbe() throws Exception {
+    when(outageIssues.recent()).thenReturn(new Incidents(true, List.of()));
+    Instant thisHour = Instant.now().truncatedTo(ChronoUnit.HOURS);
+    Instant threeDaysAgo = thisHour.minus(3, ChronoUnit.DAYS);
+    mongoTemplate.insert(new UptimeHour(UptimeHour.idFor("www", threeDaysAgo), "www",
+        threeDaysAgo, 60, 0, 6000L, null, null));
+    mongoTemplate.insert(new UptimeHour(UptimeHour.idFor("term-time", thisHour), "term-time",
+        thisHour, 1, 0, 100L, null, null));
+
+    // Yesterday: www was being probed and has nothing, so it is a gap; term-time did not exist.
+    mockMvc.perform(get("/api/admin/dashboard/uptime").param("days", "7").with(admin()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.targets[0].name").value("www"))
+        .andExpect(jsonPath("$.targets[0].days[5].status").value("GAPS"))
+        .andExpect(jsonPath("$.targets[2].name").value("term-time"))
+        .andExpect(jsonPath("$.targets[2].days[5].status").value("NO_DATA"))
+        .andExpect(jsonPath("$.probingSince").value(threeDaysAgo.toString()));
   }
 
   @Test

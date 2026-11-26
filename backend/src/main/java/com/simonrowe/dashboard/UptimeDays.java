@@ -30,7 +30,8 @@ final class UptimeDays {
    *
    * @param targets the configured target names, in display order
    * @param hours every stored hour inside the window
-   * @param probingSince the first hour anything was probed, or null
+   * @param firstProbes each target's first probed hour; a target missing from it was never
+   *     probed, so every day before it was added reads as no data rather than as a gap
    * @param days the days to report, oldest first
    * @param now the current time
    * @param zone the zone days are cut in
@@ -39,7 +40,7 @@ final class UptimeDays {
   static List<TargetUptime> build(
       final List<String> targets,
       final List<UptimeHour> hours,
-      final Instant probingSince,
+      final Map<String, Instant> firstProbes,
       final List<LocalDate> days,
       final Instant now,
       final ZoneId zone) {
@@ -54,6 +55,7 @@ final class UptimeDays {
     List<TargetUptime> rows = new ArrayList<>();
     for (String target : targets) {
       Map<LocalDate, List<UptimeHour>> perDay = byTarget.getOrDefault(target, Map.of());
+      Instant probingSince = firstProbes.get(target);
       List<DayUptime> cells = new ArrayList<>();
       int probes = 0;
       int failures = 0;

@@ -10,6 +10,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class UptimeDaysTest {
@@ -42,7 +43,7 @@ class UptimeDaysTest {
   @Test
   void dayWithEveryProbePassingIsUp() {
     List<TargetUptime> rows = UptimeDays.build(List.of("www"), fullDay("www", 0, 0),
-        DAY_START, List.of(DAY), LATER, LONDON);
+        Map.of("www", DAY_START), List.of(DAY), LATER, LONDON);
 
     DayUptime day = only(rows);
     assertThat(day.status()).isEqualTo(DayStatus.UP);
@@ -55,9 +56,9 @@ class UptimeDaysTest {
   @Test
   void underAnHourOfFailuresIsDegradedAndAnHourOrMoreIsDown() {
     DayUptime degraded = only(UptimeDays.build(List.of("www"), fullDay("www", 59, 1),
-        DAY_START, List.of(DAY), LATER, LONDON));
+        Map.of("www", DAY_START), List.of(DAY), LATER, LONDON));
     DayUptime down = only(UptimeDays.build(List.of("www"), fullDay("www", 30, 2),
-        DAY_START, List.of(DAY), LATER, LONDON));
+        Map.of("www", DAY_START), List.of(DAY), LATER, LONDON));
 
     assertThat(degraded.status()).isEqualTo(DayStatus.DEGRADED);
     assertThat(degraded.lastFailure()).isEqualTo("HTTP 502");
@@ -70,8 +71,8 @@ class UptimeDaysTest {
     // Twelve hours probed, twelve hours of nothing: the backend (or the Pi) was down.
     List<UptimeHour> half = fullDay("www", 0, 0).subList(0, 12);
 
-    DayUptime day = only(UptimeDays.build(List.of("www"), half, DAY_START, List.of(DAY), LATER,
-        LONDON));
+    DayUptime day = only(UptimeDays.build(List.of("www"), half, Map.of("www", DAY_START),
+        List.of(DAY), LATER, LONDON));
 
     assertThat(day.status()).isEqualTo(DayStatus.GAPS);
     assertThat(day.unprobedMinutes()).isEqualTo(720);
@@ -80,8 +81,8 @@ class UptimeDaysTest {
   @Test
   void dayWithoutProbesIsGapsAfterProbingBeganAndNoDataBefore() {
     LocalDate before = DAY.minusDays(1);
-    List<TargetUptime> rows = UptimeDays.build(List.of("www"), List.of(), DAY_START,
-        List.of(before, DAY), LATER, LONDON);
+    List<TargetUptime> rows = UptimeDays.build(List.of("www"), List.of(),
+        Map.of("www", DAY_START), List.of(before, DAY), LATER, LONDON);
 
     assertThat(rows.getFirst().days()).extracting(DayUptime::status)
         .containsExactly(DayStatus.NO_DATA, DayStatus.GAPS);
@@ -112,11 +113,31 @@ class UptimeDaysTest {
     List<UptimeHour> hours = new ArrayList<>(fullDay("api", 0, 0));
     hours.addAll(fullDay("retired", 0, 0));
 
-    List<TargetUptime> rows = UptimeDays.build(List.of("www", "api"), hours, DAY_START,
-        List.of(DAY), LATER, LONDON);
+    List<TargetUptime> rows = UptimeDays.build(List.of("www", "api"), hours,
+        Map.of("www", DAY_START, "api", DAY_START, "retired", DAY_START), List.of(DAY), LATER,
+        LONDON);
 
     assertThat(rows).extracting(TargetUptime::name).containsExactly("www", "api");
     assertThat(rows.get(0).days().getFirst().status()).isEqualTo(DayStatus.GAPS);
     assertThat(rows.get(1).days().getFirst().status()).isEqualTo(DayStatus.UP);
+  }
+
+  @Test
+  void hostnameAddedLaterReadsNoDataBeforeItsOwnFirstProbe() {
+    // www has been probed all along; term-time was added to the list today.
+    LocalDate before = DAY.minusDays(1);
+    Instant addedAt = DAY_START.plusSeconds(10 * 3600L);
+    List<UptimeHour> hours = new ArrayList<>(fullDay("www", 0, 0));
+    hours.add(new UptimeHour(UptimeHour.idFor("term-time", addedAt), "term-time", addedAt, 60, 0,
+        6000L, null, null));
+
+    List<TargetUptime> rows = UptimeDays.build(List.of("www", "term-time"), hours,
+        Map.of("www", DAY_START.minusSeconds(86_400), "term-time", addedAt),
+        List.of(before, DAY), DAY_START.plusSeconds(11 * 3600L), LONDON);
+
+    assertThat(rows.get(0).days().getFirst().status()).isEqualTo(DayStatus.GAPS);
+    assertThat(rows.get(1).days()).extracting(DayUptime::status)
+        .containsExactly(DayStatus.NO_DATA, DayStatus.UP);
+    assertThat(rows.get(1).days().getLast().unprobedMinutes()).isZero();
   }
 }
