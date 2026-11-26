@@ -60,6 +60,7 @@ ENDPOINTS=(
   "langfuse|https://langfuse.simonrowe.dev/|200"
   "temporal|https://temporal.simonrowe.dev/|200"
   "console|https://console.simonrowe.dev/|200"
+  "term-time|https://term-time.simonrowe.dev/|200"
   "coparents|https://coparents.simonrowe.dev/|200"
   "meals|https://meals.simonrowe.dev/|200"
 )

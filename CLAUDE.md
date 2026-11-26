@@ -281,6 +281,23 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- admin-dashboard: **`/admin/dashboard` is a real page**: uptime per public hostname, articles
+  arrived and summarised per week, and Dependency-Track findings (`com.simonrowe.dashboard`, one
+  endpoint per panel under `/api/admin/dashboard`). The fake-KPI `DashboardMetrics` and the
+  unrouted `AdminDashboard` were deleted with their CSS. Load-bearing bits:
+  - **The off-Pi heartbeat is no uptime measure**: GitHub ran its "every 15 minutes" schedule
+    three to five times a day in November 2026. So `UptimeProber` requests every public hostname
+    once a minute through the tunnel and keeps hourly `$inc` counts in `uptime_hours` (120-day
+    TTL, `V068`, not backed up). Minutes nobody probed are gaps, never uptime.
+    `DASHBOARD_UPTIME_ENABLED` is `false` in yml and `true` in prod compose. term-time is now in
+    the heartbeat's host list too; it was never probed before.
+  - **Dependency-Track uses software-factory's `DEPENDENCYTRACK_API_KEY`**, which the backend
+    already gets from `.env`. A failure is the panel's status (the HTTP code), never an error. The
+    shared env file's copy equals the KEK and 401s.
+  - Summarised counts each article once, in the week of its first `READY` summary, so a
+    `SUMMARY_FORMAT_VERSION` bump does not double it.
+  - Listened, themes, latency and Amplitude visitors are not built yet.
+  See `docs/runbooks/admin-dashboard.md`.
 - reviewer-lifecycle-from-brunel: **The code reviewer keeps a finding's identity across pushes,
   honours a person's decline, and reads the written standards**, four lessons taken from Brunel
   (global-engineering-shared/brunel), still on Claude Code. Load-bearing bits:

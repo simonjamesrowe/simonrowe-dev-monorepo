@@ -86,6 +86,16 @@ aggregation:
   # Nor software-factory: PageReaderClientTest points a real client at a stub server.
   page-reader:
     enabled: false
+# No test may probe the real hostnames or read the real Dependency-Track.
+dashboard:
+  uptime:
+    enabled: false
+  dependency-track:
+    api-key: ""
+  # Connection refused at once, so a test that forgets to stub OutageIssues fails fast rather
+  # than spending GitHub's anonymous rate limit.
+  alerts:
+    api-base-url: http://127.0.0.1:9
 platform:
   releases:
     summaries:
