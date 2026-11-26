@@ -198,11 +198,25 @@ public class SchoolSuggestionService {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "This has already been answered");
     }
     final CalendarEvent event = calendarEvent(familyId, current.calendarEventId());
-    if (event != null && action == ReviewAction.APPLY) {
-      calendar.updateEvent(familyId, event.id(), values(current.proposed(),
-          liveChildren(familyId, event.childIds()), event));
-    } else if (event != null && action == ReviewAction.REMOVE) {
-      calendar.deleteEvent(familyId, event.id());
+    try {
+      if (event != null && action == ReviewAction.APPLY) {
+        calendar.updateEvent(familyId, event.id(), values(current.proposed(),
+            liveChildren(familyId, event.childIds()), event));
+      } else if (event != null && action == ReviewAction.REMOVE) {
+        calendar.deleteEvent(familyId, event.id());
+      }
+    } catch (RuntimeException failure) {
+      // The answer was claimed before the calendar was written (no transactions), so a write
+      // that fails puts the question back exactly as it was. Otherwise the family could not
+      // answer again, and for APPLY the sync would never ask again either: the stored details
+      // already match the school, so the fingerprint would never differ.
+      coparent.updateFirst(Query.query(Criteria.where("_id").is(suggestionId)
+              .and("familyId").is(familyId).and("status").is(saved.status())
+              .and("review").is(null).and("updatedAt").is(saved.updatedAt())),
+          new Update().set("status", current.status()).set("review", current.review())
+              .set("proposed", current.proposed()).set("details", current.details())
+              .set("updatedAt", Instant.now(clock)), SchoolEventSuggestion.class);
+      throw failure;
     }
     audits.record(familyId, "school_event_suggestion", suggestionId,
         "review_" + action.name().toLowerCase(Locale.ROOT), Map.of());

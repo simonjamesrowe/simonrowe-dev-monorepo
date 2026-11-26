@@ -34,6 +34,7 @@ import com.simonrowe.school.model.SchoolEventRepository;
 import com.simonrowe.school.model.SchoolSourceType;
 import com.simonrowe.school.model.Visibility;
 import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.Month;
 import java.time.ZoneId;
@@ -227,6 +228,34 @@ class SchoolSuggestionIntegrationTest extends AbstractIntegrationTest {
         .andExpect(status().isOk());
 
     assertThat(coparent.findAll(CalendarEvent.class).getFirst().startTime()).isEqualTo("13:30");
+  }
+
+  @Test
+  void calendarWriteThatFailsLeavesTheReviewToBeAnsweredAgain() throws Exception {
+    final Fixture f = family();
+    schoolEvents.save(event("a", "Harriet's class trip", List.of(), "9:15am"));
+    sync.run();
+    final String trip = suggestionId(f, "Harriet's class trip");
+    mockMvc.perform(post(path(f, trip, "accept")).with(user("alice")))
+        .andExpect(status().isOk());
+    schoolEvents.save(event("a", "Harriet's class trip", List.of(), "1:30pm"));
+    sync.run();
+    // The child leaves the family, so the calendar refuses the update.
+    final Child child = children.findById(new ObjectId(f.younger())).orElseThrow();
+    children.save(new Child(child.id(), child.familyId(), child.fullName(),
+        child.dateOfBirth(), child.school(), child.medicalNotes(), child.avatarUrl(),
+        Instant.now(), child.createdAt(), child.updatedAt(), child.schoolCalendar()));
+
+    mockMvc.perform(post(path(f, trip, "review")).with(user("alice"))
+            .contentType(MediaType.APPLICATION_JSON).content("{\"action\":\"APPLY\"}"))
+        .andExpect(status().isBadRequest());
+
+    final SchoolEventSuggestion after =
+        coparent.findById(new ObjectId(trip), SchoolEventSuggestion.class);
+    assertThat(after.review()).isEqualTo(SchoolEventSuggestion.Review.CHANGED);
+    assertThat(after.proposed().startTime()).isEqualTo("13:30");
+    assertThat(after.details().startTime()).isEqualTo("09:15");
+    assertThat(coparent.findAll(CalendarEvent.class).getFirst().startTime()).isEqualTo("09:15");
   }
 
   @Test
