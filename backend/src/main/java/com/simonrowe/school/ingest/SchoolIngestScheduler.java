@@ -6,6 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -51,16 +52,18 @@ public class SchoolIngestScheduler {
   private final SchoolNewsletterPoller newsletterPoller;
   private final SchoolNewsService newsService;
   private final PublicationJudgeService judgeService;
+  private final ApplicationEventPublisher events;
 
   public SchoolIngestScheduler(
       final SchoolIngestService ingestService, final GmailIngestService gmailIngestService,
       final SchoolNewsletterPoller newsletterPoller, final SchoolNewsService newsService,
-      final PublicationJudgeService judgeService) {
+      final PublicationJudgeService judgeService, final ApplicationEventPublisher events) {
     this.ingestService = ingestService;
     this.gmailIngestService = gmailIngestService;
     this.newsletterPoller = newsletterPoller;
     this.newsService = newsService;
     this.judgeService = judgeService;
+    this.events = events;
   }
 
   /**
@@ -88,6 +91,7 @@ public class SchoolIngestScheduler {
     } catch (RuntimeException e) {
       LOG.warn("Calendar ingest failed: {}", e.getMessage());
     }
+    refreshed("calendar");
   }
 
   /**
@@ -112,6 +116,8 @@ public class SchoolIngestScheduler {
     } catch (RuntimeException e) {
       LOG.warn("Publication judge failed: {}", e.getMessage());
     }
+    // After the judge, so events from mail it has just published are public when read.
+    refreshed("mail");
   }
 
   /** Crawls the website. Slow and rarely changes, so daily. */
@@ -124,6 +130,7 @@ public class SchoolIngestScheduler {
     } catch (RuntimeException e) {
       LOG.warn("Website ingest failed: {}", e.getMessage());
     }
+    refreshed("website");
   }
 
   /** Reads any newsletter the school has published that Term Time does not hold yet. */
@@ -135,6 +142,7 @@ public class SchoolIngestScheduler {
     } catch (RuntimeException e) {
       LOG.warn("Newsletter poll failed: {}", e.getMessage());
     }
+    refreshed("newsletters");
   }
 
   /**
@@ -153,6 +161,18 @@ public class SchoolIngestScheduler {
       newsService.summariseMissing();
     } catch (RuntimeException e) {
       LOG.warn("Newsletter summaries failed: {}", e.getMessage());
+    }
+  }
+
+  /**
+   * Tells any listener the school's events may have changed. A listener's failure is logged
+   * here rather than ending the scheduled task.
+   */
+  private void refreshed(final String source) {
+    try {
+      events.publishEvent(new SchoolEventsRefreshed(source));
+    } catch (RuntimeException e) {
+      LOG.warn("A listener to the {} sync failed: {}", source, e.getMessage());
     }
   }
 }

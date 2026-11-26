@@ -104,7 +104,10 @@ public class BackupService {
       // a second time, so a restore without them would offer every old transaction again.
       "statement_transactions", "statement_uploads",
       // Settle-ups: the payments that paid expenses back, which the expenses point at.
-      "expense_settlements"
+      "expense_settlements",
+      // School events offered to a family, and what they decided. A dismissed one is the only
+      // record that a parent said no, so a restore without it would offer them all again.
+      "school_event_suggestions"
   );
 
   /** Writes every file under {@code dir} into the archive below {@code prefix}. */

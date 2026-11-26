@@ -18822,3 +18822,24 @@ label.meals-button { position: relative; }
     transition: none;
   }
 }
+
+/* CoParent: school events offered from Term Time (the calendar's "From school" drawer).
+   Hand-written BEM on the expense palette, because the compiled utility blob is frozen. */
+.coparent-app .school-suggest__intro { margin: 0; color: var(--expense-muted); font-size: 14px; }
+.coparent-app .school-suggest__empty { margin: 0; color: var(--expense-muted); }
+.coparent-app .school-suggest__empty a { color: var(--expense-teal-strong); text-decoration: underline; }
+.coparent-app .school-suggest__error { margin: 0; padding: 10px 12px; border-radius: 12px; background: var(--expense-rose-tint); color: var(--expense-rose); font-size: 14px; }
+.coparent-app .school-suggest__list { display: flex; flex-direction: column; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.coparent-app .school-suggest__item { display: flex; flex-direction: column; gap: 4px; padding: 16px; border: 1px solid var(--expense-border); border-left: 4px solid var(--expense-amber); border-radius: 16px; background: var(--expense-surface); }
+.coparent-app .school-suggest__flag { align-self: flex-start; margin: 0 0 4px; padding: 2px 10px; border-radius: 999px; background: var(--expense-amber-soft); color: var(--expense-text); font-size: 12px; font-weight: 600; }
+.coparent-app .school-suggest__title { margin: 0; font-size: 16px; font-weight: 700; color: var(--expense-text); }
+.coparent-app .school-suggest__when { margin: 0; font-size: 14px; color: var(--expense-text); }
+.coparent-app .school-suggest__when s { color: var(--expense-muted); }
+.coparent-app .school-suggest__meta { margin: 0; font-size: 13px; color: var(--expense-muted); }
+.coparent-app .school-suggest__source { margin: 4px 0 0; font-size: 12px; color: var(--expense-muted); overflow-wrap: anywhere; }
+.coparent-app .school-suggest__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.coparent-app .school-link { display: grid; gap: 12px; margin-top: 4px; padding: 14px; border: 1px solid var(--expense-border); border-radius: 14px; }
+.coparent-app .school-link__legend { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--expense-muted); }
+.coparent-app .school-link__note { margin: 0; font-size: 13px; color: var(--expense-muted); }
+.coparent-app .school-link__note--warn { color: var(--expense-amber-strong); }
+.coparent-app .school-link__toggle { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--expense-text); }

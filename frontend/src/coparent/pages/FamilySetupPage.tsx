@@ -15,6 +15,7 @@ import {
   useCancelInvitation,
   useUpdateParentRole,
   useCurrentParentId,
+  useSaveSchoolCalendar,
 } from '../hooks/api';
 
 const FamilySetupPage = () => {
@@ -34,6 +35,7 @@ const FamilySetupPage = () => {
   const resendInvitation = useResendInvitation();
   const cancelInvitation = useCancelInvitation();
   const updateParentRole = useUpdateParentRole();
+  const saveSchoolCalendar = useSaveSchoolCalendar();
 
   useEffect(() => {
     const [firstFamily] = families;
@@ -126,6 +128,7 @@ const FamilySetupPage = () => {
       onUpdateFamily={handleUpdateFamily}
       onAddChild={handleAddChild}
       onUpdateChild={handleUpdateChild}
+      onSaveSchoolCalendar={(id, link) => saveSchoolCalendar.mutate({ id, link })}
       onInviteCoParent={handleInvite}
       onResendInvite={handleResend}
       onCancelInvite={handleCancel}

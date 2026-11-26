@@ -70,7 +70,7 @@ import java.util.stream.Stream;
  * an event merged into another one hides it. So differently worded titles on a single day are
  * kept apart, and so are events whose sources disagree by more than the edges of a week.
  */
-final class EventDuplicates {
+public final class EventDuplicates {
 
   /**
    * The school's own name, which a website or PDF extraction prefixes to everything. Also used
@@ -130,6 +130,24 @@ final class EventDuplicates {
    * @return one preferred row per event, each in the position of its group's first row
    */
   static List<SchoolEvent> collapse(final List<SchoolEvent> events) {
+    return candidateGroups(events).stream().map(EventDuplicates::representative).toList();
+  }
+
+  /**
+   * Groups the rows that describe one event, keeping every row, for a caller that needs to know
+   * which stored rows a merged event came from (CoParent records them, so a row it has already
+   * suggested is never suggested twice).
+   *
+   * @param events events as stored, possibly several per real event
+   * @return one list per event, the preferred row first, groups in the order of their first row
+   */
+  public static List<List<SchoolEvent>> groups(final List<SchoolEvent> events) {
+    return candidateGroups(events).stream()
+        .map(group -> group.stream().map(Candidate::event).sorted(PREFERRED).toList())
+        .toList();
+  }
+
+  private static List<List<Candidate>> candidateGroups(final List<SchoolEvent> events) {
     final List<List<Candidate>> groups = new ArrayList<>();
     for (final SchoolEvent event : events) {
       final Candidate candidate =
@@ -140,7 +158,7 @@ final class EventDuplicates {
           .ifPresentOrElse(group -> group.add(candidate),
               () -> groups.add(new ArrayList<>(List.of(candidate))));
     }
-    return groups.stream().map(EventDuplicates::representative).toList();
+    return groups;
   }
 
   /**

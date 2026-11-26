@@ -11,6 +11,9 @@ import type {
 import { formatDate } from '../../lib/formatters/date';
 import { CloseButton } from '../ui/CloseButton';
 
+/** The school's year groups, as Term Time names them. */
+const YEAR_GROUPS = ['Reception', 'Year 1', 'Year 2', 'Year 3', 'Year 4', 'Year 5', 'Year 6'];
+
 type ChildDraft = {
   fullName: string;
   dateOfBirth: string;
@@ -31,6 +34,11 @@ interface FamilySetupHubProps {
   onUpdateFamily?: (id: string, updates: Partial<Family>) => void;
   onAddChild?: (child: ChildDraft) => void;
   onUpdateChild?: (id: string, updates: Partial<ChildDraft>) => void;
+  /** Links a child to Term Time's school calendar, or unlinks them with null. */
+  onSaveSchoolCalendar?: (
+    id: string,
+    link: { classTeacher: string; yearGroup: string } | null,
+  ) => void;
   onInviteCoParent?: (familyId: string, email: string, role: ParentRole, name?: string) => void;
   onResendInvite?: (invitationId: string) => void;
   onCancelInvite?: (invitationId: string) => void;
@@ -100,6 +108,7 @@ export function FamilySetupHub({
   onUpdateFamily,
   onAddChild,
   onUpdateChild,
+  onSaveSchoolCalendar,
   onInviteCoParent,
   onResendInvite,
   onCancelInvite,
@@ -124,6 +133,9 @@ export function FamilySetupHub({
   const [editChildDob, setEditChildDob] = useState('');
   const [editChildSchool, setEditChildSchool] = useState('');
   const [editChildMedicalNotes, setEditChildMedicalNotes] = useState('');
+  const [editSchoolLinked, setEditSchoolLinked] = useState(false);
+  const [editClassTeacher, setEditClassTeacher] = useState('');
+  const [editYearGroup, setEditYearGroup] = useState('');
 
   const editingChild =
     (editingChildId ? familyChildren.find((c) => c.id === editingChildId) : undefined) ??
@@ -135,12 +147,16 @@ export function FamilySetupHub({
     setEditChildDob(editingChild.dateOfBirth);
     setEditChildSchool(editingChild.school ?? '');
     setEditChildMedicalNotes(editingChild.medicalNotes ?? '');
+    setEditSchoolLinked(Boolean(editingChild.schoolCalendar));
+    setEditClassTeacher(editingChild.schoolCalendar?.classTeacher ?? '');
+    setEditYearGroup(editingChild.schoolCalendar?.yearGroup ?? '');
   }, [
     editingChild?.dateOfBirth,
     editingChild?.fullName,
     editingChild?.id,
     editingChild?.medicalNotes,
     editingChild?.school,
+    editingChild?.schoolCalendar,
   ]);
 
   const openEditor = (child: Child) => {
@@ -149,6 +165,9 @@ export function FamilySetupHub({
     setEditChildDob(child.dateOfBirth);
     setEditChildSchool(child.school ?? '');
     setEditChildMedicalNotes(child.medicalNotes ?? '');
+    setEditSchoolLinked(Boolean(child.schoolCalendar));
+    setEditClassTeacher(child.schoolCalendar?.classTeacher ?? '');
+    setEditYearGroup(child.schoolCalendar?.yearGroup ?? '');
   };
 
   const closeEditor = () => {
@@ -169,6 +188,25 @@ export function FamilySetupHub({
       school: editChildSchool.trim(),
       medicalNotes: editChildMedicalNotes.trim(),
     });
+
+    const link = editingChild.schoolCalendar;
+    if (!editSchoolLinked) {
+      if (link) onSaveSchoolCalendar?.(editingChild.id, null);
+      return;
+    }
+    // Saved again when unchanged but entered for an earlier school year: saving is how a parent
+    // confirms the class for this year.
+    const changed =
+      !link ||
+      !link.classIsCurrent ||
+      (link.classTeacher ?? '') !== editClassTeacher.trim() ||
+      (link.yearGroup ?? '') !== editYearGroup;
+    if (changed) {
+      onSaveSchoolCalendar?.(editingChild.id, {
+        classTeacher: editClassTeacher.trim(),
+        yearGroup: editYearGroup,
+      });
+    }
   };
 
   const handleAddChild = () => {
@@ -282,6 +320,78 @@ export function FamilySetupHub({
                   className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/40 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
                 />
               </div>
+              <fieldset className="school-link sm:col-span-2">
+                <legend className="school-link__legend">School calendar</legend>
+                <label className="school-link__toggle" htmlFor="child-edit-school-linked">
+                  <input
+                    id="child-edit-school-linked"
+                    type="checkbox"
+                    checked={editSchoolLinked}
+                    onChange={(e) => setEditSchoolLinked(e.target.checked)}
+                  />
+                  Suggest events from Term Time&apos;s school calendar
+                </label>
+                {editSchoolLinked && (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <label
+                        htmlFor="child-edit-class"
+                        className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400"
+                      >
+                        Class (teacher&apos;s first name)
+                      </label>
+                      <input
+                        id="child-edit-class"
+                        type="text"
+                        value={editClassTeacher}
+                        maxLength={40}
+                        onChange={(e) => setEditClassTeacher(e.target.value)}
+                        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/40 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        htmlFor="child-edit-year-group"
+                        className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400"
+                      >
+                        Year group
+                      </label>
+                      <select
+                        id="child-edit-year-group"
+                        value={editYearGroup}
+                        onChange={(e) => setEditYearGroup(e.target.value)}
+                        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/40 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                      >
+                        <option value="">
+                          {editingChild.schoolCalendar?.currentYearGroup &&
+                          !editingChild.schoolCalendar.yearGroup
+                            ? `From date of birth (${editingChild.schoolCalendar.currentYearGroup})`
+                            : 'From date of birth'}
+                        </option>
+                        {YEAR_GROUPS.map((year) => (
+                          <option key={year} value={year}>
+                            {year}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                )}
+                {editSchoolLinked &&
+                  editingChild.schoolCalendar?.classTeacher &&
+                  !editingChild.schoolCalendar.classIsCurrent && (
+                    <p className="school-link__note school-link__note--warn">
+                      This class was entered for {editingChild.schoolCalendar.academicYear}. Check
+                      it is still right for this school year, then save.
+                    </p>
+                  )}
+                {editSchoolLinked && (
+                  <p className="school-link__note">
+                    Only events for this class or year group, and whole-school ones, are suggested.
+                    Either parent approves each one before it goes on the calendar.
+                  </p>
+                )}
+              </fieldset>
               <div className="sm:col-span-2">
                 <label
                   htmlFor="child-edit-medical-notes"

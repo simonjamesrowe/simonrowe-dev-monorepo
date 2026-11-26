@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 
 import { CalendarView } from '../components/calendar/CalendarView';
 import { EventCreationDrawer } from '../components/calendar/EventCreationDrawer';
+import { SchoolSuggestionsDrawer } from '../components/calendar/SchoolSuggestionsDrawer';
 import { ScheduleChangeDrawer } from '../components/calendar/ScheduleChangeDrawer';
 import { ScheduleChangeRequestModal } from '../components/calendar/ScheduleChangeRequestModal';
 import {
@@ -21,6 +22,10 @@ import {
   useDeclineScheduleChangeRequest,
   useCreateScheduleChangeRequest,
   useDeleteScheduleChangeRequest,
+  useSchoolSuggestions,
+  useAcceptSchoolSuggestion,
+  useDismissSchoolSuggestion,
+  useReviewSchoolSuggestion,
 } from '../hooks/api';
 import type { Event, ScheduleChangeRequest, Parent, Child } from '../types/calendar';
 
@@ -96,6 +101,8 @@ const CalendarPage = () => {
   // `request` is what an applied assistant action links to; `requests` opens the list.
   const linkedRequestId = searchParams.get('request') || undefined;
   const requestsOpen = Boolean(linkedRequestId) || searchParams.get('requests') === '1';
+  // `school=1` is what the "school events need a look" email links to.
+  const schoolOpen = searchParams.get('school') === '1';
   const [changeTarget, setChangeTarget] = useState<Event | null>(null);
   const isEditing = Boolean(editingEventId);
   const initialDate = searchParams.get('date') || todayYmd;
@@ -107,6 +114,10 @@ const CalendarPage = () => {
   const { data: children = [] } = useChildren(activeFamilyId);
   const { data: events = [] } = useEvents(activeFamilyId);
   const { data: scheduleChangeRequests = [] } = useScheduleChangeRequests(activeFamilyId);
+  const { data: schoolSuggestions = [] } = useSchoolSuggestions(activeFamilyId);
+  const acceptSchoolSuggestion = useAcceptSchoolSuggestion();
+  const dismissSchoolSuggestion = useDismissSchoolSuggestion();
+  const reviewSchoolSuggestion = useReviewSchoolSuggestion();
 
   const createEvent = useCreateEvent();
   const updateEvent = useUpdateEvent();
@@ -326,6 +337,8 @@ const CalendarPage = () => {
         onApproveRequest={handleApproveRequest}
         onDeclineRequest={handleDeclineRequest}
         onViewRequest={handleViewRequest}
+        schoolSuggestionCount={schoolSuggestions.length}
+        onViewSchoolSuggestions={() => setSearchParams({ school: '1' })}
         onChangeView={handleChangeView}
         onNavigateDate={handleNavigateDate}
       />
@@ -371,6 +384,19 @@ const CalendarPage = () => {
         currentParentId={currentParentId}
         onClose={() => setChangeTarget(null)}
         onSubmit={handleSubmitChange}
+      />
+
+      <SchoolSuggestionsDrawer
+        open={schoolOpen}
+        onClose={() => setSearchParams({})}
+        suggestions={schoolSuggestions}
+        childNames={Object.fromEntries(transformedChildren.map((c) => [c.id, c.name]))}
+        anyChildLinked={children.some((c) => Boolean(c.schoolCalendar))}
+        onAccept={(id) => acceptSchoolSuggestion.mutateAsync({ familyId: activeFamilyId, id })}
+        onDismiss={(id) => dismissSchoolSuggestion.mutateAsync({ familyId: activeFamilyId, id })}
+        onReview={(id, action) =>
+          reviewSchoolSuggestion.mutateAsync({ familyId: activeFamilyId, id, action })
+        }
       />
 
       <ScheduleChangeDrawer

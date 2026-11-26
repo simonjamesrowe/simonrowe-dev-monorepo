@@ -8,6 +8,7 @@ import com.simonrowe.migration.changeunits.V043CreateCoparentCollections;
 import com.simonrowe.migration.changeunits.V052CreateCoparentExpenses;
 import com.simonrowe.migration.changeunits.V054CreateCoparentStatements;
 import com.simonrowe.migration.changeunits.V055CreateCoparentSettlements;
+import com.simonrowe.migration.changeunits.V067CreateCoparentSchoolSuggestions;
 import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -41,7 +42,8 @@ class CoparentBackupCoverageTest extends AbstractIntegrationTest {
       V052CreateCoparentExpenses.EXPENSES,
       V054CreateCoparentStatements.TRANSACTIONS,
       V054CreateCoparentStatements.UPLOADS,
-      V055CreateCoparentSettlements.SETTLEMENTS);
+      V055CreateCoparentSettlements.SETTLEMENTS,
+      V067CreateCoparentSchoolSuggestions.SUGGESTIONS);
 
   @Autowired
   @Qualifier("coparentMongoTemplate")
@@ -133,6 +135,9 @@ class CoparentBackupCoverageTest extends AbstractIntegrationTest {
         .contains("idx_coparent_statement_upload_owner_recent");
     assertThat(indexNames(V055CreateCoparentSettlements.SETTLEMENTS))
         .contains("idx_coparent_settlement_family_recent");
+    assertThat(indexNames(V067CreateCoparentSchoolSuggestions.SUGGESTIONS))
+        .contains("idx_coparent_school_suggestion_source",
+            "idx_coparent_school_suggestion_family_status");
   }
 
   private List<String> indexNames(final String collection) {
