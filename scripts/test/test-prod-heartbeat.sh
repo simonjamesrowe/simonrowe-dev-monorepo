@@ -174,6 +174,32 @@ run FAKE_TIMEOUT=www.simonrowe.dev
 check "one hostname timing out is not an ingress fault either" \
   "! grep -qE 'ingress:|pinggy:' <<<\"\$out\""
 
+# ---------------------------------------------------------------------------
+echo "  the retry window bounds the run, so a full outage still alerts"
+# ---------------------------------------------------------------------------
+# 2026-11-26: the Pi went offline, every probe waited out its timeout, and six
+# rounds outlasted the job's timeout-minutes. GitHub cancelled the run before the
+# alert step, so the worst outage raised no issue. A real 1s delay against a 2s
+# window: without the window this would make 50 rounds.
+run FAKE_DOWN=www.simonrowe.dev ATTEMPTS=50 RETRY_DELAY=1 RETRY_WINDOW=2
+check "retrying stops once the window is spent, well short of ATTEMPTS" \
+  "[[ \$(grep -c 'www.simonrowe.dev' '$TMP/calls') -le 4 ]]"
+check "and the run still fails, naming the hostname" \
+  "[[ $rc -ne 0 ]] && grep -q 'www: HTTP 503' <<<\"\$out\" && grep -q 'retry window (2s) spent' <<<\"\$out\""
+
+# The defaults must fit the workflow's timeout in the worst case: the Loki
+# freshness query and the pinggy diagnosis (30s each), the retry window, one
+# more round of every hostname timing out, and a minute for checkout and the
+# alert step itself.
+workflow="$PROJECT_DIR/.github/workflows/prod-heartbeat.yml"
+timeout_minutes="$(sed -n 's/^ *timeout-minutes: *\([0-9][0-9]*\).*/\1/p' "$workflow" | head -1)"
+window="$(sed -n 's/^RETRY_WINDOW=\${RETRY_WINDOW:-\([0-9][0-9]*\)}$/\1/p' "$SCRIPT")"
+probe_timeout="$(sed -n 's/^PROBE_TIMEOUT=\${PROBE_TIMEOUT:-\([0-9][0-9]*\)}$/\1/p' "$SCRIPT")"
+endpoints="$(sed -n '/^ENDPOINTS=(/,/^)/p' "$SCRIPT" | grep -c '^  "')"
+worst=$(( 30 + window + endpoints * probe_timeout + 30 + 60 ))
+check "worst case (${worst}s) fits timeout-minutes (${timeout_minutes:-?}m)" \
+  "[[ -n '$timeout_minutes' && -n '$window' && -n '$probe_timeout' && $endpoints -gt 0 && $worst -lt \$(( ${timeout_minutes:-0} * 60 )) ]]"
+
 echo
 printf '  %d checks, %d failures\n' "$checks" "$failures"
 [[ "$failures" -eq 0 ]]
