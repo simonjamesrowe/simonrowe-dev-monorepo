@@ -4,7 +4,11 @@ import com.simonrowe.coparent.assistant.AssistantInferenceService.ProposedCall;
 import com.simonrowe.coparent.calendar.Recurrence;
 import com.simonrowe.coparent.config.CoparentProperties;
 import com.simonrowe.coparent.expense.ExpenseService;
+import com.simonrowe.coparent.document.DocumentService;
 import com.simonrowe.coparent.model.CalendarEvent;
+import com.simonrowe.coparent.model.DocumentSection;
+import com.simonrowe.coparent.model.DueKind;
+import com.simonrowe.coparent.model.FamilyDocument;
 import com.simonrowe.coparent.model.EventCategory;
 import com.simonrowe.coparent.model.Expense;
 import com.simonrowe.coparent.model.Parent;
@@ -15,6 +19,7 @@ import com.simonrowe.coparent.persistence.ConversationRepository;
 import com.simonrowe.coparent.persistence.EventCategoryRepository;
 import com.simonrowe.coparent.persistence.EventRepository;
 import com.simonrowe.coparent.persistence.ExpenseRepository;
+import com.simonrowe.coparent.persistence.FamilyDocumentRepository;
 import com.simonrowe.coparent.persistence.ParentRepository;
 import com.simonrowe.coparent.persistence.ScheduleChangeRepository;
 import com.simonrowe.coparent.shared.CoparentAccessPolicy;
@@ -46,6 +51,12 @@ import org.springframework.web.server.ResponseStatusException;
 public class AssistantProposalService {
 
   private static final Duration RETENTION = Duration.ofDays(7);
+  /**
+   * Six digits in a row once spaces are ignored: the shape of a passport or NHS number, which
+   * must stay in the file. Dates written with separators ({@code 2026-01-10}) never reach six.
+   */
+  private static final java.util.regex.Pattern IDENTIFYING_NUMBER =
+      java.util.regex.Pattern.compile("[0-9]{6}");
 
   private static final Map<String, AssistantProposalBatch.ActionType> TOOL_TYPES = toolTypes();
   private static final Map<AssistantProposalBatch.ActionType, Set<String>> PAYLOAD_FIELDS =
@@ -64,6 +75,8 @@ public class AssistantProposalService {
   private final ParentRepository parents;
   private final ChildRepository children;
   private final ExpenseRepository expenses;
+  private final FamilyDocumentRepository documents;
+  private final AssistantDocumentLookup documentLookup;
   private final MongoTemplate mongoTemplate;
   private final Clock clock;
 
@@ -83,10 +96,12 @@ public class AssistantProposalService {
       final ParentRepository parents,
       final ChildRepository children,
       final ExpenseRepository expenses,
+      final FamilyDocumentRepository documents,
+      final AssistantDocumentLookup documentLookup,
       @Qualifier("coparentMongoTemplate") final MongoTemplate mongoTemplate) {
     this(properties, access, inputValidator, contextFactory, inference, batches, events,
-        categories, changes, conversations, parents, children, expenses, mongoTemplate,
-        Clock.systemUTC());
+        categories, changes, conversations, parents, children, expenses, documents,
+        documentLookup, mongoTemplate, Clock.systemUTC());
   }
 
   AssistantProposalService(
@@ -103,6 +118,8 @@ public class AssistantProposalService {
       final ParentRepository parents,
       final ChildRepository children,
       final ExpenseRepository expenses,
+      final FamilyDocumentRepository documents,
+      final AssistantDocumentLookup documentLookup,
       final MongoTemplate mongoTemplate,
       final Clock clock) {
     this.properties = properties;
@@ -118,6 +135,8 @@ public class AssistantProposalService {
     this.parents = parents;
     this.children = children;
     this.expenses = expenses;
+    this.documents = documents;
+    this.documentLookup = documentLookup;
     this.mongoTemplate = mongoTemplate;
     this.clock = clock;
   }
@@ -133,7 +152,8 @@ public class AssistantProposalService {
     final Parent actor = access.requireMember(familyId);
     final AssistantInputValidator.ValidatedInput input = inputValidator.validate(text, image);
     final AssistantContextFactory.Context context = contextFactory.build(familyId);
-    final List<ProposedCall> calls = inference.propose(context, input);
+    final List<ProposedCall> calls = inference.propose(context, input,
+        arguments -> documentLookup.find(familyId, arguments));
     final List<AssistantProposalBatch.Action> actions = calls.stream()
         .filter(call -> !"no_action".equals(call.name()))
         .map(call -> normalize(familyId, actor, call)).toList();
@@ -401,6 +421,11 @@ public class AssistantProposalService {
               && Expense.OUTSTANDING.equals(expense.reimbursement().status())
               && expense.payerId() != null && !actor.id().equals(expense.payerId()),
           "Select an expense you still owe on");
+      case CREATE_DOCUMENT -> validateDocument(familyId, payload, errors);
+      case ADD_DOCUMENT_VERSION -> {
+        target = documentTarget(familyId, payload, errors);
+        validateDocumentDates(payload, errors);
+      }
     }
     final AssistantProposalBatch.ActionStatus status = errors.isEmpty()
         ? AssistantProposalBatch.ActionStatus.PENDING
@@ -453,6 +478,104 @@ public class AssistantProposalService {
           "Use a whole percentage from 0 to 100"));
     } else {
       payload.put("sharePercent", number.intValue());
+    }
+  }
+
+  /**
+   * Checks a proposed document the way the add form would, and refuses any field that carries
+   * what looks like an identifying number: the model is told never to copy one, and this is
+   * what holds if it does.
+   */
+  private void validateDocument(
+      final ObjectId familyId,
+      final Map<String, Object> payload,
+      final List<AssistantProposalBatch.FieldError> errors) {
+    requireText(payload, "title", errors);
+    final String title = text(payload.get("title"));
+    if (title != null && title.length() > DocumentService.MAX_TITLE) {
+      errors.add(new AssistantProposalBatch.FieldError("title",
+          "Use up to %d characters".formatted(DocumentService.MAX_TITLE)));
+    }
+    final String section = text(payload.get("section"));
+    final DocumentSection parsed = enumValue(DocumentSection.class, section);
+    if (parsed == null) {
+      errors.add(new AssistantProposalBatch.FieldError("section", "Choose a section"));
+    } else {
+      payload.put("section", parsed.name());
+    }
+    if (payload.get("childIds") == null) {
+      payload.put("childIds", List.of());
+    }
+    optionalFamilyIds(payload, "childIds", children.findByFamilyIdAndDeletedAtIsNull(familyId)
+        .stream().map(child -> child.id()).collect(java.util.stream.Collectors.toSet()), errors);
+    final String note = text(payload.get("note"));
+    if (note != null && note.length() > DocumentService.MAX_NOTE) {
+      errors.add(new AssistantProposalBatch.FieldError("note",
+          "Use up to %d characters".formatted(DocumentService.MAX_NOTE)));
+    }
+    for (final String field : List.of("title", "note")) {
+      final String value = text(payload.get(field));
+      if (value != null && IDENTIFYING_NUMBER.matcher(value.replace(" ", "")).find()) {
+        errors.add(new AssistantProposalBatch.FieldError(field,
+            "Leave identifying numbers out; they stay in the file"));
+      }
+    }
+    validateDocumentDates(payload, errors);
+  }
+
+  /** The issue date is required; an expiry or review date needs both the date and its kind. */
+  private static void validateDocumentDates(
+      final Map<String, Object> payload,
+      final List<AssistantProposalBatch.FieldError> errors) {
+    requireText(payload, "datedOn", errors);
+    parsedDate(payload, "datedOn", errors);
+    parsedDate(payload, "dueOn", errors);
+    final String kindText = text(payload.get("dueKind"));
+    final DueKind kind = enumValue(DueKind.class, kindText);
+    if (kindText != null && kind == null) {
+      errors.add(new AssistantProposalBatch.FieldError("dueKind",
+          "Choose whether it expires or is reviewed"));
+    } else if (kind != null) {
+      payload.put("dueKind", kind.name());
+    }
+    final boolean hasDue = text(payload.get("dueOn")) != null;
+    if (hasDue && kindText == null) {
+      errors.add(new AssistantProposalBatch.FieldError("dueKind",
+          "Say whether the date is an expiry or a review"));
+    } else if (!hasDue && kindText != null) {
+      errors.add(new AssistantProposalBatch.FieldError("dueOn",
+          "Give the expiry or review date, or clear what kind it is"));
+    }
+  }
+
+  private AssistantProposalBatch.TargetSnapshot documentTarget(
+      final ObjectId familyId,
+      final Map<String, Object> payload,
+      final List<AssistantProposalBatch.FieldError> errors) {
+    final ObjectId id = exactTarget(payload, "documentId", errors);
+    if (id == null) {
+      return hintTarget("document", payload);
+    }
+    final FamilyDocument document = documents.findByIdAndFamilyId(id, familyId)
+        .filter(found -> found.archivedAt() == null).orElse(null);
+    if (document == null) {
+      payload.put("documentId", null);
+      errors.add(new AssistantProposalBatch.FieldError("documentId",
+          "Select a document from this family"));
+      return hintTarget("document", payload);
+    }
+    return new AssistantProposalBatch.TargetSnapshot(
+        "document", id, document.updatedAt(), null);
+  }
+
+  private static <E extends Enum<E>> E enumValue(final Class<E> type, final String value) {
+    if (value == null) {
+      return null;
+    }
+    try {
+      return Enum.valueOf(type, value.strip().toUpperCase(java.util.Locale.ROOT));
+    } catch (IllegalArgumentException unknown) {
+      return null;
     }
   }
 
@@ -909,6 +1032,10 @@ public class AssistantProposalService {
         Set.of("expenseId", "targetHint", "payerId", "paidOn", "amount", "currency"));
     result.put(AssistantProposalBatch.ActionType.CLAIM_EXPENSE_REIMBURSEMENT,
         Set.of("expenseId", "targetHint", "note"));
+    result.put(AssistantProposalBatch.ActionType.CREATE_DOCUMENT,
+        Set.of("childIds", "section", "title", "datedOn", "dueOn", "dueKind", "note"));
+    result.put(AssistantProposalBatch.ActionType.ADD_DOCUMENT_VERSION,
+        Set.of("documentId", "targetHint", "datedOn", "dueOn", "dueKind"));
     return Map.copyOf(result);
   }
 

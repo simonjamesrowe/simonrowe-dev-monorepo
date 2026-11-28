@@ -24,6 +24,8 @@ export const ACTION_LABELS: Record<string, string> = {
   CREATE_EXPENSE: 'Add expense',
   MARK_EXPENSE_PAID: 'Mark expense as paid',
   CLAIM_EXPENSE_REIMBURSEMENT: 'Mark expense paid back',
+  CREATE_DOCUMENT: 'Add document',
+  ADD_DOCUMENT_VERSION: 'Add new version of document',
 };
 
 /** An event the card may point at, so a target can be named with its child and date. */
@@ -197,6 +199,24 @@ function expenseOutcome(context: ActionSummaryContext, payload: Record<string, u
   return `${due}, ${other} will pay${owed < 0 ? `, you'll owe ${formatMoney(-owed)}` : ''}`;
 }
 
+const SECTION_LABELS: Record<string, string> = {
+  IDENTITY: 'Identity and travel',
+  HEALTH: 'Health',
+  SCHOOL: 'School',
+  AGREEMENTS: 'Agreements',
+  OTHER: 'Activities and other',
+};
+
+/** "dated 2 Aug 2025", "expires 2 Aug 2030": a document's dates in a card's line. */
+function documentDates(payload: Record<string, unknown>) {
+  const datedOn = text(payload.datedOn);
+  const dueOn = text(payload.dueOn);
+  return [
+    datedOn && `dated ${formatDay(datedOn)}`,
+    dueOn && `${payload.dueKind === 'REVIEW' ? 'review' : 'expires'} ${formatDay(dueOn)}`,
+  ];
+}
+
 const SCHEDULE_CHANGES: Record<string, string> = {
   swap: 'swap',
   extend: 'change',
@@ -297,6 +317,20 @@ export function summarizeAction(action: AssistantAction, context: ActionSummaryC
         label,
         detail: join(targetName(context, payload, 'expenseId'), other ? `you paid ${other} back` : 'you paid it back'),
       };
+    case 'CREATE_DOCUMENT': {
+      const names = childNames(context, ids(payload.childIds));
+      return {
+        label,
+        detail: join(
+          text(payload.title),
+          names.length ? `for ${joinNames(names)}` : 'whole family',
+          SECTION_LABELS[text(payload.section) ?? ''],
+          ...documentDates(payload),
+        ),
+      };
+    }
+    case 'ADD_DOCUMENT_VERSION':
+      return { label, detail: join(targetName(context, payload, 'documentId'), ...documentDates(payload)) };
     default:
       return { label, detail: null };
   }

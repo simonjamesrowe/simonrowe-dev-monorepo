@@ -94,3 +94,4 @@ blob-report/
 # Term Time keeps school PDF attachments here; they are ingested data, not source.
 backend/school-attachments/
 backend/coparent-receipts/
+backend/coparent-documents/

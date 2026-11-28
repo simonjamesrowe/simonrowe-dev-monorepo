@@ -104,6 +104,7 @@ class MealsBackupCoverageTest {
         mock(BackupService.class), mock(IndexService.class),
         mock(ElasticsearchBackupService.class), mock(NarrationRestoreValidator.class),
         temp.resolve("uploads").toString(), temp.resolve("school").toString(),
-        temp.resolve("receipts").toString(), images.toString());
+        temp.resolve("receipts").toString(), temp.resolve("documents").toString(),
+        images.toString());
   }
 }

@@ -11,3 +11,4 @@ export * from './useAssistant';
 export * from './useExpenses';
 export * from './useStatements';
 export * from './useSchoolSuggestions';
+export * from './useDocuments';

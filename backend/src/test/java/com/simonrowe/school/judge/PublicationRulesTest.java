@@ -56,6 +56,28 @@ class PublicationRulesTest {
   }
 
   @Test
+  void theReportingSystemIsNeverPublishedEvenWithNoBroadcastSenderList() {
+    // Its "A report for <child> is ready" emails name one child. They are ingested only for
+    // CoParent's report prompts, so the rule must hold even if the sender list is emptied.
+    final PublicationRules open = new PublicationRules(new SchoolJudgeProperties(
+        SchoolJudgeProperties.Mode.AUTO, null, 0, 0, List.of(), "school.example", List.of(),
+        List.of()));
+    for (final String from : List.of("system@insighttracking.com",
+        "SYSTEM@InsightTracking.com ", "noreply@mail.insighttracking.com")) {
+      assertThat(open.email(from, "A report for Robin is ready", "Log in to read it.",
+          THIS_TERM, TODAY)).get().extracting(PublicationRules.Hit::code)
+          .isEqualTo("reporting-system");
+    }
+    assertThat(rules.email("system@insighttracking.com", "A report for Robin is ready",
+        "Log in.", THIS_TERM, TODAY)).get().extracting(PublicationRules.Hit::code)
+        .isEqualTo("reporting-system");
+    assertThat(open.email("info@notinsighttracking.com", "Hello", "Hi.", THIS_TERM, TODAY))
+        .as("a look-alike domain is not the reporting system").isEmpty();
+    assertThat(open.email(BROADCAST, "Year 3 trip", "Dear parents.", THIS_TERM, TODAY))
+        .isEmpty();
+  }
+
+  @Test
   void mailFromAnyOtherSchoolAddressIsAboutOneFamily() {
     assertThat(email("attendance@school.example", "Absence", "Thank you." + SIGNATURE))
         .map(PublicationRules.Hit::code).contains("sender");

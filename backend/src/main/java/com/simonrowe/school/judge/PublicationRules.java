@@ -55,6 +55,13 @@ public final class PublicationRules {
   private static final Pattern PUPIL_FILENAME = Pattern.compile(
       "^[A-Z][A-Za-z'-]{1,40}+, ?+[A-Z][A-Za-z'-]{1,40}+ ?+\\.pdf$");
 
+  /**
+   * The school's reporting system. Every email it sends ("A report for Mia is ready") names one
+   * child and is read only so CoParent can prompt that child's family, so none may ever be
+   * published, whatever the broadcast-sender list says.
+   */
+  static final String REPORTING_SYSTEM_DOMAIN = "insighttracking.com";
+
   /** Why a rule fired. {@code code} is stable and shown on the admin page. */
   public record Hit(String code, String reason) {
   }
@@ -90,7 +97,11 @@ public final class PublicationRules {
   public Optional<Hit> email(final String fromAddress, final String subject, final String body,
       final Instant publishedAt, final LocalDate today) {
     final String text = normalise(body);
-    final String from = fromAddress == null ? "" : fromAddress.toLowerCase(Locale.ROOT);
+    final String from = fromAddress == null ? "" : fromAddress.toLowerCase(Locale.ROOT).trim();
+    if (fromReportingSystem(from)) {
+      return Optional.of(new Hit("reporting-system",
+          "From the school's reporting system, about one child"));
+    }
     if (!broadcastSenders.isEmpty() && !broadcastSenders.contains(from)) {
       return Optional.of(new Hit("sender", "Sent from %s, not the school's broadcast address"
           .formatted(from.isEmpty() ? "an unknown address" : from)));
@@ -125,6 +136,17 @@ public final class PublicationRules {
       return Optional.of(new Hit("pupil-document", "Named after one pupil"));
     }
     return household(normalise(body)).or(() -> previousYear(publishedAt, today));
+  }
+
+  /** The reporting system's domain or a subdomain of it, compared on the parsed domain. */
+  private static boolean fromReportingSystem(final String from) {
+    final int at = from.lastIndexOf('@');
+    if (at < 0) {
+      return false;
+    }
+    final String domain = from.substring(at + 1);
+    return domain.equals(REPORTING_SYSTEM_DOMAIN)
+        || domain.endsWith("." + REPORTING_SYSTEM_DOMAIN);
   }
 
   private Optional<Hit> household(final String text) {

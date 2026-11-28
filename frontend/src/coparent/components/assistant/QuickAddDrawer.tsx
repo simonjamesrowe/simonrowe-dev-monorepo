@@ -18,6 +18,7 @@ import {
   useChildren,
   useConversations,
   useCurrentUser,
+  useDocuments,
   useEvents,
   useExpenses,
   useFamilies,
@@ -61,6 +62,7 @@ export function QuickAddDrawer({ open, onClose }: { open: boolean; onClose: () =
   const expenseParents = useParentsWithInvited(familyId || undefined);
   const currentUser = useCurrentUser();
   const expenses = useExpenses(familyId || undefined);
+  const documents = useDocuments(familyId || undefined);
   // The photo each batch was read from, kept only in this tab, so an approved expense can
   // attach it as the receipt. Never sent anywhere unless the parent approves with it ticked.
   const [batchImages, setBatchImages] = useState<Record<string, File>>({});
@@ -108,7 +110,21 @@ export function QuickAddDrawer({ open, onClose }: { open: boolean; onClose: () =
     timing: [{ value: 'paid', label: 'Already paid' }, { value: 'upcoming', label: 'Coming up' }],
     // Pounds sterling only: choosing this is how a parent fixes a note that gave dollars.
     currency: [{ value: 'GBP', label: 'GBP (£)' }],
-  }), [categories.data, children.data, conversations.data, currentParentId, events.data,
+    documentId: documents.data?.map((document) => {
+      const names = document.childIds
+        .map((id) => children.data?.find((child) => child.id === id)?.fullName.split(/\s+/)[0])
+        .filter(Boolean);
+      return { value: document.id, label: `${names.length ? names.join(' and ') : 'Family'}: ${document.title}` };
+    }) ?? [],
+    section: [
+      { value: 'IDENTITY', label: 'Identity and travel' },
+      { value: 'HEALTH', label: 'Health' },
+      { value: 'SCHOOL', label: 'School' },
+      { value: 'AGREEMENTS', label: 'Agreements' },
+      { value: 'OTHER', label: 'Activities and other' },
+    ],
+    dueKind: [{ value: 'EXPIRES', label: 'Expires' }, { value: 'REVIEW', label: 'Review due' }],
+  }), [categories.data, children.data, conversations.data, currentParentId, documents.data, events.data,
     expenseParents.data, expenses.data, parents.data, requests.data]);
 
   // Lets a collapsed card name the event it changes: "Ava — Swimming (Mon 12 Oct)".

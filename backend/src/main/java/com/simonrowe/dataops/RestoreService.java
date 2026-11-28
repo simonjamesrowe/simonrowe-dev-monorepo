@@ -46,6 +46,7 @@ import com.simonrowe.migration.changeunits.V053ReserveInvitedCoparents;
 import com.simonrowe.migration.changeunits.V054CreateCoparentStatements;
 import com.simonrowe.migration.changeunits.V055CreateCoparentSettlements;
 import com.simonrowe.migration.changeunits.V067CreateCoparentSchoolSuggestions;
+import com.simonrowe.migration.changeunits.V069CreateCoparentDocuments;
 import com.simonrowe.narration.NarrationRestoreValidator;
 import com.simonrowe.school.judge.SchoolJudgement;
 import com.simonrowe.school.news.NewsletterSummary;
@@ -155,7 +156,10 @@ public class RestoreService {
       V054CreateCoparentStatements.TRANSACTIONS,
       V054CreateCoparentStatements.UPLOADS,
       V055CreateCoparentSettlements.SETTLEMENTS,
-      V067CreateCoparentSchoolSuggestions.SUGGESTIONS);
+      V067CreateCoparentSchoolSuggestions.SUGGESTIONS,
+      V069CreateCoparentDocuments.DOCUMENTS,
+      V069CreateCoparentDocuments.OFFERS,
+      V069CreateCoparentDocuments.NOTICES);
 
   private static final List<String> IMPORT_ORDER_DEPENDENT = List.of(
       "skill_groups", "jobs", "blogs", "code_examples", "narrations"
@@ -172,6 +176,7 @@ public class RestoreService {
   private final String uploadsPath;
   private final String schoolAttachmentPath;
   private final String coparentReceiptPath;
+  private final String coparentDocumentPath;
   private final String mealImagePath;
 
   public RestoreService(
@@ -186,6 +191,7 @@ public class RestoreService {
       @Value("${uploads.path:backend/uploads/}") final String uploadsPath,
       @Value("${school.attachment-path:school-attachments/}") final String schoolAttachmentPath,
       @Value("${coparent.receipt-path:coparent-receipts/}") final String coparentReceiptPath,
+      @Value("${coparent.document-path:coparent-documents/}") final String coparentDocumentPath,
       @Value("${meals.image-path:meal-images/}") final String mealImagePath
   ) {
     this.mongoTemplate = mongoTemplate;
@@ -199,6 +205,7 @@ public class RestoreService {
     this.uploadsPath = uploadsPath;
     this.schoolAttachmentPath = schoolAttachmentPath;
     this.coparentReceiptPath = coparentReceiptPath;
+    this.coparentDocumentPath = coparentDocumentPath;
     this.mealImagePath = mealImagePath;
   }
 
@@ -227,6 +234,7 @@ public class RestoreService {
         restoreMediaFiles(mediaZip);
         restoreSchoolAttachments(tempZip);
         restoreCoparentReceipts(tempZip);
+        restoreCoparentDocuments(tempZip);
         restoreMealImages(tempZip);
       } finally {
         if (mediaZip != null && !mediaZip.equals(tempZip)) {
@@ -558,6 +566,7 @@ public class RestoreService {
     V054CreateCoparentStatements.createIndexes(coparentMongoTemplate);
     V055CreateCoparentSettlements.createIndexes(coparentMongoTemplate);
     V067CreateCoparentSchoolSuggestions.createIndexes(coparentMongoTemplate);
+    V069CreateCoparentDocuments.createIndexes(coparentMongoTemplate);
     LOG.info("Recreated CoParent indexes after restore");
   }
 
@@ -654,6 +663,18 @@ public class RestoreService {
   void restoreCoparentReceipts(final Path zipFile) throws IOException {
     restoreDirectoryEntries(zipFile, "coparent-receipts/", Path.of(coparentReceiptPath),
         "CoParent receipt");
+  }
+
+  /**
+   * Restores CoParent family documents into their private directory. Additive, like receipts:
+   * a file is reachable only through a document row, and those rows come from the same archive.
+   *
+   * @param zipFile the backup archive
+   * @throws IOException if the archive cannot be read
+   */
+  void restoreCoparentDocuments(final Path zipFile) throws IOException {
+    restoreDirectoryEntries(zipFile, "coparent-documents/", Path.of(coparentDocumentPath),
+        "CoParent document file");
   }
 
   /**

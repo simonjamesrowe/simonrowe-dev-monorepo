@@ -33,7 +33,7 @@ export type FieldControl =
 const CHIP_LIMIT = 4;
 
 const DATE_FIELDS = new Set([
-  'startDate', 'endDate', 'date', 'paidOn',
+  'startDate', 'endDate', 'date', 'paidOn', 'datedOn', 'dueOn',
   'originalStartDate', 'originalEndDate', 'newStartDate', 'newEndDate',
 ]);
 const TIME_FIELDS = new Set(['startTime', 'endTime']);

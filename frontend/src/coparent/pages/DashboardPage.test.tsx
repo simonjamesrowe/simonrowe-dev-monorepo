@@ -15,6 +15,7 @@ vi.mock('../hooks/api', () => ({
   useConversations: vi.fn(),
   useCurrentParentId: vi.fn(),
   useCurrentUser: vi.fn(),
+  useDocuments: vi.fn(),
   useEvents: vi.fn(),
   useExpenseSummary: vi.fn(),
   useExpenseTransition: vi.fn(),
@@ -96,6 +97,7 @@ describe('DashboardPage', () => {
     );
     vi.mocked(apiHooks.useConversations).mockReturnValue(query([]));
     vi.mocked(apiHooks.useEvents).mockReturnValue(query([]));
+    vi.mocked(apiHooks.useDocuments).mockReturnValue(query([]));
     vi.mocked(apiHooks.useScheduleChangeRequests).mockReturnValue(query([]));
     vi.mocked(apiHooks.useExpenses).mockReturnValue(query([]));
     vi.mocked(apiHooks.useExpenseSummary).mockReturnValue(query(summary()));

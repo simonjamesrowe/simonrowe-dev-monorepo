@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CoParent · Documents — straw-man mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font-family:Inter,system-ui,-apple-system,sans-serif;background:#dfe5ea;color:#0f172a;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+
+/* ---------- mockup chrome (not part of the product) ---------- */
+.mock-bar{height:56px;display:flex;align-items:center;gap:22px;padding:0 20px;background:#0b1220;color:#e2e8f0;font-size:13px;position:relative;z-index:100}
+.mock-bar__brand{font-weight:600;display:flex;align-items:center;gap:8px}
+.mock-bar__tag{font-size:11px;padding:2px 8px;border-radius:999px;background:#1e293b;color:#94a3b8}
+.mock-group{display:flex;align-items:center;gap:8px}
+.mock-group__label{color:#94a3b8}
+.mock-seg{display:inline-flex;background:#1e293b;border-radius:9px;padding:3px}
+.mock-seg button{border:0;background:transparent;color:#cbd5e1;padding:5px 11px;border-radius:7px}
+.mock-seg button.is-on{background:#0d9488;color:#fff}
+.stage{height:calc(100vh - 56px);display:flex;justify-content:center;align-items:stretch}
+.stage--mobile{align-items:center;padding:18px}
+
+/* ---------- product ---------- */
+.app{
+  --bg:#f5f7f9;--surface:#fff;--surface-2:#f8fafc;--surface-3:#f1f5f9;--border:#e2e8f0;--border-strong:#cbd5e1;
+  --text:#0f172a;--text-2:#334155;--muted:#64748b;
+  --teal:#0d9488;--teal-strong:#0f766e;--teal-soft:#ccfbf1;--teal-tint:#f0fdfa;--teal-line:#5eead4;
+  --rose-text:#be123c;--rose-soft:#ffe4e6;
+  --amber-text:#92400e;--amber-soft:#fef3c7;
+  --violet-text:#5b21b6;--violet-soft:#ede9fe;
+  --sky-text:#0369a1;--sky-soft:#e0f2fe;
+  --emerald-text:#047857;--emerald-soft:#d1fae5;
+  --orange-text:#c2410c;--orange-soft:#ffedd5;
+  --slate-soft:#e2e8f0;--slate-text:#334155;
+  --shadow:0 1px 2px rgba(15,23,42,.05),0 1px 3px rgba(15,23,42,.06);
+  --shadow-lg:0 24px 48px -12px rgba(15,23,42,.25);
+  position:relative;overflow:hidden;width:100%;height:100%;display:flex;background:var(--bg);color:var(--text);font-size:15px
+}
+.app.theme-dark{
+  --bg:#0a1120;--surface:#0f172a;--surface-2:#111b2e;--surface-3:#16223a;--border:#1e293b;--border-strong:#334155;
+  --text:#e2e8f0;--text-2:#cbd5e1;--muted:#94a3b8;
+  --teal:#14b8a6;--teal-strong:#2dd4bf;--teal-soft:rgba(20,184,166,.18);--teal-tint:rgba(20,184,166,.08);--teal-line:rgba(94,234,212,.35);
+  --rose-text:#fda4af;--rose-soft:rgba(244,63,94,.18);
+  --amber-text:#fcd34d;--amber-soft:rgba(245,158,11,.18);
+  --violet-text:#c4b5fd;--violet-soft:rgba(139,92,246,.2);
+  --sky-text:#7dd3fc;--sky-soft:rgba(14,165,233,.2);
+  --emerald-text:#6ee7b7;--emerald-soft:rgba(16,185,129,.18);
+  --orange-text:#fdba74;--orange-soft:rgba(249,115,22,.18);
+  --slate-soft:#1e293b;--slate-text:#cbd5e1;
+  --shadow:0 1px 2px rgba(0,0,0,.3);--shadow-lg:0 24px 48px -12px rgba(0,0,0,.6)
+}
+.stage--mobile .app{width:390px;height:min(844px,calc(100vh - 92px));border-radius:42px;border:11px solid #0b1220;box-shadow:0 30px 60px -20px rgba(15,23,42,.5)}
+svg.ic{width:18px;height:18px;flex:none;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+.side{width:250px;flex:none;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:22px 16px;gap:4px}
+.side__logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:19px;color:var(--teal-strong);padding:0 10px 22px}
+.side__mark{width:32px;height:32px;border-radius:10px;background:linear-gradient(135deg,#14b8a6,#f43f5e);display:grid;place-items:center;color:#fff}
+.side__label{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);padding:6px 12px}
+.nav{display:flex;align-items:center;gap:12px;border:0;background:none;padding:11px 12px;border-radius:10px;color:var(--text-2);font-weight:500;font-size:14px;text-align:left}
+.nav.is-on{background:var(--teal-tint);color:var(--teal-strong)}
+.nav__badge{margin-left:auto;background:var(--teal);color:#fff;font-size:11px;font-weight:700;border-radius:999px;padding:1px 7px}
+.side__spacer{flex:1}
+
+.main{flex:1;overflow:auto;position:relative}
+.wrap{max-width:1180px;margin:0 auto;padding:28px 32px 60px}
+.m-head{display:none}
+.is-mobile .side{display:none}
+.is-mobile .m-head{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:5}
+.is-mobile .wrap{padding:18px 16px 90px}
+
+.ph{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:20px}
+.ph h1{margin:0;font-size:28px;letter-spacing:-.01em}
+.ph p{margin:4px 0 0;color:var(--muted);font-size:14px}
+.ph__actions{margin-left:auto;display:flex;gap:10px}
+.btn{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--border-strong);background:var(--surface);border-radius:10px;padding:9px 14px;font-weight:600;font-size:14px;color:var(--text)}
+.btn--primary{background:var(--teal);border-color:var(--teal);color:#fff}
+.btn--ghost{border-color:transparent;background:none;color:var(--muted)}
+.btn--sm{padding:6px 10px;font-size:13px}
+.btn__count{background:var(--teal);color:#fff;border-radius:999px;font-size:11px;padding:1px 7px}
+
+.attn{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px;margin-bottom:22px}
+.attn__item{display:flex;gap:12px;align-items:flex-start;background:var(--surface);border:1px solid var(--border);border-left:4px solid var(--amber-text);border-radius:12px;padding:12px 14px;box-shadow:var(--shadow);text-align:left;cursor:pointer}
+.attn__item--school{border-left-color:var(--teal)}
+.attn__item strong{display:block;font-size:14px}
+.attn__item span{font-size:13px;color:var(--muted)}
+.attn__ic{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;flex:none}
+
+.bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:18px}
+.search{flex:1;min-width:200px;display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border-strong);border-radius:10px;padding:8px 12px;color:var(--muted)}
+.search input{border:0;outline:0;background:none;flex:1;color:var(--text)}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1px solid var(--border-strong);background:var(--surface);border-radius:999px;padding:6px 12px;font-size:13px;font-weight:500;display:inline-flex;gap:6px;align-items:center}
+.chip.is-on{background:var(--text);border-color:var(--text);color:var(--surface)}
+.dot{width:20px;height:20px;border-radius:50%;display:inline-grid;place-items:center;font-size:10px;font-weight:700;color:#fff;flex:none}
+.dot--mia{background:#ec4899}.dot--leo{background:#6366f1}.dot--fam{background:#0d9488}
+
+.sec{margin-bottom:26px}
+.sec__h{display:flex;align-items:center;gap:10px;margin:0 0 10px;font-size:13px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600}
+.sec__h small{font-weight:500;text-transform:none;letter-spacing:0}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:10px;text-align:left;cursor:pointer;transition:border-color .15s}
+.card:hover{border-color:var(--teal-line)}
+.card__top{display:flex;gap:12px;align-items:flex-start}
+.thumb{width:42px;height:52px;border-radius:6px;border:1px solid var(--border);background:var(--surface-2);display:grid;place-items:center;flex:none;color:var(--muted);position:relative}
+.thumb small{position:absolute;bottom:3px;font-size:8px;font-weight:700;letter-spacing:.04em}
+.card__title{font-weight:600;font-size:14px;line-height:1.3}
+.card__sub{font-size:12.5px;color:var(--muted);margin-top:3px}
+.card__foot{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.tag{font-size:11.5px;font-weight:600;border-radius:6px;padding:2px 7px;display:inline-flex;align-items:center;gap:4px}
+.tag--amber{background:var(--amber-soft);color:var(--amber-text)}
+.tag--rose{background:var(--rose-soft);color:var(--rose-text)}
+.tag--teal{background:var(--teal-soft);color:var(--teal-strong)}
+.tag--slate{background:var(--slate-soft);color:var(--slate-text)}
+.tag--violet{background:var(--violet-soft);color:var(--violet-text)}
+.tag svg.ic{width:12px;height:12px}
+.who{margin-left:auto;font-size:11.5px;color:var(--muted);display:flex;align-items:center;gap:4px}
+.who svg.ic{width:13px;height:13px}
+
+.empty{background:var(--surface);border:1px dashed var(--border-strong);border-radius:16px;padding:40px;text-align:center}
+.empty h2{margin:10px 0 6px}
+.empty p{color:var(--muted);max-width:520px;margin:0 auto 18px}
+.starter{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;max-width:760px;margin:18px auto 0;text-align:left}
+.starter div{border:1px solid var(--border);border-radius:12px;padding:12px;font-size:13px;background:var(--surface-2)}
+.starter strong{display:block;margin-bottom:2px}
+
+/* drawer */
+.scrim{position:absolute;inset:0;background:rgba(15,23,42,.35);z-index:20}
+.drawer{position:absolute;top:0;right:0;bottom:0;width:min(560px,100%);background:var(--surface);z-index:21;box-shadow:var(--shadow-lg);display:flex;flex-direction:column}
+.is-mobile .drawer{top:40px;border-radius:20px 20px 0 0;width:100%}
+.drawer__h{display:flex;align-items:flex-start;gap:12px;padding:20px 22px;border-bottom:1px solid var(--border)}
+.drawer__h h2{margin:0;font-size:19px}
+.drawer__h p{margin:3px 0 0;font-size:13px;color:var(--muted)}
+.x{margin-left:auto;border:0;background:none;color:var(--muted);padding:4px}
+.drawer__b{flex:1;overflow:auto;padding:20px 22px}
+.drawer__f{border-top:1px solid var(--border);padding:14px 22px;display:flex;gap:8px;flex-wrap:wrap}
+
+.preview{border:1px solid var(--border);border-radius:12px;background:var(--surface-3);height:220px;display:grid;place-items:center;margin-bottom:18px;position:relative;overflow:hidden}
+.paper{width:150px;height:196px;background:#fff;border-radius:4px;box-shadow:0 6px 20px rgba(15,23,42,.18);padding:14px 12px;display:flex;flex-direction:column;gap:6px}
+.paper i{display:block;height:5px;border-radius:3px;background:#e2e8f0}
+.paper b{display:block;height:9px;width:60%;border-radius:3px;background:#94a3b8;margin-bottom:6px}
+.paper--passport{background:#7f1d1d;width:136px;height:186px;align-items:center;justify-content:center;color:#fbbf24;font-size:10px;letter-spacing:.12em;font-weight:700;text-align:center}
+.preview__pages{position:absolute;bottom:10px;right:12px;font-size:12px;color:var(--muted);background:var(--surface);border-radius:6px;padding:2px 8px;border:1px solid var(--border)}
+.dl{display:grid;grid-template-columns:150px 1fr;gap:10px 14px;font-size:14px;margin:0 0 20px}
+.dl dt{color:var(--muted)}
+.dl dd{margin:0;font-weight:500}
+.callout{display:flex;gap:10px;border-radius:12px;padding:12px 14px;font-size:13.5px;margin-bottom:18px}
+.callout--amber{background:var(--amber-soft);color:var(--amber-text)}
+.callout--teal{background:var(--teal-tint);color:var(--teal-strong);border:1px solid var(--teal-line)}
+.callout--slate{background:var(--surface-3);color:var(--text-2)}
+.h3{font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600;margin:0 0 8px}
+.log{list-style:none;padding:0;margin:0 0 18px;font-size:13.5px}
+.log li{display:flex;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)}
+.log time{color:var(--muted);margin-left:auto;font-size:12.5px;white-space:nowrap}
+
+/* add flow */
+.drop{border:2px dashed var(--teal-line);background:var(--teal-tint);border-radius:14px;padding:30px;text-align:center;color:var(--teal-strong)}
+.drop p{margin:6px 0 14px;color:var(--muted)}
+.drop__btns{display:flex;justify-content:center;gap:10px;flex-wrap:wrap}
+.reading{display:flex;align-items:center;gap:12px;padding:16px;border-radius:12px;background:var(--surface-3);font-size:14px}
+.spin{width:18px;height:18px;border-radius:50%;border:2px solid var(--teal-line);border-top-color:var(--teal);animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.form{display:grid;gap:12px}
+.field label{display:block;font-size:12.5px;font-weight:600;color:var(--text-2);margin-bottom:5px}
+.field input,.field select,.field textarea{width:100%;border:1px solid var(--border-strong);background:var(--surface);border-radius:9px;padding:8px 10px}
+.field--ai input,.field--ai select{border-color:var(--teal-line);background:var(--teal-tint)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.seg{display:inline-flex;border:1px solid var(--border-strong);border-radius:9px;overflow:hidden}
+.seg button{border:0;background:var(--surface);padding:7px 12px;font-size:13px}
+.seg button.is-on{background:var(--teal);color:#fff}
+.hint{font-size:12px;color:var(--muted);margin-top:4px}
+
+/* school suggestions */
+.sugg{border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:12px;background:var(--surface)}
+.sugg__h{display:flex;gap:10px;align-items:flex-start}
+.sugg__h strong{display:block;font-size:14.5px}
+.sugg__meta{font-size:12.5px;color:var(--muted);margin-top:2px}
+.sugg__why{font-size:13px;color:var(--text-2);background:var(--surface-3);border-radius:9px;padding:8px 10px;margin:10px 0}
+.sugg__acts{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.sugg__acts select{border:1px solid var(--border-strong);border-radius:8px;padding:6px 8px;background:var(--surface);font-size:13px}
+
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;padding:10px 16px;border-radius:10px;font-size:14px;z-index:200;box-shadow:var(--shadow-lg)}
+.fab{display:none}
+.is-mobile .fab{display:grid;position:absolute;right:18px;bottom:22px;width:54px;height:54px;border-radius:50%;background:var(--teal);color:#fff;border:0;place-items:center;box-shadow:var(--shadow-lg);z-index:6}
+.is-mobile .ph__actions .btn--primary{display:none}
+.is-mobile .grid{grid-template-columns:1fr}
+.is-mobile .dl{grid-template-columns:120px 1fr}
+.is-mobile .row2{grid-template-columns:1fr}
+</style>
+</head>
+<body>
+<div class="mock-bar">
+  <div class="mock-bar__brand">CoParent · Documents <span class="mock-bar__tag">straw man — for discussion</span></div>
+  <div class="mock-group"><span class="mock-group__label">Data</span><div class="mock-seg" data-ctl="data"><button data-v="full">Populated</button><button data-v="empty">First visit</button></div></div>
+  <div class="mock-group"><span class="mock-group__label">Signed in as</span><div class="mock-seg" data-ctl="me"><button data-v="alex">Alex</button><button data-v="sam">Sam</button></div></div>
+  <div class="mock-group"><span class="mock-group__label">Device</span><div class="mock-seg" data-ctl="device"><button data-v="desktop">Desktop</button><button data-v="mobile">Mobile</button></div></div>
+  <div class="mock-group"><span class="mock-group__label">Theme</span><div class="mock-seg" data-ctl="theme"><button data-v="light">Light</button><button data-v="dark">Dark</button></div></div>
+</div>
+<div class="stage" id="stage"><div class="app" id="app"></div></div>
+
+<script>
+(() => {
+const TODAY = new Date('2026-11-28');
+const PARENTS = { alex: 'Alex', sam: 'Sam' };
+const CHILDREN = { mia: { name: 'Mia', full: 'Mia Morgan-Taylor', year: 'Year 6', cls: 'Elis' }, leo: { name: 'Leo', full: 'Leo Morgan-Taylor', year: 'Year 2', cls: 'Priya' } };
+const CATS = {
+  identity: { label: 'Identity and travel', icon: 'id', tone: 'violet', hint: 'Passports, birth certificates, travel consent letters' },
+  health: { label: 'Health', icon: 'steth', tone: 'rose', hint: 'Red book, vaccinations, care plans, hospital and GP letters' },
+  school: { label: 'School', icon: 'cap', tone: 'amber', hint: 'Reports, letters, consent forms, assessments' },
+  legal: { label: 'Agreements', icon: 'scale', tone: 'teal', hint: 'Parenting plan, court orders, mediation summaries' },
+  other: { label: 'Activities and other', icon: 'star', tone: 'slate', hint: 'Certificates, club forms, anything else' },
+};
+const ICONS = {
+  dashboard: '<rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/>',
+  calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+  message: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+  pound: '<path d="M18 7c0-5.333-8-5.333-8 0"/><path d="M10 7v14"/><path d="M6 21h12"/><path d="M6 13h10"/>',
+  file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8"/>',
+  clock: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+  settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.82 1.17V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-2.82-1.17l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 3 15.08H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.17-2.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 2.82 1.17l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  x: '<path d="M18 6 6 18M6 6l12 12"/>',
+  search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
+  sparkles: '<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 17v4M17 19h4"/>',
+  camera: '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3"/>',
+  upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>',
+  mail: '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/>',
+  alert: '<circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>',
+  info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>',
+  scale: '<path d="M12 3v18M7 21h10M5 7h14M5 7l-3 7a3.5 3.5 0 0 0 6 0zM19 7l-3 7a3.5 3.5 0 0 0 6 0z"/>',
+  cap: '<path d="M22 10 12 5 2 10l10 5 10-5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/>',
+  steth: '<path d="M4.8 2.3A.3.3 0 1 0 5 2H4a2 2 0 0 0-2 2v5a6 6 0 0 0 12 0V4a2 2 0 0 0-2-2h-1a.2.2 0 1 0 .3.3"/><path d="M8 15v1a6 6 0 0 0 12 0v-4"/><circle cx="20" cy="10" r="2"/>',
+  id: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M15 9h3M15 13h3M6 16c.6-1.5 1.8-2 3-2s2.4.5 3 2"/>',
+  star: '<path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/>',
+  hand: '<path d="M18 11V6a2 2 0 0 0-4 0M14 10V4a2 2 0 0 0-4 0v2M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>',
+  lock: '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+  download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>',
+  refresh: '<path d="M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5"/>',
+  pen: '<path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+  trash: '<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
+};
+const ic = (n, s) => `<svg class="ic" viewBox="0 0 24 24"${s ? ` style="width:${s}px;height:${s}px"` : ''}>${ICONS[n] || ''}</svg>`;
+
+const SEED = [
+  { id: 'd1', title: 'Passport', child: 'mia', cat: 'identity', kind: 'passport', issued: '2022-03-14', expires: '2027-03-14', addedBy: 'alex', added: '2026-11-02', pages: 2, source: 'upload' },
+  { id: 'd2', title: 'Passport', child: 'leo', cat: 'identity', kind: 'passport', issued: '2025-08-02', expires: '2030-08-02', versions: 2, addedBy: 'alex', added: '2026-11-02', pages: 2, source: 'upload' },
+  { id: 'd3', title: 'Birth certificate', child: 'mia', cat: 'identity', issued: '2015-06-20', addedBy: 'alex', added: '2026-11-02', pages: 1, source: 'upload' },
+  { id: 'd4', title: 'Birth certificate', child: 'leo', cat: 'identity', issued: '2019-04-11', addedBy: 'sam', added: '2026-11-03', pages: 1, source: 'upload' },
+  { id: 'd5', title: 'Asthma care plan', child: 'leo', cat: 'health', issued: '2026-01-10', review: '2027-01-10', addedBy: 'sam', added: '2026-01-12', pages: 3, source: 'upload' },
+  { id: 'd6', title: 'Vaccination record (red book pages)', child: 'mia', cat: 'health', issued: '2019-09-01', addedBy: 'sam', added: '2026-11-04', pages: 6, source: 'upload' },
+  { id: 'd7', title: 'Orthodontist referral letter', child: 'mia', cat: 'health', issued: '2026-10-02', addedBy: 'alex', added: '2026-10-03', pages: 1, source: 'upload' },
+  { id: 'd8', title: 'Year 5 end-of-year report', child: 'mia', cat: 'school', issued: '2026-07-17', addedBy: 'alex', added: '2026-07-18', pages: 4, source: 'school' },
+  { id: 'd9', title: 'Year 1 end-of-year report', child: 'leo', cat: 'school', issued: '2026-07-17', addedBy: 'alex', added: '2026-07-18', pages: 3, source: 'school' },
+  { id: 'd10', title: 'Child arrangements order', child: 'family', cat: 'legal', issued: '2024-05-09', addedBy: 'alex', added: '2026-11-02', pages: 7, source: 'upload' },
+  { id: 'd11', title: 'Parenting plan (agreed in mediation)', child: 'family', cat: 'legal', issued: '2024-02-21', addedBy: 'sam', added: '2026-11-03', pages: 5, source: 'upload' },
+  { id: 'd12', title: 'Stage 5 swimming certificate', child: 'leo', cat: 'other', issued: '2026-09-27', addedBy: 'sam', added: '2026-09-28', pages: 1, source: 'upload' },
+  { id: 'd13', title: 'Red book: first 12 months (duplicate scan)', child: 'leo', cat: 'health', issued: '2020-04-11', addedBy: 'sam', added: '2026-11-04', pages: 4, source: 'upload', archived: { by: 'sam', on: '2026-11-05' } },
+  { id: 'd14', title: 'Year 4 end-of-year report', child: 'mia', cat: 'school', issued: '2025-07-18', addedBy: 'alex', added: '2025-07-19', pages: 4, source: 'school', archived: { by: 'alex', on: '2026-09-02' } },
+];
+const SUGGESTIONS = [
+  { id: 's1', title: 'Year 6 residential to Kingswood: consent and medical form', from: 'Kilmorie Primary School', sent: '2026-11-26', child: 'mia', cat: 'school', why: 'Sent to Year 6 parents. Mia is in Year 6 (Elis\'s class).', attach: 'Kingswood-consent.pdf · 2 pages', personal: false },
+  { id: 's4', portal: true, title: 'Leo\'s report is ready on Insight Tracking', from: 'Kilmorie Primary School (Insight Tracking)', sent: '2026-11-24', child: 'leo', cat: 'school', why: 'The school publishes reports on Insight Tracking, not by email. Download the PDF there, then add it here: the details are filled in for you.' },
+  { id: 's2', title: 'Instrumental lessons report: Mia (violin)', from: 'Kilmorie Primary School', sent: '2026-11-21', child: 'mia', cat: 'school', why: 'Addressed to you and names Mia. Sam will see it once you keep it.', attach: 'Instrumental-report-Mia.pdf · 1 page', personal: true },
+  { id: 's3', title: 'Flu vaccination: consent form', from: 'Lewisham school nursing team via Kilmorie', sent: '2026-11-18', child: 'both', cat: 'health', why: 'Sent to the whole school. Both Mia and Leo are at Kilmorie.', attach: 'Flu-consent-2026.pdf · 1 page', personal: false },
+];
+
+const ui = { data: 'full', me: 'alex', device: 'desktop', theme: 'light', child: 'all', q: '', open: null, add: null, school: false, toast: null, archived: false };
+let docs = SEED.map((d) => ({ ...d }));
+let suggestions = SUGGESTIONS.map((s) => ({ ...s }));
+
+const fmt = (iso) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+const months = (iso) => Math.round((new Date(iso) - TODAY) / (1000 * 60 * 60 * 24 * 30.4));
+const childDot = (c) => c === 'family' || c === 'both' ? `<span class="dot dot--fam">${ic('users', 11)}</span>` : `<span class="dot dot--${c}">${CHILDREN[c].name[0]}</span>`;
+const childName = (c) => c === 'family' ? 'Whole family' : c === 'both' ? 'Mia and Leo' : CHILDREN[c].name;
+const other = () => ui.me === 'alex' ? 'sam' : 'alex';
+const visible = () => docs.filter((d) => !d.archived);
+const archivedDocs = () => docs.filter((d) => d.archived);
+
+function attention() {
+  const items = [];
+  visible().forEach((d) => {
+    if (d.expires && months(d.expires) <= 6) items.push({ kind: 'expiry', doc: d, title: `${CHILDREN[d.child].name}'s passport expires in ${months(d.expires)} months`, sub: `${fmt(d.expires)}. We've emailed you both.` });
+    if (d.review && months(d.review) <= 2) items.push({ kind: 'expiry', doc: d, title: `${CHILDREN[d.child].name}'s ${d.title.toLowerCase()} is due for review`, sub: `Review by ${fmt(d.review)}` });
+  });
+  if (suggestions.length) items.unshift({ kind: 'school', title: `${suggestions.length} letter${suggestions.length > 1 ? 's' : ''} from school to file`, sub: 'Choose which to keep for Mia and Leo' });
+  return items;
+}
+
+function card(d) {
+  const tags = [];
+  if (d.expires) { const m = months(d.expires); tags.push(m <= 6 ? `<span class="tag tag--amber">${ic('clock')}Expires ${fmt(d.expires)}</span>` : `<span class="tag tag--slate">Valid to ${fmt(d.expires)}</span>`); }
+  if (d.review) tags.push(`<span class="tag tag--amber">${ic('clock')}Review ${fmt(d.review)}</span>`);
+  if (d.source === 'school') tags.push(`<span class="tag tag--teal">${ic('mail')}From school</span>`);
+  if (d.archived) tags.push(`<span class="tag tag--slate">Archived ${fmt(d.archived.on)}</span>`);
+  const orig = d.versions ? `<span class="who">${d.versions} versions</span>` : '';
+  return `<button class="card" data-act="open" data-id="${d.id}">
+    <div class="card__top"><span class="thumb">${ic(d.kind === 'passport' ? 'id' : 'file')}<small>${d.pages}p</small></span>
+      <div><div class="card__title">${d.title}</div><div class="card__sub">${childDot(d.child)} ${childName(d.child)} · ${fmt(d.issued)}</div></div></div>
+    <div class="card__foot">${tags.join('')}${orig}</div></button>`;
+}
+
+function library() {
+  if (ui.data === 'empty') return emptyState();
+  const q = ui.q.toLowerCase();
+  const pool = ui.archived ? archivedDocs() : visible();
+  const list = pool.filter((d) => (ui.child === 'all' || d.child === ui.child) && (!q || `${d.title} ${childName(d.child)} ${CATS[d.cat].label}`.toLowerCase().includes(q)));
+  const att = attention();
+  const counts = { all: visible().length, mia: visible().filter((d) => d.child === 'mia').length, leo: visible().filter((d) => d.child === 'leo').length, family: visible().filter((d) => d.child === 'family').length };
+  return `
+  <div class="ph"><div><h1>Documents</h1><p>The children's important papers, kept in one place you can both reach.</p></div>
+    <div class="ph__actions"><button class="btn" data-act="school">${ic('mail')} From school ${suggestions.length ? `<span class="btn__count">${suggestions.length}</span>` : ''}</button>
+    <button class="btn btn--primary" data-act="add">${ic('plus')} Add document</button></div></div>
+  ${att.length && !ui.archived ? `<div class="attn">${att.map((a) => `<button class="attn__item${a.kind === 'school' ? ' attn__item--school' : ''}" data-act="${a.kind === 'school' ? 'school' : 'open'}" data-id="${a.doc ? a.doc.id : ''}">
+    <span class="attn__ic" style="background:var(--${a.kind === 'school' ? 'teal-soft' : 'amber-soft'});color:var(--${a.kind === 'school' ? 'teal-strong' : 'amber-text'})">${ic(a.kind === 'school' ? 'mail' : 'clock')}</span>
+    <div><strong>${a.title}</strong><span>${a.sub}</span></div></button>`).join('')}</div>` : ''}
+  <div class="bar"><label class="search">${ic('search')}<input data-act="q" placeholder="Search documents" value="${ui.q}"></label>
+    <div class="chips">${[['all', 'Everyone'], ['mia', 'Mia'], ['leo', 'Leo'], ['family', 'Family']].map(([k, l]) => `<button class="chip${ui.child === k ? ' is-on' : ''}" data-act="child" data-v="${k}">${k === 'all' ? '' : childDot(k)}${l} <span style="opacity:.6">${counts[k]}</span></button>`).join('')}<button class="chip${ui.archived ? ' is-on' : ''}" data-act="archived">Archived <span style="opacity:.6">${archivedDocs().length}</span></button></div></div>
+  ${ui.archived ? `<div class="callout callout--slate">${ic('info')}<div>Archived documents are hidden from the library but never deleted. Either of you can restore one.</div></div>` : ''}
+  ${Object.entries(CATS).map(([k, c]) => { const ds = list.filter((d) => d.cat === k); return ds.length ? `<section class="sec"><h3 class="sec__h">${ic(c.icon)} ${c.label} <small>${ds.length}</small></h3><div class="grid">${ds.map(card).join('')}</div></section>` : ''; }).join('')}
+  ${list.length ? '' : `<div class="empty"><p>Nothing matches.</p></div>`}
+  <button class="fab" data-act="add" aria-label="Add document">${ic('plus', 24)}</button>`;
+}
+
+function emptyState() {
+  return `<div class="ph"><div><h1>Documents</h1><p>The children's important papers, kept in one place you can both reach.</p></div></div>
+  <div class="empty">${ic('file', 34)}<h2>Start with the papers you reach for most</h2>
+  <p>Photograph or upload a document. CoParent reads it and suggests which child it's for, what it is and when it expires. You check the details before anything is saved.</p>
+  <div class="drop__btns"><button class="btn btn--primary" data-act="add">${ic('camera')} Photograph a document</button><button class="btn" data-act="add">${ic('upload')} Upload a file</button></div>
+  <div class="starter">${Object.values(CATS).map((c) => `<div><strong>${c.label}</strong>${c.hint}</div>`).join('')}</div></div>`;
+}
+
+function docDrawer(d) {
+  const preview = d.kind === 'passport' ? `<div class="paper paper--passport">UNITED KINGDOM<br><br>PASSPORT</div>` : `<div class="paper"><b></b>${'<i></i>'.repeat(9)}<i style="width:60%"></i></div>`;
+  const exp = d.expires ? months(d.expires) : null;
+  return `<div class="scrim" data-act="close"></div><aside class="drawer" role="dialog" aria-label="${d.title}">
+    <div class="drawer__h">${childDot(d.child)}<div><h2>${childName(d.child)}: ${d.title}</h2><p>${CATS[d.cat].label} · added by ${d.addedBy === ui.me ? 'you' : PARENTS[d.addedBy]} on ${fmt(d.added)}</p></div><button class="x" data-act="close">${ic('x')}</button></div>
+    <div class="drawer__b">
+      <div class="preview">${preview}<span class="preview__pages">Page 1 of ${d.pages}</span></div>
+      ${exp !== null && exp <= 6 ? `<div class="callout callout--amber">${ic('alert')}<div>Expires in ${exp} months. Many countries want 6 months left on arrival, so renew before booking travel. We'll remind you both again 3 months before.</div></div>` : ''}
+      ${d.archived ? `<div class="callout callout--slate">${ic('info')}<div>Archived by ${d.archived.by === ui.me ? 'you' : PARENTS[d.archived.by]} on ${fmt(d.archived.on)}. It's hidden from the library, not deleted.</div></div>` : ''}
+      <dl class="dl">
+        <dt>For</dt><dd>${childName(d.child)}</dd>
+        <dt>Type</dt><dd>${d.title}</dd>
+        <dt>Dated</dt><dd>${fmt(d.issued)}</dd>
+        ${d.expires ? `<dt>Expires</dt><dd>${fmt(d.expires)}</dd>` : ''}
+        ${d.review ? `<dt>Review due</dt><dd>${fmt(d.review)}</dd>` : ''}
+        ${d.source === 'school' ? `<dt>Came from</dt><dd>School email, 17 Jul 2026</dd>` : ''}
+      </dl>
+      ${d.versions ? `<h4 class="h3">Versions</h4><ul class="log"><li>${ic('file')} Current: issued ${fmt(d.issued)}, expires ${fmt(d.expires)}<time>${fmt(d.added)}</time></li><li style="color:var(--muted)">${ic('file')} Previous: issued 2020-08-01, expired 2025-08-01 <button class="btn btn--ghost btn--sm" style="padding:0 4px">Download</button><time>${fmt('2024-01-15')}</time></li></ul>` : ''}
+      <h4 class="h3">History</h4>
+      <ul class="log">
+        <li>${ic('upload')} Added by ${d.addedBy === ui.me ? 'you' : PARENTS[d.addedBy]}<time>${fmt(d.added)}</time></li>
+        ${d.archived ? `<li>${ic('trash')} Archived by ${d.archived.by === ui.me ? 'you' : PARENTS[d.archived.by]}<time>${fmt(d.archived.on)}</time></li>` : ''}
+      </ul>
+    </div>
+    <div class="drawer__f">
+      <button class="btn btn--primary btn--sm">${ic('file')} View full screen</button>
+      <button class="btn btn--sm">${ic('download')} Download</button>
+      <button class="btn btn--sm">${ic('refresh')} Upload ${d.expires ? 'renewed' : 'newer'} version</button>
+      <button class="btn btn--sm">${ic('pen')} Edit details</button>
+      ${d.archived ? `<button class="btn btn--sm" data-act="restore" data-id="${d.id}">${ic('refresh')} Restore</button>` : `<button class="btn btn--ghost btn--sm" data-act="archive" data-id="${d.id}">${ic('trash')} Archive</button>`}
+    </div></aside>`;
+}
+
+function addDrawer() {
+  const a = ui.add;
+  let body = '';
+  if (a.step === 'pick') {
+    body = `<div class="drop">${ic('upload', 30)}<div style="font-weight:600;margin-top:8px">Drop a PDF or photos here</div><p>Several photos of one document are kept together as one document.</p>
+      <div class="drop__btns"><button class="btn btn--primary" data-act="read">${ic('camera')} Take photos</button><button class="btn" data-act="read">${ic('upload')} Choose file</button></div>
+      <div style="margin-top:12px;font-size:13px;color:var(--muted)">CoParent reads the document to fill in the details. <button class="btn btn--ghost btn--sm" data-act="manual" style="padding:0;text-decoration:underline">Fill in myself instead</button></div></div>
+      <div class="callout callout--slate" style="margin-top:16px">${ic('info')}<div>JPEG, PNG or PDF, up to 20 MB. Stored privately and shared with ${PARENTS[other()]}: everything here is visible to you both.</div></div>`;
+  } else if (a.step === 'reading') {
+    body = `<div class="preview"><div class="paper paper--passport">UNITED KINGDOM<br><br>PASSPORT</div><span class="preview__pages">2 photos</span></div><div class="reading"><span class="spin"></span>Reading the document…</div>`;
+  } else {
+    const f = a.prefill || (a.manual ? { child: 'leo', cat: 'identity', title: '', issued: '', expires: '' } : { child: 'leo', cat: 'identity', title: 'Passport', issued: '02/08/2025', expires: '02/08/2030' });
+    const aiCls = a.manual ? 'field' : 'field field--ai';
+    const opt = (v, l, cur) => `<option${v === cur ? ' selected' : ''}>${l}</option>`;
+    body = `${a.prefill ? `<div class="drop" style="padding:18px">${ic('upload', 22)}<div style="font-weight:600;margin-top:6px">Drop the report PDF you downloaded</div></div><div style="height:14px"></div>` : `<div class="preview" style="height:170px"><div class="paper paper--passport" style="transform:scale(.8)">UNITED KINGDOM<br><br>PASSPORT</div><span class="preview__pages">2 photos</span></div>`}
+      ${a.manual ? '' : `<div class="callout callout--teal">${ic('sparkles')}<div>${a.prefill ? 'Filled in from the school\'s email.' : 'Here\'s what we read.'} Highlighted fields were filled in for you, so check them before saving.</div></div>`}
+      <div class="form">
+        <div class="row2"><div class="${aiCls}"><label>For</label><select>${opt('leo', 'Leo', f.child)}${opt('mia', 'Mia', f.child)}${opt('family', 'Whole family', f.child)}</select></div>
+        <div class="${aiCls}"><label>Section</label><select>${Object.entries(CATS).map(([k, c]) => opt(k, c.label, f.cat)).join('')}</select></div></div>
+        <div class="${aiCls}"><label>Title</label><input value="${f.title}" placeholder="e.g. Passport"></div>
+        <div class="row2"><div class="${aiCls}"><label>Dated</label><input value="${f.issued}" placeholder="dd/mm/yyyy"></div><div class="${aiCls}"><label>Expires or review due (optional)</label><input value="${f.expires}" placeholder="dd/mm/yyyy"><div class="hint">We'll remind you both 6 and 3 months before.</div></div></div>
+        <div class="hint">${PARENTS[other()]} gets one email for everything you add in the next 15 minutes.</div>
+        <div class="field"><label>Note (optional)</label><textarea rows="2" placeholder="e.g. renewal photos are in the drawer"></textarea></div>
+      </div>`;
+  }
+  return `<div class="scrim" data-act="close"></div><aside class="drawer" role="dialog" aria-label="Add document">
+    <div class="drawer__h"><div><h2>Add a document</h2><p>${a.step === 'review' ? 'Check the details, then save' : 'Photograph it or upload a file'}</p></div><button class="x" data-act="close">${ic('x')}</button></div>
+    <div class="drawer__b">${body}</div>
+    ${a.step === 'review' ? `<div class="drawer__f"><button class="btn btn--primary" data-act="save">Save document</button><button class="btn btn--ghost" data-act="close">Cancel</button></div>` : ''}</aside>`;
+}
+
+function schoolDrawer() {
+  return `<div class="scrim" data-act="close"></div><aside class="drawer" role="dialog" aria-label="From school">
+    <div class="drawer__h"><span class="attn__ic" style="background:var(--teal-soft);color:var(--teal-strong)">${ic('mail')}</span><div><h2>From school</h2><p>Letters Term Time found for Mia and Leo. Nothing is filed until you keep it.</p></div><button class="x" data-act="close">${ic('x')}</button></div>
+    <div class="drawer__b">${suggestions.length ? suggestions.map((s) => `<div class="sugg">
+      <div class="sugg__h">${childDot(s.child)}<div><strong>${s.title}</strong><div class="sugg__meta">${s.from} · ${fmt(s.sent)}${s.personal ? ' · <span class="tag tag--violet">' + ic('mail') + 'Personal letter</span>' : ''}</div></div></div>
+      <div class="sugg__why">${ic('info', 13)} ${s.why}</div>
+      ${s.portal ? `<div class="sugg__acts"><button class="btn btn--sm">Open Insight Tracking ↗</button><button class="btn btn--primary btn--sm" data-act="report-add" data-id="${s.id}">${ic('plus')} Add it here</button><button class="btn btn--ghost btn--sm" data-act="dismiss" data-id="${s.id}">Not needed</button></div></div>` : `<div class="card__foot" style="margin-bottom:10px"><span class="tag tag--slate">${ic('file')}${s.attach}</span></div>
+      <div class="sugg__acts"><button class="btn btn--primary btn--sm" data-act="keep" data-id="${s.id}">Keep in ${childName(s.child)}'s ${CATS[s.cat].label}</button>
+      <select aria-label="File under">${Object.entries(CATS).map(([k, c]) => `<option${k === s.cat ? ' selected' : ''}>${c.label}</option>`).join('')}</select>
+      <button class="btn btn--ghost btn--sm" data-act="dismiss" data-id="${s.id}">Not needed</button></div></div>`}`).join('')
+      : `<div class="empty"><p>All caught up. New letters for Mia and Leo appear here.</p></div>`}</div></aside>`;
+}
+
+function render() {
+  const app = document.getElementById('app');
+  document.getElementById('stage').className = 'stage' + (ui.device === 'mobile' ? ' stage--mobile' : '');
+  app.className = 'app' + (ui.theme === 'dark' ? ' theme-dark' : '') + (ui.device === 'mobile' ? ' is-mobile' : '');
+  const nav = (icon, label, on, badge) => `<button class="nav${on ? ' is-on' : ''}">${ic(icon)}<span>${label}</span>${badge ? `<span class="nav__badge">${badge}</span>` : ''}</button>`;
+  const overlay = ui.open ? docDrawer(docs.find((d) => d.id === ui.open)) : ui.add ? addDrawer() : ui.school ? schoolDrawer() : '';
+  app.innerHTML = `<aside class="side"><div class="side__logo"><span class="side__mark">${ic('users', 18)}</span>CoParent</div><div class="side__label">Main</div>
+    ${nav('dashboard', 'Dashboard')}${nav('calendar', 'Calendar')}${nav('message', 'Messages')}${nav('pound', 'Expenses')}${nav('file', 'Documents', true, ui.data === 'full' && suggestions.length ? suggestions.length : 0)}${nav('clock', 'Timeline and photos')}
+    <div class="side__spacer"></div>${nav('settings', 'Settings')}</aside>
+    <div class="main"><header class="m-head"><span style="display:flex;gap:8px;align-items:center;font-weight:700;color:var(--teal-strong)"><span class="side__mark" style="width:28px;height:28px">${ic('users', 15)}</span>CoParent</span>${ic('menu')}</header>
+    <div class="wrap">${library()}</div></div>${overlay}
+    ${ui.toast ? `<div class="toast">${ui.toast}</div>` : ''}`;
+  document.querySelectorAll('[data-ctl]').forEach((g) => g.querySelectorAll('button').forEach((b) => b.classList.toggle('is-on', ui[g.dataset.ctl] === b.dataset.v)));
+}
+
+function toast(msg) { ui.toast = msg; render(); setTimeout(() => { ui.toast = null; render(); }, 2600); }
+
+document.addEventListener('click', (e) => {
+  const ctl = e.target.closest('[data-ctl] button');
+  if (ctl) { ui[ctl.parentElement.dataset.ctl] = ctl.dataset.v; ui.open = null; ui.add = null; ui.school = false; return render(); }
+  const el = e.target.closest('[data-act]');
+  if (!el) return;
+  const act = el.dataset.act;
+  if (act === 'q') return;
+  if (act === 'open' && el.dataset.id) { ui.open = el.dataset.id; }
+  else if (act === 'close') { ui.open = null; ui.add = null; ui.school = false; }
+  else if (act === 'child') { ui.child = el.dataset.v; }
+  else if (act === 'school') { ui.school = true; }
+  else if (act === 'add') { ui.add = { step: 'pick' }; }
+  else if (act === 'manual') { ui.add = { step: 'review', manual: true }; }
+  else if (act === 'report-add') { suggestions = suggestions.filter((x) => x.id !== el.dataset.id); ui.school = false; ui.add = { step: 'review', prefill: { child: 'leo', cat: 'school', title: 'Autumn report 2026/27', issued: '24/11/2026', expires: '' } }; }
+  else if (act === 'read') { ui.add = { step: 'reading' }; setTimeout(() => { if (ui.add) { ui.add = { step: 'review' }; render(); } }, 1400); }
+  else if (act === 'save') { ui.add = null; ui.data = 'full'; return toast(`Saved. ${PARENTS[other()]} will get an email.`); }
+  else if (act === 'archived') { ui.archived = !ui.archived; }
+  else if (act === 'archive') { docs.find((d) => d.id === el.dataset.id).archived = { by: ui.me, on: '2026-11-28' }; ui.open = null; return toast(`Archived. ${PARENTS[other()]} will get an email, and either of you can restore it.`); }
+  else if (act === 'restore') { delete docs.find((d) => d.id === el.dataset.id).archived; ui.open = null; return toast('Restored to the library.'); }
+  else if (act === 'keep') {
+    const s = suggestions.find((x) => x.id === el.dataset.id);
+    suggestions = suggestions.filter((x) => x.id !== s.id);
+    (s.child === 'both' ? ['mia', 'leo'] : [s.child]).forEach((c, i) => docs.push({ id: `k${s.id}${i}`, title: s.title, child: c, cat: s.cat, issued: s.sent, addedBy: ui.me, added: '2026-11-28', pages: 1, source: 'school' }));
+    return toast('Kept and shared with ' + PARENTS[other()] + '.');
+  }
+  else if (act === 'dismiss') { suggestions = suggestions.filter((x) => x.id !== el.dataset.id); }
+  render();
+});
+document.addEventListener('input', (e) => { if (e.target.dataset.act === 'q') { ui.q = e.target.value; const pos = e.target.selectionStart; render(); const i = document.querySelector('[data-act="q"]'); i.focus(); i.setSelectionRange(pos, pos); } });
+render();
+})();
+</script>
+</body>
+</html>

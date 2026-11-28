@@ -117,7 +117,9 @@ class NarrationBackupCoverageTest extends AbstractIntegrationTest {
         mock(BackupService.class), mock(IndexService.class),
         mock(ElasticsearchBackupService.class), mock(NarrationRestoreValidator.class),
         UPLOADS.toString(), UPLOADS.resolve("school-attachments").toString(),
-        UPLOADS.resolve("coparent-receipts").toString(), UPLOADS.resolve("meal-images").toString());
+        UPLOADS.resolve("coparent-receipts").toString(),
+        UPLOADS.resolve("coparent-documents").toString(),
+        UPLOADS.resolve("meal-images").toString());
 
     restore.restoreCollections(archive);
 
