@@ -30,8 +30,15 @@ set -uo pipefail
 #    stack logs continuously, so silence means shipping has stopped - quota,
 #    credentials, alloy, DNS, or the Pi being offline. An error from Loki itself
 #    fails too, as "cannot check": an unanswerable question is not a pass.
-# 2. Each public hostname serves. Retried for ~RETRY_DELAY x (ATTEMPTS-1) so a
+# 2. Each public hostname serves. Retried for up to RETRY_WINDOW seconds so a
 #    deploy's maintenance page (503 for a few minutes by design) is not an alarm.
+#    The window is a time budget, not an attempt count, on purpose: when the Pi
+#    is offline every probe waits out its PROBE_TIMEOUT, so one round costs
+#    ~ENDPOINTS x PROBE_TIMEOUT + RETRY_DELAY (260s for ten hostnames). Six such
+#    rounds outlasted the workflow's 15-minute timeout, GitHub cancelled the run
+#    before it could open the outage issue, and the 2026-11-26 outage - the Pi
+#    offline entirely - raised no alarm at all. test-prod-heartbeat.sh pins the
+#    worst case under the workflow's timeout-minutes.
 # 3. Dependency-Track reports OIDC available. It returns 200 either way, and says
 #    `false` when the apiserver cannot fetch Auth0's discovery document - which is
 #    how the 2026-09 DNS outage presented, and is an end-to-end test of outbound
@@ -48,6 +55,8 @@ LOG_SILENCE_MINUTES=${LOG_SILENCE_MINUTES:-30}
 
 ATTEMPTS=${ATTEMPTS:-6}
 RETRY_DELAY=${RETRY_DELAY:-60}
+RETRY_WINDOW=${RETRY_WINDOW:-300}
+PROBE_TIMEOUT=${PROBE_TIMEOUT:-20}
 
 # "<name>|<url>|<expectation>": an HTTP status, or `body=<text>` for a 200 whose
 # trimmed body must equal <text>. Same probe URLs as monitor-prod.sh's ENDPOINTS,
@@ -161,7 +170,7 @@ probe() {
   # Cleared first: curl writes nothing on a timeout, and a stale body left by the
   # previous probe would be reported as this URL's answer.
   : > "$TMP/body"
-  code=$(curl -s -o "$TMP/body" -w '%{http_code}' -m 20 "$url") || true
+  code=$(curl -s -o "$TMP/body" -w '%{http_code}' -m "$PROBE_TIMEOUT" "$url") || true
   [[ -z "$code" ]] && code="000"
   if [[ "$expect" == body=* ]]; then
     body="$(tr -d '[:space:]' < "$TMP/body" 2>/dev/null)"
@@ -182,6 +191,7 @@ probe() {
 # the attempt just made, so its results always line up with what is pending.
 check_endpoints() {
   local pending=("${ENDPOINTS[@]}") failed=() attempt entry name url expect result
+  local started=$SECONDS
   for (( attempt = 1; attempt <= ATTEMPTS; attempt++ )); do
     failed=()
     for entry in "${pending[@]}"; do
@@ -199,6 +209,12 @@ check_endpoints() {
       pending+=("${entry%|*}")
     done
     if (( attempt < ATTEMPTS )); then
+      # Never start a round that would begin after the window has closed. The
+      # round already under way may overrun it by at most one round's probes.
+      if (( SECONDS - started + RETRY_DELAY > RETRY_WINDOW )); then
+        echo "      ${#pending[@]} still not serving after $((SECONDS - started))s; retry window (${RETRY_WINDOW}s) spent"
+        break
+      fi
       echo "      ${#pending[@]} not serving yet; retrying in ${RETRY_DELAY}s (attempt $attempt/$ATTEMPTS)"
       sleep "$RETRY_DELAY"
     fi

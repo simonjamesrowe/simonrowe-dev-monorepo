@@ -41,7 +41,7 @@ Two outages have had exactly that shape:
 | --- | --- | --- |
 | `logs` | Loki has no lines from `simonrowe-dev-monorepo-*` containers in the last 30 minutes | Log shipping has stopped. alloy has no DNS (`scripts/enable-docker-dns.sh --verify` on the Pi), the Grafana Cloud quota is spent (a `429` in `docker logs alloy`), or the Pi is offline. Every hostname failing as well points to the Pi being offline |
 | `logs: cannot check` | Loki returned an error or an unreadable answer | The GitHub secrets are wrong or the token was rotated; it does **not** mean prod is fine |
-| each hostname | Not the expected status after ~5 minutes of retries | The service behind it is down, or the whole Pi/tunnel is (all of them fail together). The retries absorb a normal deploy's maintenance page; a 503 that outlasts them means the page was left up |
+| each hostname | Not the expected status after the 5-minute retry window (`RETRY_WINDOW`) | The service behind it is down, or the whole Pi/tunnel is (all of them fail together). The retries absorb a normal deploy's maintenance page; a 503 that outlasts them means the page was left up |
 | `pinggy: the tunnel token is held by another session` | Every hostname is unreachable, logs are still arriving, and pinggy's log in Loki has `same token ... is already active` or `temporarily blocked` in the last 15 minutes | Another session holds `PINGGY_TOKEN`, and restarting cannot fix it. See [prod-monitoring.md](prod-monitoring.md#pinggy-token-conflict-2026-10-22-outage) |
 | `ingress: every hostname is unreachable while the stack is still logging` | As above, without the token errors | The tunnel is down while the stack is fine. Read pinggy's log in Loki (`{container="simonrowe-dev-monorepo-pinggy-1"}`), then [status.pinggy.io](https://status.pinggy.io) |
 | `dependency-track sign-in` | `/api/v1/oidc/available` is not `true` | The apiserver cannot fetch Auth0's discovery document: almost always outbound DNS. `docker logs <apiserver> \| grep UnknownHost` confirms it; restarting the container fixes it |
@@ -89,6 +89,16 @@ done'
 - GitHub disables scheduled workflows in a repository with no activity for 60
   days. That is not a risk for this repository today, but a disabled heartbeat is
   silent too. The workflow page says so.
+- **The retries are bounded by time, not attempts, and must stay inside the
+  job's `timeout-minutes`.** When the Pi is offline every probe waits out its
+  20s timeout, so one round of ten hostnames costs ~260s. The old six-attempt
+  loop needed ~25 minutes against a 15-minute timeout, so GitHub cancelled the
+  run before the alert step. The 2026-11-26 outage (the Pi offline from 20:32
+  UTC, Pi Connect "last seen" the same minute) raised no issue: both runs that
+  day show as *cancelled*, not *failed*. `test-prod-heartbeat.sh` now fails if
+  the worst case stops fitting the timeout, so adding hostnames or lengthening
+  the window is caught. **A cancelled heartbeat run means the same as a failed
+  one.**
 - It notifies once per outage (when the issue opens), not on every failed run.
   Each run's own summary is still on the workflow page.
 - The "Close the outage issue" step is `continue-on-error`, so a GitHub API
