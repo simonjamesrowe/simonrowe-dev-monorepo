@@ -5,7 +5,6 @@ import {
   MessageSquare,
   PoundSterling,
   FileText,
-  Image,
   Settings,
 } from 'lucide-react';
 import { useEffect } from 'react';
@@ -35,7 +34,6 @@ import MessagesPage from './pages/MessagesPage';
 import OnboardingPage from './pages/OnboardingPage';
 import SettingsPage from './pages/SettingsPage';
 import StatementsPage from './pages/StatementsPage';
-import TimelinePage from './pages/TimelinePage';
 
 const App = () => {
   const location = useLocation();
@@ -120,12 +118,6 @@ const App = () => {
       isActive: location.pathname === '/documents',
     },
     {
-      label: 'Timeline',
-      href: '/timeline',
-      icon: <Image className="h-5 w-5" />,
-      isActive: location.pathname === '/timeline',
-    },
-    {
       label: 'Settings',
       href: '/settings',
       icon: <Settings className="h-5 w-5" />,
@@ -161,7 +153,6 @@ const App = () => {
                     <Route path="/expenses" element={<ExpensesPage />} />
                     <Route path="/expenses/statements" element={<StatementsPage />} />
                     <Route path="/documents" element={<DocumentsPage />} />
-                    <Route path="/timeline" element={<TimelinePage />} />
                     <Route path="/settings" element={<SettingsPage />} />
                     <Route path="/onboarding" element={<OnboardingPage />} />
                     <Route path="/family-setup" element={<FamilySetupPage />} />
