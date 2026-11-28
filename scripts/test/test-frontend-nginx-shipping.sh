@@ -128,6 +128,8 @@ check "the production API proxy permits the backend's 10 MB upload limit" \
   "awk '/server_name api.simonrowe.dev;/ { api = 1 } api && /location \/ \{/ { inside = 1 } inside && /client_max_body_size 12m;/ { found = 1 } inside && /^    }/ { exit } END { exit !found }' '$PROXY_CONF'"
 check "the Term Time API proxy permits the backend's 10 MB upload limit" \
   "awk '/server_name term-time.simonrowe.dev;/ { term = 1 } term && /location \/api\// { inside = 1 } inside && /client_max_body_size 12m;/ { found = 1 } inside && /^    }/ { exit } END { exit !found }' '$PROXY_CONF'"
+check "the CoParent API proxy permits the documents library's 60 MB request limit" \
+  "awk '/server_name coparents.simonrowe.dev;/ { cp = 1 } cp && /location \/api\/coparent\// { inside = 1 } inside && /client_max_body_size 62m;/ { found = 1 } inside && /^    }/ { exit } END { exit !found }' '$PROXY_CONF'"
 
 # ---------------------------------------------------------------------------
 echo

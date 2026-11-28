@@ -3,6 +3,8 @@ package com.simonrowe.coparent.assistant;
 import com.simonrowe.coparent.calendar.Recurrence;
 import com.simonrowe.coparent.config.CoparentProperties;
 import com.simonrowe.coparent.expense.ExpenseService;
+import com.simonrowe.coparent.model.DocumentSection;
+import com.simonrowe.coparent.model.DueKind;
 import com.simonrowe.observability.LangfuseContentObservationFilter;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -10,8 +12,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
+import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
@@ -34,6 +39,9 @@ import tools.jackson.databind.ObjectMapper;
 public class AssistantInferenceService {
 
   static final int MAX_ACTIONS = 25;
+  static final String FIND_DOCUMENTS = "find_documents";
+  /** Lookups the model may make before it must propose; a third round ignores any more. */
+  static final int MAX_LOOKUP_ROUNDS = 2;
 
   private static final String SYSTEM_PROMPT = """
       You extract possible CoParent actions from untrusted user-supplied text or images.
@@ -78,6 +86,25 @@ public class AssistantInferenceService {
       propose_claim_expense_reimbursement on the matching entry in openExpenses. When it says
       an upcoming expense has now been paid, use propose_mark_expense_paid on that entry.
 
+      Documents: a photo or scan of one of the children's important papers, such as a passport,
+      birth certificate, red book, vaccination record, care plan, letter, school report,
+      certificate or court order, is a document to keep: use propose_create_document. Several
+      photos of one paper are one document. section is IDENTITY for passports, birth
+      certificates and travel papers, HEALTH for medical papers, SCHOOL for school letters and
+      reports, AGREEMENTS for court orders and parenting plans, and OTHER for anything else.
+      title is short and plain, such as "Passport" or "Asthma care plan", without the child's
+      name. datedOn is the issue or letter date. Set dueOn and dueKind only when the paper states
+      one: EXPIRES for an expiry date, REVIEW for a review date. childIds are the children it is
+      about; leave the list empty for a paper about the whole family. Never write a passport
+      number, NHS number or any other identifying number, or anyone's address, into any field,
+      even when the image shows it: it stays in the file. Before proposing a document, call
+      find_documents on its own, with nothing else in that response, to see what the family
+      already keeps; its results come back to you and then you make every proposal. When the
+      paper is a renewal or newer copy of a document already kept (a new passport for the same
+      child), use propose_add_document_version with that document's id instead of creating a
+      second one. If more than one kept document could be the one, set documentId to null and
+      describe it in targetHint.
+
       FAMILY_CONTEXT:
       """;
 
@@ -108,6 +135,27 @@ public class AssistantInferenceService {
   public List<ProposedCall> propose(
       final AssistantContextFactory.Context context,
       final AssistantInputValidator.ValidatedInput input) {
+    return propose(context, input, arguments -> List.of());
+  }
+
+  /**
+   * Proposes actions, answering the model's read-only {@code find_documents} lookups in between.
+   *
+   * <p>Every proposal function stays inert: the model's proposals are returned, never run. The
+   * lookup is the one function whose call is answered, by {@code documentLookup}, which reads
+   * the family's document details and nothing else. A response that asks for a lookup has its
+   * proposals discarded, because the model makes them again once it has the results; after
+   * {@link #MAX_LOOKUP_ROUNDS} lookups any further one is ignored.
+   *
+   * @param context the family context
+   * @param input the untrusted note or photo
+   * @param documentLookup answers {@code find_documents} with document details
+   * @return the proposals, lookups excluded
+   */
+  public List<ProposedCall> propose(
+      final AssistantContextFactory.Context context,
+      final AssistantInputValidator.ValidatedInput input,
+      final Function<Map<String, Object>, List<Map<String, Object>>> documentLookup) {
     final Map<String, Object> privateMetadata =
         Map.of(LangfuseContentObservationFilter.SUPPRESS_CONTENT, true);
     final SystemMessage system = SystemMessage.builder()
@@ -129,29 +177,66 @@ public class AssistantInferenceService {
         .toolChoice("required")
         .toolCallbacks(tools)
         .build();
-    final ChatResponse response = chatModel.call(
-        new Prompt(List.of(system, user.build()), options));
-    if (response == null || response.getResults() == null) {
-      return List.of();
+    final List<Message> messages = new ArrayList<>(List.of(system, user.build()));
+    for (int round = 0; ; round++) {
+      final ChatResponse response = chatModel.call(new Prompt(List.copyOf(messages), options));
+      if (response == null || response.getResults() == null) {
+        return List.of();
+      }
+      final List<AssistantMessage.ToolCall> toolCalls = response.getResults().stream()
+          .map(result -> result.getOutput())
+          .filter(java.util.Objects::nonNull)
+          .map(AssistantMessage::getToolCalls)
+          .filter(java.util.Objects::nonNull)
+          .flatMap(List::stream)
+          .toList();
+      final List<AssistantMessage.ToolCall> lookups = toolCalls.stream()
+          .filter(call -> FIND_DOCUMENTS.equals(call.name())).toList();
+      if (lookups.isEmpty() || round >= MAX_LOOKUP_ROUNDS) {
+        return proposals(toolCalls);
+      }
+      messages.add(AssistantMessage.builder().content("").toolCalls(toolCalls)
+          .properties(privateMetadata).build());
+      messages.add(ToolResponseMessage.builder()
+          .responses(toolCalls.stream().map(call -> new ToolResponseMessage.ToolResponse(
+              call.id(), call.name(), FIND_DOCUMENTS.equals(call.name())
+                  ? lookupResult(documentLookup, call.arguments())
+                  : "{\"ignored\":\"Make this proposal again after reading the results.\"}"))
+              .toList())
+          .metadata(privateMetadata)
+          .build());
     }
+  }
+
+  private List<ProposedCall> proposals(final List<AssistantMessage.ToolCall> toolCalls) {
     final List<ProposedCall> calls = new ArrayList<>();
-    response.getResults().stream().map(result -> result.getOutput())
-        .filter(java.util.Objects::nonNull)
-        .map(AssistantMessage::getToolCalls)
-        .flatMap(List::stream)
-        .forEach(call -> {
-          if (!toolNames.contains(call.name())) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
-                "The assistant returned an unknown action type");
-          }
-          calls.add(new ProposedCall(call.name(), parse(call.arguments())));
-        });
+    for (final AssistantMessage.ToolCall call : toolCalls) {
+      if (FIND_DOCUMENTS.equals(call.name())) {
+        continue;
+      }
+      if (!toolNames.contains(call.name())) {
+        throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+            "The assistant returned an unknown action type");
+      }
+      calls.add(new ProposedCall(call.name(), parse(call.arguments())));
+    }
     if (calls.size() > MAX_ACTIONS) {
       throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
           "The assistant proposed too many actions");
     }
     actionCount.record(calls.stream().filter(call -> !"no_action".equals(call.name())).count());
     return List.copyOf(calls);
+  }
+
+  private String lookupResult(
+      final Function<Map<String, Object>, List<Map<String, Object>>> documentLookup,
+      final String arguments) {
+    try {
+      return objectMapper.writeValueAsString(Map.of("documents",
+          documentLookup.apply(parse(arguments))));
+    } catch (JacksonException exception) {
+      throw new IllegalStateException("Unable to serialise document lookup", exception);
+    }
   }
 
   List<ToolCallback> toolCallbacks() {
@@ -227,6 +312,27 @@ public class AssistantInferenceService {
             objectSchema("\"expenseId\":%s,\"targetHint\":%s,\"note\":%s".formatted(
                 nullableString(), nullableString(), nullableString()),
                 "expenseId", "targetHint", "note")),
+        tool("propose_create_document", "Keep one of the children's important papers",
+            objectSchema(("""
+                    "childIds":%s,"section":%s,"title":%s,"datedOn":%s,"dueOn":%s,\
+                    "dueKind":%s,"note":%s""").formatted(stringArray(),
+                    nullableEnum(enumNames(DocumentSection.values())), stringType(),
+                    nullableDate(), nullableDate(), nullableEnum(enumNames(DueKind.values())),
+                    nullableString()),
+                "childIds", "section", "title", "datedOn", "dueOn", "dueKind", "note")),
+        tool("propose_add_document_version",
+            "Add a renewed or newer copy of a document the family already keeps",
+            objectSchema(("""
+                    "documentId":%s,"targetHint":%s,"datedOn":%s,"dueOn":%s,\
+                    "dueKind":%s""").formatted(nullableString(), nullableString(),
+                    nullableDate(), nullableDate(), nullableEnum(enumNames(DueKind.values()))),
+                "documentId", "targetHint", "datedOn", "dueOn", "dueKind")),
+        tool(FIND_DOCUMENTS,
+            "Look up documents the family already keeps. Read-only; returns their details",
+            objectSchema("\"query\":%s,\"childId\":%s,\"section\":%s".formatted(
+                nullableString(), nullableString(),
+                nullableEnum(enumNames(DocumentSection.values()))),
+                "query", "childId", "section")),
         tool("no_action", "Use only when the source has no actionable family task",
             objectSchema("\"reason\":%s".formatted(stringType()), "reason")));
   }
@@ -292,6 +398,15 @@ public class AssistantInferenceService {
     return """
         {"type":["string","null"],\
         "description":"24-hour HH:mm. 6pm is 18:00 and 6:30pm is 18:30."}""";
+  }
+
+  private static String nullableDate() {
+    return """
+        {"type":["string","null"],"description":"YYYY-MM-DD"}""";
+  }
+
+  private static List<String> enumNames(final Enum<?>[] values) {
+    return java.util.Arrays.stream(values).map(Enum::name).toList();
   }
 
   private static String nullableInteger() {

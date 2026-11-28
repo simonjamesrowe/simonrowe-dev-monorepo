@@ -14,9 +14,11 @@ const editMutation = {
 };
 const approveMutation = { ...editMutation, mutate: vi.fn(), mutateAsync: vi.fn() };
 const rejectMutation = { ...editMutation, mutate: vi.fn(), mutateAsync: vi.fn() };
+const approveFilesMutation = { ...editMutation, mutate: vi.fn(), mutateAsync: vi.fn() };
 
 vi.mock('../../hooks/api/useAssistant', () => ({
   useApproveAssistantAction: () => approveMutation,
+  useApproveAssistantActionWithFiles: () => approveFilesMutation,
   useEditAssistantAction: () => editMutation,
   useRejectAssistantAction: () => rejectMutation,
 }));
@@ -520,5 +522,110 @@ describe('AssistantActionCard editor controls', () => {
 
     expect(screen.getByRole('textbox', { name: 'Icon' })).toHaveValue('heart');
     expect(screen.getByRole('textbox', { name: 'Color' })).toHaveValue('violet');
+  });
+});
+
+describe('AssistantActionCard document cards', () => {
+  const documentAction: AssistantAction = {
+    id: 'action-document',
+    actionType: 'CREATE_DOCUMENT',
+    status: 'PENDING',
+    payload: {
+      childIds: ['child-1'],
+      section: 'IDENTITY',
+      title: 'Passport',
+      datedOn: '2025-08-02',
+      dueOn: '2030-08-02',
+      dueKind: 'EXPIRES',
+      note: null,
+    },
+    fieldErrors: [],
+    revision: 4,
+    targetSnapshot: null,
+    result: null,
+    failureMessage: null,
+  };
+  const options = {
+    childIds: [{ value: 'child-1', label: 'Mia Morgan-Taylor' }],
+    section: [
+      { value: 'IDENTITY', label: 'Identity and travel' },
+      { value: 'HEALTH', label: 'Health' },
+      { value: 'SCHOOL', label: 'School' },
+      { value: 'AGREEMENTS', label: 'Agreements' },
+      { value: 'OTHER', label: 'Activities and other' },
+    ],
+    dueKind: [{ value: 'EXPIRES', label: 'Expires' }, { value: 'REVIEW', label: 'Review due' }],
+    documentId: [{ value: 'doc-1', label: 'Leo: Passport' }],
+  };
+
+  beforeEach(() => {
+    approveFilesMutation.mutate.mockClear();
+    approveMutation.mutate.mockClear();
+    URL.createObjectURL = vi.fn(() => 'blob:photo');
+    URL.revokeObjectURL = vi.fn();
+  });
+
+  it('says what it adds, and approves as multipart with the analysed photo by default', async () => {
+    const user = userEvent.setup();
+    const photo = new File(['jpeg'], 'IMG_0001.HEIC.jpg', { type: 'image/jpeg' });
+    render(
+      <AssistantActionCard familyId="family-1" batchId="batch-1" action={documentAction} online options={options} receiptImage={photo} />,
+    );
+
+    expect(screen.getByText('Passport · for Mia · Identity and travel · dated Sat 2 Aug · expires Fri 2 Aug', { exact: false })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /^Add document/ }));
+    expect(screen.getByText('The photo you added will be saved as the document.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Dated')).toHaveValue('2025-08-02');
+
+    await user.click(screen.getByRole('button', { name: 'Approve' }));
+
+    await waitFor(() => expect(approveFilesMutation.mutate).toHaveBeenCalledTimes(1));
+    const [{ familyId, batchId, action, files }] = approveFilesMutation.mutate.mock.calls[0];
+    expect({ familyId, batchId, actionId: action.id }).toEqual({ familyId: 'family-1', batchId: 'batch-1', actionId: 'action-document' });
+    expect(files).toHaveLength(1);
+    expect(files[0].type).toBe('image/jpeg');
+    expect(approveMutation.mutate).not.toHaveBeenCalled();
+  });
+
+  it('can send different files instead of the photo', async () => {
+    const user = userEvent.setup();
+    const photo = new File(['jpeg'], 'photo.jpg', { type: 'image/jpeg' });
+    render(
+      <AssistantActionCard familyId="family-1" batchId="batch-1" action={documentAction} online options={options} receiptImage={photo} />,
+    );
+    await user.click(screen.getByRole('button', { name: /^Add document/ }));
+
+    const pdf = new File(['%PDF'], 'passport-scan.pdf', { type: 'application/pdf' });
+    await user.upload(screen.getByLabelText('Choose document files'), pdf);
+    expect(screen.getByText('Saving passport-scan.pdf as the document.')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Approve' }));
+
+    await waitFor(() => expect(approveFilesMutation.mutate).toHaveBeenCalledTimes(1));
+    expect(approveFilesMutation.mutate.mock.calls[0][0].files).toEqual([pdf]);
+  });
+
+  it('cannot be approved until a file is chosen when there is no photo', async () => {
+    const user = userEvent.setup();
+    render(
+      <AssistantActionCard
+        familyId="family-1"
+        batchId="batch-1"
+        action={{ ...documentAction, actionType: 'ADD_DOCUMENT_VERSION', payload: { documentId: 'doc-1', datedOn: '2027-02-01', dueOn: null, dueKind: null } }}
+        online
+        options={options}
+      />,
+    );
+
+    expect(screen.getByText(/Leo: Passport · dated/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /^Add new version of document/ }));
+    const approve = screen.getByRole('button', { name: 'Approve' });
+    expect(approve).toBeDisabled();
+    expect(screen.getByText(/Choose the photos or PDF of the document before approving/)).toBeInTheDocument();
+
+    const pdf = new File(['%PDF'], 'renewal.pdf', { type: 'application/pdf' });
+    await user.upload(screen.getByLabelText('Choose document files'), pdf);
+    expect(approve).toBeEnabled();
+    await user.click(approve);
+    await waitFor(() => expect(approveFilesMutation.mutate.mock.calls[0][0].files).toEqual([pdf]));
   });
 });

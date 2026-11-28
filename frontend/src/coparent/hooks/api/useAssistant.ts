@@ -10,6 +10,7 @@ import type {
 } from '../../types/assistant';
 
 import { conversationKeys } from './useConversations';
+import { documentKeys } from './useDocuments';
 import { eventKeys } from './useEvents';
 import { expenseKeys } from './useExpenses';
 import { scheduleChangeRequestKeys } from './useScheduleChangeRequests';
@@ -137,6 +138,10 @@ function invalidateDomain(queryClient: ReturnType<typeof useQueryClient>, family
     || actionType.includes('PERMISSION')) {
     queryClient.invalidateQueries({ queryKey: conversationKeys.list(familyId) });
   }
+  if (actionType.includes('DOCUMENT')) {
+    queryClient.invalidateQueries({ queryKey: documentKeys.lists(familyId) });
+    queryClient.invalidateQueries({ queryKey: [...documentKeys.all, 'detail', familyId] });
+  }
   if (actionType.includes('EXPENSE')) {
     queryClient.invalidateQueries({ queryKey: expenseKeys.list(familyId) });
     queryClient.invalidateQueries({ queryKey: expenseKeys.summary(familyId) });
@@ -191,6 +196,38 @@ function useDecision(decision: 'approve' | 'reject') {
 
 export function useApproveAssistantAction() {
   return useDecision('approve');
+}
+
+/**
+ * Approves an action that needs files to apply (CREATE_DOCUMENT, ADD_DOCUMENT_VERSION): the same
+ * path as the JSON approve, as multipart with the version and the files, by default the photo the
+ * batch was read from.
+ */
+export function useApproveAssistantActionWithFiles() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ familyId, batchId, action, files }: {
+      familyId: string;
+      batchId: string;
+      action: AssistantAction;
+      files: File[];
+    }) => {
+      const form = new FormData();
+      form.append('version', String(action.revision));
+      files.forEach((file) => form.append('files', file, file.name));
+      const { data } = await apiClient.post<AssistantAction>(
+        `/families/${familyId}/assistant/batches/${batchId}/actions/${action.id}/approve`,
+        form,
+        { headers: { 'Content-Type': undefined } },
+      );
+      return { familyId, batchId, action: data };
+    },
+    onSuccess: ({ familyId, batchId, action }) => {
+      queryClient.setQueryData<AssistantBatch>(assistantKeys.batch(familyId, batchId), (batch) =>
+        replaceAction(batch, action));
+      if (action.status === 'APPLIED') invalidateDomain(queryClient, familyId, action.actionType);
+    },
+  });
 }
 
 export function useRejectAssistantAction() {

@@ -1,12 +1,13 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { AlertTriangle, Check, ChevronDown, ExternalLink, RotateCcw, X } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { AlertTriangle, Check, ChevronDown, ExternalLink, FileText, RotateCcw, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
 import { prepareSchoolNoteImage } from '../../../pages/admin/schoolNoteImage';
 import {
   useApproveAssistantAction,
+  useApproveAssistantActionWithFiles,
   useEditAssistantAction,
   useRejectAssistantAction,
 } from '../../hooks/api/useAssistant';
@@ -42,7 +43,14 @@ const requiredFields: Record<string, string[]> = {
   CREATE_EXPENSE: ['title', 'amount', 'category', 'childIds', 'timing', 'date'],
   MARK_EXPENSE_PAID: ['expenseId', 'payerId', 'paidOn'],
   CLAIM_EXPENSE_REIMBURSEMENT: ['expenseId'],
+  CREATE_DOCUMENT: ['title', 'section', 'datedOn'],
+  ADD_DOCUMENT_VERSION: ['documentId', 'datedOn'],
 };
+
+/** Actions that only apply with files, approved as multipart. */
+const FILE_ACTIONS = new Set(['CREATE_DOCUMENT', 'ADD_DOCUMENT_VERSION']);
+const DOCUMENT_FILE_TYPES = 'image/jpeg,image/png,image/webp,application/pdf';
+const MAX_DOCUMENT_FILES = 12;
 
 /** Plain names for the payload keys; anything else falls back to its key in sentence case. */
 const FIELD_LABELS: Record<string, string> = {
@@ -67,6 +75,11 @@ const FIELD_LABELS: Record<string, string> = {
   allDay: 'All day',
   recurringFrequency: 'Repeats',
   recurringDays: 'Repeats on',
+  documentId: 'Document',
+  section: 'Section',
+  datedOn: 'Dated',
+  dueOn: 'Expires or review due',
+  dueKind: 'Kind of date',
 };
 
 /**
@@ -75,10 +88,11 @@ const FIELD_LABELS: Record<string, string> = {
  * keep their payload order after these.
  */
 const FIELD_ORDER = [
-  'eventId', 'originalEventId', 'categoryId', 'requestId', 'conversationId', 'expenseId',
-  'targetHint', 'title', 'name', 'subject', 'recipientId',
+  'eventId', 'originalEventId', 'categoryId', 'requestId', 'conversationId', 'expenseId', 'documentId',
+  'targetHint', 'title', 'name', 'subject', 'recipientId', 'section',
   'type', 'childId',
   'amount', 'currency', 'category', 'timing', 'date', 'payerId', 'sharePercent', 'paidOn',
+  'datedOn', 'dueOn', 'dueKind',
   'originalStartDate', 'originalEndDate', 'newStartDate', 'newEndDate',
   'startDate', 'endDate', 'startTime', 'endTime',
   'location', 'allDay', 'recurringFrequency', 'recurringDays', 'parentId',
@@ -102,6 +116,7 @@ const TARGET_FIELDS: Record<string, string> = {
   requestId: 'request',
   conversationId: 'conversation',
   expenseId: 'expense',
+  documentId: 'document',
 };
 
 function fieldLabel(key: string) {
@@ -188,7 +203,7 @@ export function AssistantActionCard({
   /**
    * The photo this batch was read from, still only in the browser. It is attached to the expense
    * only if the parent leaves the box ticked and approves, so CoParent never keeps a photo the
-   * parent did not choose to keep.
+   * parent did not choose to keep. A document card sends it as the document's file by default.
    */
   receiptImage?: File | null;
 }) {
@@ -196,6 +211,12 @@ export function AssistantActionCard({
   const schema = useMemo(() => editorSchema(action), [action]);
   const edit = useEditAssistantAction();
   const approve = useApproveAssistantAction();
+  const approveWithFiles = useApproveAssistantActionWithFiles();
+  const needsFiles = FILE_ACTIONS.has(action.actionType);
+  // Null means "the photo this batch was read from"; a list is files the parent chose instead.
+  const [chosenFiles, setChosenFiles] = useState<File[] | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const documentFiles = chosenFiles ?? (receiptImage ? [receiptImage] : []);
   const reject = useRejectAssistantAction();
   const uploadReceipt = useUploadReceipt();
   const [attachReceipt, setAttachReceipt] = useState(true);
@@ -237,7 +258,26 @@ export function AssistantActionCard({
     }
   };
 
+  /** The analysed photo is re-encoded, which drops its EXIF (location included); chosen files go as they are. */
+  const filesToSend = async (): Promise<File[]> => {
+    if (chosenFiles || !receiptImage) return documentFiles;
+    const url = URL.createObjectURL(receiptImage);
+    try {
+      const blob = await prepareSchoolNoteImage(url);
+      const name = receiptImage.name.replace(/\.[^.]+$/, '') || 'document';
+      return [new File([blob], `${name}.jpg`, { type: 'image/jpeg' })];
+    } catch {
+      return [receiptImage];
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  };
+
   const decide = (kind: 'approve' | 'reject') => {
+    if (kind === 'approve' && needsFiles) {
+      void filesToSend().then((files) => approveWithFiles.mutate({ familyId, batchId, action, files }));
+      return;
+    }
     const mutation = kind === 'approve' ? approve : reject;
     if (kind !== 'approve' || !offersReceipt || !attachReceipt) {
       mutation.mutate({ familyId, batchId, action });
@@ -277,8 +317,9 @@ export function AssistantActionCard({
   };
   // Errors for a field the editor shows sit under that field; only the rest are listed here.
   const cardErrors = action.fieldErrors.filter((error) => !shownFields.has(error.field));
-  const busy = edit.isPending || approve.isPending || reject.isPending || action.status === 'APPLYING';
-  const mutationError = edit.error || approve.error || reject.error;
+  const busy = edit.isPending || approve.isPending || approveWithFiles.isPending || reject.isPending
+    || action.status === 'APPLYING';
+  const mutationError = edit.error || approve.error || approveWithFiles.error || reject.error;
 
   return (
     <article className={`assistant-card assistant-card--${action.status.toLowerCase()}`}>
@@ -333,6 +374,48 @@ export function AssistantActionCard({
             </p>
           )}
 
+          {needsFiles && !terminal && (
+            <div className="assistant-card__files">
+              {documentFiles.length > 0 ? (
+                <p className="assistant-card__notice">
+                  <FileText size={16} />
+                  {chosenFiles
+                    ? `Saving ${chosenFiles.map((file) => file.name).join(', ')} as the document.`
+                    : 'The photo you added will be saved as the document.'}
+                </p>
+              ) : (
+                <p className="assistant-card__notice">
+                  <AlertTriangle size={16} /> Choose the photos or PDF of the document before approving.
+                </p>
+              )}
+              <div className="assistant-card__file-actions">
+                <button type="button" className="cp-button cp-button--secondary cp-button--sm"
+                  disabled={busy} onClick={() => fileInput.current?.click()}>
+                  {documentFiles.length > 0 ? 'Choose different file(s)' : 'Choose file(s)'}
+                </button>
+                {chosenFiles && receiptImage && (
+                  <button type="button" className="cp-button cp-button--quiet cp-button--sm"
+                    disabled={busy} onClick={() => setChosenFiles(null)}>
+                    Use the photo you added
+                  </button>
+                )}
+              </div>
+              <input
+                ref={fileInput}
+                type="file"
+                accept={DOCUMENT_FILE_TYPES}
+                multiple
+                hidden
+                aria-label="Choose document files"
+                onChange={(event) => {
+                  const files = Array.from(event.target.files ?? []).slice(0, MAX_DOCUMENT_FILES);
+                  if (files.length) setChosenFiles(files);
+                  event.target.value = '';
+                }}
+              />
+            </div>
+          )}
+
           {showEditor && (
             <form className="assistant-card__form assistant-editor" onSubmit={save}>
               {editorFields.map(([key]) => {
@@ -371,7 +454,8 @@ export function AssistantActionCard({
                 <button
                   className="cp-button cp-button--primary"
                   type="button"
-                  disabled={!online || busy || action.status === 'BLOCKED'}
+                  disabled={!online || busy || action.status === 'BLOCKED'
+                    || (needsFiles && documentFiles.length === 0)}
                   onClick={() => decide('approve')}
                 >
                   <Check size={16} /> {action.status === 'FAILED' ? 'Retry' : 'Approve'}

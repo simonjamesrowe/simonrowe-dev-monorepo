@@ -18,9 +18,16 @@ import com.simonrowe.AbstractIntegrationTest;
 import com.simonrowe.coparent.model.CalendarEvent;
 import com.simonrowe.coparent.model.Child;
 import com.simonrowe.coparent.model.Conversation;
+import com.simonrowe.coparent.model.DocumentFile;
+import com.simonrowe.coparent.model.DocumentNotice;
+import com.simonrowe.coparent.model.DocumentSection;
+import com.simonrowe.coparent.model.DocumentSource;
+import com.simonrowe.coparent.model.DocumentVersion;
+import com.simonrowe.coparent.model.DueKind;
 import com.simonrowe.coparent.model.EventCategory;
 import com.simonrowe.coparent.model.Expense;
 import com.simonrowe.coparent.model.Family;
+import com.simonrowe.coparent.model.FamilyDocument;
 import com.simonrowe.coparent.model.Parent;
 import com.simonrowe.coparent.model.ScheduleChangeRequest;
 import com.simonrowe.coparent.persistence.AssistantProposalRepository;
@@ -29,6 +36,7 @@ import com.simonrowe.coparent.persistence.ConversationRepository;
 import com.simonrowe.coparent.persistence.EventCategoryRepository;
 import com.simonrowe.coparent.persistence.EventRepository;
 import com.simonrowe.coparent.persistence.ExpenseRepository;
+import com.simonrowe.coparent.persistence.FamilyDocumentRepository;
 import com.simonrowe.coparent.persistence.FamilyRepository;
 import com.simonrowe.coparent.persistence.ParentRepository;
 import com.simonrowe.coparent.persistence.ScheduleChangeRepository;
@@ -36,6 +44,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -64,7 +73,8 @@ import org.springframework.test.web.servlet.MvcResult;
 @TestPropertySource(properties = {
     "coparent.enabled=true",
     "coparent.assistant.enabled=true",
-    "coparent.assistant.model=gpt-5.4-nano"
+    "coparent.assistant.model=gpt-5.4-nano",
+    "coparent.document-path=build/test-assistant-documents/"
 })
 class AssistantApiIntegrationTest extends AbstractIntegrationTest {
 
@@ -104,14 +114,175 @@ class AssistantApiIntegrationTest extends AbstractIntegrationTest {
   @Autowired
   private ExpenseRepository expenses;
 
+  @Autowired
+  private FamilyDocumentRepository documents;
+
+  private static final java.nio.file.Path DOCUMENT_STORE =
+      java.nio.file.Path.of("build/test-assistant-documents");
+
   @BeforeEach
   @AfterEach
   void cleanCollections() {
     Mockito.reset(chatModel);
     List.of("families", "parents", "children", "events", "eventcategories",
         "schedulechangerequests", "conversations", "audits", Expense.COLLECTION,
-        AssistantProposalBatch.COLLECTION).forEach(collection ->
+        AssistantProposalBatch.COLLECTION, FamilyDocument.COLLECTION,
+        DocumentNotice.COLLECTION).forEach(collection ->
         mongoTemplate.getCollection(collection).deleteMany(new Document()));
+    org.springframework.util.FileSystemUtils.deleteRecursively(DOCUMENT_STORE.toFile());
+  }
+
+  @Test
+  void documentCardIsApprovedOnlyWithItsFileAndOnlyOnce() throws Exception {
+    final Fixture fixture = fixture();
+    when(chatModel.call(any(org.springframework.ai.chat.prompt.Prompt.class)))
+        .thenReturn(toolResponse(toolCall(1, "propose_create_document", """
+            {"childIds":["%s"],"section":"identity","title":"Passport",
+            "datedOn":"2025-08-02","dueOn":"2035-08-02","dueKind":"expires","note":null}
+            """.formatted(fixture.childId()))));
+    final String body = analyse(fixture, "Robin's passport");
+    final String batchId = JsonPath.read(body, "$.id");
+    final String actionId = JsonPath.read(body, "$.actions[0].id");
+    assertThat((String) JsonPath.read(body, "$.actions[0].status")).isEqualTo("PENDING");
+    assertThat((String) JsonPath.read(body, "$.actions[0].payload.section"))
+        .isEqualTo("IDENTITY");
+    assertThat((String) JsonPath.read(body, "$.actions[0].payload.dueKind"))
+        .isEqualTo("EXPIRES");
+
+    mockMvc.perform(post(APPROVE_PATH, fixture.familyId(), batchId, actionId)
+            .with(user("alice")).contentType(MediaType.APPLICATION_JSON)
+            .content("{\"version\":0}"))
+        .andExpect(status().isBadRequest())
+        .andExpect(result -> assertThat(result.getResolvedException())
+            .hasMessageContaining("This needs the document's file"));
+    assertThat(documents.count()).isZero();
+
+    final AssistantProposalBatch.Action proposed = proposals.findById(new ObjectId(batchId))
+        .orElseThrow().actions().getFirst();
+    mockMvc.perform(approveWithFiles(fixture, batchId, actionId, 0, JPEG))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.status", is("APPLIED")))
+        .andExpect(jsonPath("$.result.entityType", is("document")))
+        .andExpect(jsonPath("$.result.entityId", is(proposed.operationId().toHexString())))
+        .andExpect(jsonPath("$.result.route",
+            is("/documents?doc=" + proposed.operationId().toHexString())));
+    mockMvc.perform(approveWithFiles(fixture, batchId, actionId, 0, JPEG))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.status", is("APPLIED")));
+
+    assertThat(documents.findAll()).singleElement().satisfies(document -> {
+      assertThat(document.id()).isEqualTo(proposed.operationId());
+      assertThat(document.title()).isEqualTo("Passport");
+      assertThat(document.source().kind()).isEqualTo(DocumentSource.Kind.QUICK_ADD);
+      assertThat(document.dueKind()).isEqualTo(DueKind.EXPIRES);
+      assertThat(document.childIds()).containsExactly(new ObjectId(fixture.childId()));
+      assertThat(document.versions().getFirst().files()).singleElement()
+          .extracting(DocumentFile::mimeType).isEqualTo("image/jpeg");
+    });
+  }
+
+  @Test
+  void renewalAddsVersionToTheDocumentTheCardNamed() throws Exception {
+    final Fixture fixture = fixture();
+    final FamilyDocument passport = documents.save(document(fixture, "Passport"));
+    when(chatModel.call(any(org.springframework.ai.chat.prompt.Prompt.class)))
+        .thenReturn(toolResponse(toolCall(1, "propose_add_document_version", """
+            {"documentId":"%s","targetHint":null,"datedOn":"2026-11-01",
+            "dueOn":"2036-11-01","dueKind":"EXPIRES"}""".formatted(passport.id()))));
+    final String body = analyse(fixture, "Robin's new passport arrived");
+    final String batchId = JsonPath.read(body, "$.id");
+    final String actionId = JsonPath.read(body, "$.actions[0].id");
+    assertThat((String) JsonPath.read(body, "$.actions[0].targetSnapshot.entityId"))
+        .isEqualTo(passport.id().toHexString());
+
+    mockMvc.perform(approveWithFiles(fixture, batchId, actionId, 0, JPEG, JPEG))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.status", is("APPLIED")))
+        .andExpect(jsonPath("$.result.entityId", is(passport.id().toHexString())));
+
+    final FamilyDocument renewed = documents.findById(passport.id()).orElseThrow();
+    assertThat(renewed.versions()).hasSize(2);
+    assertThat(renewed.dueOn()).isEqualTo(LocalDate.parse("2036-11-01"));
+    assertThat(renewed.currentVersion().files()).hasSize(2);
+    final ObjectId operationId = proposals.findById(new ObjectId(batchId)).orElseThrow()
+        .actions().getFirst().operationId();
+    assertThat(renewed.currentVersion().versionId()).isEqualTo(operationId);
+  }
+
+  @Test
+  void documentCardsBlockOnIdentifyingNumbersAndUnknownTargets() throws Exception {
+    final Fixture fixture = fixture();
+    when(chatModel.call(any(org.springframework.ai.chat.prompt.Prompt.class)))
+        .thenReturn(toolResponse(
+            toolCall(1, "propose_create_document", """
+                {"childIds":[],"section":"IDENTITY","title":"Passport 123 456 789",
+                "datedOn":"2025-08-02","dueOn":"2035-08-02","dueKind":null,"note":null}"""),
+            toolCall(2, "propose_add_document_version", """
+                {"documentId":null,"targetHint":"Robin's passport","datedOn":"2026-11-01",
+                "dueOn":null,"dueKind":null}""")));
+    final String body = analyse(fixture, "Two passports");
+    assertThat((String) JsonPath.read(body, "$.actions[0].status")).isEqualTo("BLOCKED");
+    final List<String> fields = JsonPath.read(body, "$.actions[0].fieldErrors[*].field");
+    assertThat(fields).containsExactlyInAnyOrder("title", "dueKind");
+    assertThat((String) JsonPath.read(body, "$.actions[1].status")).isEqualTo("BLOCKED");
+    assertThat((String) JsonPath.read(body, "$.actions[1].targetSnapshot.hint"))
+        .isEqualTo("Robin's passport");
+
+    final String batchId = JsonPath.read(body, "$.id");
+    final String actionId = JsonPath.read(body, "$.actions[0].id");
+    mockMvc.perform(approveWithFiles(fixture, batchId, actionId, 0, JPEG))
+        .andExpect(status().isUnprocessableEntity());
+    assertThat(documents.count()).isZero();
+  }
+
+  @Test
+  void otherCardsAreNotApprovedWithFiles() throws Exception {
+    final Fixture fixture = fixture();
+    when(chatModel.call(any(org.springframework.ai.chat.prompt.Prompt.class)))
+        .thenReturn(proposalResponse(fixture.childId()));
+    final String body = analyse(fixture, "School fair");
+    mockMvc.perform(approveWithFiles(fixture, JsonPath.read(body, "$.id"),
+            JsonPath.read(body, "$.actions[0].id"), 0, JPEG))
+        .andExpect(status().isBadRequest());
+    assertThat(events.count()).isZero();
+  }
+
+  private static final byte[] JPEG = {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, 0x11, 0x11, 0x11};
+
+  private String analyse(final Fixture fixture, final String text) throws Exception {
+    return mockMvc.perform(multipart(
+            "/api/coparent/families/{familyId}/assistant/batches", fixture.familyId())
+            .param("text", text).with(user("alice")))
+        .andExpect(status().isCreated())
+        .andReturn().getResponse().getContentAsString();
+  }
+
+  private static org.springframework.test.web.servlet.RequestBuilder approveWithFiles(
+      final Fixture fixture, final String batchId, final String actionId, final long version,
+      final byte[]... files) {
+    final var request = multipart(APPROVE_PATH, fixture.familyId(), batchId, actionId);
+    for (final byte[] file : files) {
+      request.file(new MockMultipartFile("files", "photo.jpg", "image/jpeg", file));
+    }
+    return request.param("version", String.valueOf(version)).with(user("alice"));
+  }
+
+  private static ChatResponse toolResponse(final AssistantMessage.ToolCall... calls) {
+    return new ChatResponse(List.of(new Generation(AssistantMessage.builder().content("")
+        .toolCalls(List.of(calls)).build())));
+  }
+
+  private static FamilyDocument document(final Fixture fixture, final String title) {
+    final Instant now = Instant.parse("2026-01-01T10:00:00Z");
+    final ObjectId alice = new ObjectId(fixture.aliceId());
+    return new FamilyDocument(new ObjectId(), new ObjectId(fixture.familyId()),
+        List.of(new ObjectId(fixture.childId())), DocumentSection.IDENTITY, title,
+        LocalDate.parse("2016-11-01"), LocalDate.parse("2026-12-01"), DueKind.EXPIRES, null,
+        List.of(new DocumentVersion(new ObjectId(),
+            List.of(new DocumentFile(new ObjectId(), "image/jpeg", 6)),
+            LocalDate.parse("2016-11-01"), LocalDate.parse("2026-12-01"), DueKind.EXPIRES,
+            alice, now)),
+        DocumentSource.upload(), null, null, Set.of(), alice, now, now, 1);
   }
 
   @Test
@@ -241,8 +412,10 @@ class AssistantApiIntegrationTest extends AbstractIntegrationTest {
     final String batchId = JsonPath.read(body, "$.id");
     final List<String> actionIds = JsonPath.read(body, "$.actions[*].id");
     final List<String> actionTypes = JsonPath.read(body, "$.actions[*].actionType");
+    // Document actions need files to approve; they have their own tests below.
     assertThat(actionTypes).containsExactlyInAnyOrderElementsOf(
         java.util.Arrays.stream(AssistantProposalBatch.ActionType.values())
+            .filter(type -> !type.needsFiles())
             .map(Enum::name).toList());
 
     for (String actionId : actionIds) {

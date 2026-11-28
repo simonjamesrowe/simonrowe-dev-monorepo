@@ -32,6 +32,7 @@ vi.mock('../../hooks/api', () => ({
   useChildren: () => ({ data: [] }),
   useConversations: () => ({ data: [] }),
   useCurrentUser: () => ({ data: { profiles: [{ id: 'parent-1', familyId: 'family-1' }] } }),
+  useDocuments: () => ({ data: [] }),
   useEvents: () => ({ data: [] }),
   useExpenses: () => ({ data: [] }),
   useFamilies: () => ({ data: familyData }),

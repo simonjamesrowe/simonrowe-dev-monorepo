@@ -281,6 +281,29 @@ It is exposed to the internet by the `pinggy` service, which tunnels `nginx:80` 
   (all ingress is via the pinggy tunnel), so there are no conflicts with other local stacks.
 
 ## Recent Changes
+- 057-coparent-documents: **CoParent's `/documents` is a shared library of the children's papers**
+  (`com.simonrowe.coparent.document`, collections `documents`, `document_school_offers`,
+  `document_notices`, `V069CreateCoparentDocuments`), replacing the placeholder. Load-bearing bits:
+  - **Nothing is private and nothing is deleted.** Both parents see every document; Archive is a
+    soft delete either parent can undo, and the app never removes a file (a real deletion is by hand).
+    A renewal is a new version of the same document; the document's dates mirror the newest version,
+    so reminders (6 and 3 months for expiry, 1 month and 1 week for review) follow it.
+  - **Files live on the `coparent-documents` volume**, never `uploads/`, sniffed from their bytes
+    (JPEG, PNG, WebP, PDF), 20 MB each, 60 MB a request, served `nosniff` + `sandbox`.
+  - **nginx's `/api/coparent/` had no `client_max_body_size`**, so every receipt or Quick add photo
+    over 1 MB was already refused in production; it is `62m` now, and needs nginx recreated by hand.
+    Raising Spring's global multipart limit to 20 MB also lifts the owner-only Meals photo upload.
+  - **The model only proposes** (`DocumentReader`, structured output, no tools), has no field for a
+    passport or NHS number, and "Fill in myself" skips it. Quick add gains `CREATE_DOCUMENT` and
+    `ADD_DOCUMENT_VERSION`, approved **multipart** with the photo, plus a `find_documents` lookup.
+  - **From school** (`SchoolDocumentOfferSync`, after every Term Time sync): broadcast PDFs a
+    classifier calls keepable, personal letters naming a child (mailbox family only), and Insight
+    Tracking "report is ready" prompts that open a prefilled upload. CoParent never signs in to
+    Insight Tracking. The unique `(familyId, schoolDocumentId)` index is the ledger.
+  - **Term Time now admits `insighttracking.com`** and `PublicationRules` always declines it (the
+    mail names a child). The shared env file pins `SCHOOL_SENDER_ALLOWLIST`, so add it there too.
+    A domain allowlist entry now matches only that domain and its subdomains.
+  See `specs/057-coparent-documents/`.
 - admin-dashboard: **`/admin/dashboard` is a real page**: uptime per public hostname, articles
   arrived and summarised per week, and Dependency-Track findings (`com.simonrowe.dashboard`, one
   endpoint per panel under `/api/admin/dashboard`). The fake-KPI `DashboardMetrics` and the

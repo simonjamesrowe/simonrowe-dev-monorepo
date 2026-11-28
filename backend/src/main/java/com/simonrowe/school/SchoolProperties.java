@@ -155,6 +155,13 @@ public record SchoolProperties(
    * {@code "Kilmorie Primary School" <anything@example.com>} match on the display name, which is
    * exactly the shape of the real sender this guards against.
    *
+   * <p>An allowlist entry with an {@code @} is one exact address. An entry without one is a
+   * domain, and admits that domain or a subdomain of it, never another domain that merely ends
+   * with the same letters: {@code insighttracking.com} admits
+   * {@code system@insighttracking.com} and not {@code x@evilinsighttracking.com}, which a plain
+   * suffix match would. The denylist stays a plain suffix match, because denying too much is
+   * the safe direction.
+   *
    * @param address a bare email address, with no display name
    * @return true when the address is allowed and not denied
    */
@@ -166,7 +173,11 @@ public record SchoolProperties(
     if (senderDenylist.stream().anyMatch(candidate::endsWith)) {
       return false;
     }
-    return senderAllowlist.stream().anyMatch(candidate::endsWith);
+    final int at = candidate.lastIndexOf('@');
+    final String domain = at < 0 ? "" : candidate.substring(at + 1);
+    return senderAllowlist.stream().anyMatch(entry -> entry.indexOf('@') >= 0
+        ? candidate.equals(entry)
+        : !domain.isEmpty() && (domain.equals(entry) || domain.endsWith("." + entry)));
   }
 
   private static List<String> normalise(final List<String> values) {

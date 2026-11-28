@@ -107,7 +107,10 @@ public class BackupService {
       "expense_settlements",
       // School events offered to a family, and what they decided. A dismissed one is the only
       // record that a parent said no, so a restore without it would offer them all again.
-      "school_event_suggestions"
+      "school_event_suggestions",
+      // The document library (spec 057): the documents, the From school ledger (a dismissed
+      // letter is the only record a parent said no) and the emails waiting to be sent.
+      "documents", "document_school_offers", "document_notices"
   );
 
   /** Writes every file under {@code dir} into the archive below {@code prefix}. */
@@ -145,6 +148,7 @@ public class BackupService {
   private final String uploadsPath;
   private final String schoolAttachmentPath;
   private final String coparentReceiptPath;
+  private final String coparentDocumentPath;
   private final String mealImagePath;
 
   public BackupService(
@@ -157,6 +161,7 @@ public class BackupService {
       @Value("${uploads.path:backend/uploads/}") final String uploadsPath,
       @Value("${school.attachment-path:school-attachments/}") final String schoolAttachmentPath,
       @Value("${coparent.receipt-path:coparent-receipts/}") final String coparentReceiptPath,
+      @Value("${coparent.document-path:coparent-documents/}") final String coparentDocumentPath,
       @Value("${meals.image-path:meal-images/}") final String mealImagePath
   ) {
     this.mongoClient = mongoClient;
@@ -168,6 +173,7 @@ public class BackupService {
     this.uploadsPath = uploadsPath;
     this.schoolAttachmentPath = schoolAttachmentPath;
     this.coparentReceiptPath = coparentReceiptPath;
+    this.coparentDocumentPath = coparentDocumentPath;
     this.mealImagePath = mealImagePath;
   }
 
@@ -266,6 +272,8 @@ public class BackupService {
 
         // CoParent expense receipts. Not re-derivable from anything: the bytes exist only here.
         exportDirectory(zos, Path.of(coparentReceiptPath), "coparent-receipts/");
+        // CoParent family documents: passports, certificates, care plans. Not re-derivable.
+        exportDirectory(zos, Path.of(coparentDocumentPath), "coparent-documents/");
         // Recipe photos. The bundles they came from are not kept anywhere.
         exportDirectory(zos, Path.of(mealImagePath), "meal-images/");
 

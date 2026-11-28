@@ -1,4 +1,4 @@
-import { useExpenseSummary, useFamilies } from '../../hooks/api';
+import { useExpenseSummary, useFamilies, useSchoolOffers } from '../../hooks/api';
 
 import { AppShell, type AppShellProps } from './AppShell';
 
@@ -8,9 +8,14 @@ import { AppShell, type AppShellProps } from './AppShell';
  */
 export function ShellWithBadges(props: AppShellProps) {
   const { data: families = [] } = useFamilies();
-  const { data: summary } = useExpenseSummary(families[0]?.id);
-  const navigationItems = props.navigationItems.map((item) =>
-    item.href === '/expenses' ? { ...item, badge: summary?.needsYourAction || undefined } : item,
-  );
+  const familyId = families[0]?.id;
+  const { data: summary } = useExpenseSummary(familyId);
+  // Letters from school waiting to be kept or dismissed.
+  const { data: offers } = useSchoolOffers(familyId);
+  const navigationItems = props.navigationItems.map((item) => {
+    if (item.href === '/expenses') return { ...item, badge: summary?.needsYourAction || undefined };
+    if (item.href === '/documents') return { ...item, badge: offers?.length || undefined };
+    return item;
+  });
   return <AppShell {...props} navigationItems={navigationItems} />;
 }

@@ -24,7 +24,7 @@ export interface BriefingAction {
 /** Something waiting on the signed-in parent, in the order the page lists them. */
 export interface NeedsYouItem {
   id: string;
-  kind: 'invite' | 'expense' | 'permission' | 'schedule' | 'message';
+  kind: 'invite' | 'expense' | 'permission' | 'schedule' | 'message' | 'document';
   title: string;
   detail: string;
   actions: BriefingAction[];

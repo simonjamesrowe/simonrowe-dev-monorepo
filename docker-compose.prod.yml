@@ -888,7 +888,10 @@ services:
       # both survive, so answers went on citing PDFs that returned 404 - and could not
       # self-heal, because an unchanged email is skipped on re-ingest.
       SCHOOL_ATTACHMENT_PATH: /workspace/school-attachments/
-      SCHOOL_SENDER_ALLOWLIST: ${SCHOOL_SENDER_ALLOWLIST:-kilmorie.lewisham.sch.uk}
+      # insighttracking.com is the school's reporting system, read only for CoParent's report
+      # prompts; PublicationRules keeps every one of its emails out of the public tier. The
+      # shared env file pins this variable too, so its line must gain the domain as well.
+      SCHOOL_SENDER_ALLOWLIST: ${SCHOOL_SENDER_ALLOWLIST:-kilmorie.lewisham.sch.uk,insighttracking.com}
       # ParentPay is school-adjacent but purely financial: dense with personal data and of
       # almost no informational value to a question about term dates. Excluded outright rather
       # than ingested as restricted.
@@ -936,6 +939,9 @@ services:
       # SCHOOL_ATTACHMENT_PATH: a relative path lands in the writable layer and every deploy
       # deletes the receipts.
       COPARENT_RECEIPT_PATH: /workspace/coparent-receipts/
+      # Family documents (spec 057), on their own volume for the same reason: passports and
+      # birth certificates must survive every deploy and never sit under uploads/.
+      COPARENT_DOCUMENT_PATH: /workspace/coparent-documents/
       # Meals recipe photos (spec 053): from copyrighted books, so never under uploads/.
       MEALS_IMAGE_PATH: /workspace/meal-images/
     volumes:
@@ -943,6 +949,10 @@ services:
       # CoParent expense receipts, served only by ExpenseReceiptController after a family
       # membership check. Kept out of backend-uploads for the reason given below.
       - coparent-receipts:/workspace/coparent-receipts
+      # CoParent family documents, served only by DocumentController after a family
+      # membership check. Kept out of backend-uploads for the reason given below. No chown init
+      # service is needed - this container runs as 0:0.
+      - coparent-documents:/workspace/coparent-documents
       - meal-images:/workspace/meal-images
       # The original bytes of PDFs that arrived as school email attachments, served by
       # SchoolAttachmentController. Deliberately NOT inside backend-uploads: /workspace/uploads
@@ -1755,6 +1765,9 @@ volumes:
   # CoParent expense receipts. Separate from backend-uploads because that path is served
   # unauthenticated; see the mount on `backend`.
   coparent-receipts:
+  # CoParent family documents (passports, certificates, care plans). Separate from
+  # backend-uploads because that path is served unauthenticated; see the mount on `backend`.
+  coparent-documents:
   # Meals recipe photos, served only to the signed-in owner. Backed up as meal-images/.
   meal-images:
   portainer-data:

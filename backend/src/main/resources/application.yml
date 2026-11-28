@@ -38,6 +38,9 @@ coparent:
   # Expense receipt files. Relative to the working directory locally; production sets an absolute
   # path on its own volume. Never under uploads/, which is served with no authorisation at all.
   receipt-path: ${COPARENT_RECEIPT_PATH:coparent-receipts/}
+  # Family document files (spec 057): passports, certificates, care plans. Same rule as
+  # receipts: relative locally, absolute on its own volume in production, never under uploads/.
+  document-path: ${COPARENT_DOCUMENT_PATH:coparent-documents/}
   assistant:
     enabled: ${COPARENT_ASSISTANT_ENABLED:false}
     # Luna, not nano. On a four-item note (an expense, a weekly lesson, a jab and a message),
@@ -64,6 +67,19 @@ coparent:
     # The family whose own mailbox Term Time reads also gets events from school email that has
     # not been published to everyone. Set in .env only: it names a real family.
     mailbox-family-id: ${COPARENT_SCHOOL_MAILBOX_FAMILY_ID:}
+  school-documents:
+    # Offers the letters Term Time reads to family document libraries ("From school", spec 057
+    # §4), after every school sync. Inert unless school.enabled is on too, since nothing syncs.
+    enabled: ${COPARENT_SCHOOL_DOCUMENTS_ENABLED:true}
+    # Broadcast letters are offered only when this classifier calls them keepable (consent,
+    # medical, trip, report, certificate), so with it off only personal letters and report
+    # prompts are offered. Off unless the assistant is on, since both spend on the same key.
+    classifier-enabled: ${COPARENT_SCHOOL_DOCUMENTS_CLASSIFIER_ENABLED:${COPARENT_ASSISTANT_ENABLED:false}}
+    # The cheapest model that does structured output; set per call with reasoning effort none.
+    model: ${COPARENT_SCHOOL_DOCUMENTS_MODEL:gpt-6-luna}
+    max-classified-per-run: ${COPARENT_SCHOOL_DOCUMENTS_MAX_CLASSIFIED:10}
+    lookback-days: ${COPARENT_SCHOOL_DOCUMENTS_LOOKBACK_DAYS:60}
+    school-name: ${COPARENT_SCHOOL_DOCUMENTS_SCHOOL_NAME:Kilmorie Primary School}
 
 mongock:
   enabled: ${MONGOCK_ENABLED:true}
@@ -212,9 +228,13 @@ spring:
           audiences: https://api.simonrowe.dev
   servlet:
     multipart:
-      max-file-size: 10MB
-      # Allows one full-size image plus multipart framing and the 20 KB text field.
-      max-request-size: 11MB
+      # CoParent documents take up to 20 MB a file and 60 MB a request (DocumentUploads, which
+      # answers with a readable 400); these sit just above so that check is the one a parent
+      # sees. Every other upload endpoint checks its own, smaller limit: media, Quick add and
+      # Term Time note photos 10 MB, statements 2 MB. The owner-only meals photo endpoints do
+      # not, so they now accept up to 20 MB where they used to stop at 10.
+      max-file-size: 20MB
+      max-request-size: 61MB
   # Boot 4 moved the Mongo CONNECTION settings out of spring.data.mongodb into their own
   # spring.mongodb namespace (spring-boot-mongodb); spring.data.mongodb.* now carries only
   # Spring Data specifics such as gridfs and repositories. The old key is not an error — it
@@ -783,8 +803,12 @@ school:
   ingest-from-date: ${SCHOOL_INGEST_FROM_DATE:2026-07-01}
   # ADDRESSES, never display names. system@insighttracking.com sends mail whose display name is
   # "Kilmorie Primary School"; a display-name allowlist would admit it and anything else willing
-  # to set the same name.
-  sender-allowlist: ${SCHOOL_SENDER_ALLOWLIST:kilmorie.lewisham.sch.uk}
+  # to set the same name. insighttracking.com is the school's reporting system: its "A report
+  # for <child> is ready" emails become CoParent report prompts (spec 057 §4). They name a child,
+  # so PublicationRules declines every one of them before the publication judge's model is asked,
+  # and they stay restricted. A domain entry admits that domain and its subdomains only
+  # (SchoolProperties.allowsSender), not a look-alike such as evilinsighttracking.com.
+  sender-allowlist: ${SCHOOL_SENDER_ALLOWLIST:kilmorie.lewisham.sch.uk,insighttracking.com}
   sender-denylist: ${SCHOOL_SENDER_DENYLIST:parentpay.com}
   calendar-base-url: ${SCHOOL_CALENDAR_BASE_URL:https://www.kilmorieschool.co.uk/calendar}
   website-base-url: ${SCHOOL_WEBSITE_BASE_URL:https://www.kilmorieschool.co.uk}

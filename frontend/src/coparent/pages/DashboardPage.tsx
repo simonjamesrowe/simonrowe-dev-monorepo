@@ -11,6 +11,7 @@ import {
   type NeedsYouItem,
 } from '../components/dashboard/DashboardBriefing';
 import { briefingChildren, custodyParentOn, nextHandover } from '../components/dashboard/briefing';
+import { dueLine, expiringSoon } from '../components/documents/documentText';
 import { formatMoney } from '../components/expenses/money';
 import { firstName } from '../components/expenses/parentTone';
 import { useToast } from '../components/ui/ToastProvider';
@@ -19,6 +20,7 @@ import {
   useConversations,
   useCurrentParentId,
   useCurrentUser,
+  useDocuments,
   useEvents,
   useExpenseSummary,
   useExpenseTransition,
@@ -68,6 +70,7 @@ const DashboardPage = () => {
   const { data: scheduleChangeRequests = [] } = useScheduleChangeRequests(activeFamilyId);
   const { data: expenses = [] } = useExpenses(activeFamilyId);
   const { data: expenseSummary } = useExpenseSummary(activeFamilyId);
+  const { data: documents = [] } = useDocuments(activeFamilyId);
   const expenseTransition = useExpenseTransition();
   const resendInvitation = useResendInvitation();
   const updateCurrentUser = useUpdateCurrentUser();
@@ -198,6 +201,24 @@ const DashboardPage = () => {
         actions: [{ label: 'Read message', primary: true, onClick: openThread }],
       });
     }
+  });
+
+  // A document expiring within 3 months: a passport takes weeks to renew.
+  expiringSoon(documents, today).forEach((document) => {
+    const line = dueLine(document, kids, today);
+    needs.push({
+      id: `document-${document.id}`,
+      kind: 'document',
+      title: line.title,
+      detail: line.detail,
+      actions: [
+        {
+          label: 'Open document',
+          primary: true,
+          onClick: () => navigate(`/documents?doc=${encodeURIComponent(document.id)}`),
+        },
+      ],
+    });
   });
 
   invitations

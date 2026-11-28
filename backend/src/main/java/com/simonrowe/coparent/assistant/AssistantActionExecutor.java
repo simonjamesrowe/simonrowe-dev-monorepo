@@ -1,17 +1,23 @@
 package com.simonrowe.coparent.assistant;
 
 import com.simonrowe.coparent.calendar.CalendarService;
+import com.simonrowe.coparent.document.DocumentService;
+import com.simonrowe.coparent.document.DocumentUploads;
 import com.simonrowe.coparent.expense.ExpenseService;
 import com.simonrowe.coparent.messaging.MessagingService;
 import com.simonrowe.coparent.model.CalendarEvent;
+import com.simonrowe.coparent.model.DocumentSection;
+import com.simonrowe.coparent.model.DueKind;
 import com.simonrowe.coparent.model.EventCategory;
 import com.simonrowe.coparent.model.Expense;
+import com.simonrowe.coparent.model.FamilyDocument;
 import com.simonrowe.coparent.model.ScheduleChangeRequest;
 import com.simonrowe.coparent.persistence.CoparentAuditService;
 import com.simonrowe.coparent.persistence.ConversationRepository;
 import com.simonrowe.coparent.persistence.EventCategoryRepository;
 import com.simonrowe.coparent.persistence.EventRepository;
 import com.simonrowe.coparent.persistence.ExpenseRepository;
+import com.simonrowe.coparent.persistence.FamilyDocumentRepository;
 import com.simonrowe.coparent.persistence.ScheduleChangeRepository;
 import java.time.Instant;
 import java.time.Duration;
@@ -40,7 +46,10 @@ public class AssistantActionExecutor {
   private final ConversationRepository conversations;
   private final ExpenseService expenseService;
   private final ExpenseRepository expenses;
+  private final DocumentService documentService;
+  private final FamilyDocumentRepository documents;
 
+  @SuppressWarnings("checkstyle:ParameterNumber")
   public AssistantActionExecutor(
       final AssistantProposalService proposals,
       final CalendarService calendar,
@@ -51,7 +60,9 @@ public class AssistantActionExecutor {
       final ScheduleChangeRepository changes,
       final ConversationRepository conversations,
       final ExpenseService expenseService,
-      final ExpenseRepository expenses) {
+      final ExpenseRepository expenses,
+      final DocumentService documentService,
+      final FamilyDocumentRepository documents) {
     this.proposals = proposals;
     this.calendar = calendar;
     this.messaging = messaging;
@@ -62,6 +73,8 @@ public class AssistantActionExecutor {
     this.conversations = conversations;
     this.expenseService = expenseService;
     this.expenses = expenses;
+    this.documentService = documentService;
+    this.documents = documents;
   }
 
   /** Atomically claims, executes, and records one action decision. */
@@ -70,11 +83,35 @@ public class AssistantActionExecutor {
       final ObjectId batchId,
       final ObjectId actionId,
       final long version) {
+    return approve(familyId, batchId, actionId, version, null);
+  }
+
+  /**
+   * Approves one action. A document action needs the files the parent approved with, which
+   * only the multipart approval carries ({@code uploads} non-null); any other action takes none.
+   * Both are checked before the action is claimed, so a missing file never leaves it applying.
+   *
+   * @param uploads the checked files, or null for the JSON approval
+   */
+  public AssistantDtos.Action approve(
+      final ObjectId familyId,
+      final ObjectId batchId,
+      final ObjectId actionId,
+      final long version,
+      final List<DocumentUploads.Upload> uploads) {
     final AssistantProposalBatch batch = proposals.requireOwned(familyId, batchId);
     final AssistantProposalBatch.Action current = proposals.findAction(batch, actionId);
     if (current.status() == AssistantProposalBatch.ActionStatus.APPLIED) {
       recordReceipt(familyId, batchId, current);
       return AssistantDtos.Action.from(current);
+    }
+    if (current.actionType().needsFiles() && uploads == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+          "This needs the document's file");
+    }
+    if (!current.actionType().needsFiles() && uploads != null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+          "Only a document action is approved with files");
     }
     if (current.status() != AssistantProposalBatch.ActionStatus.APPLYING
         && current.revision() != version) {
@@ -121,7 +158,8 @@ public class AssistantActionExecutor {
       }
     }
     try {
-      final AssistantProposalBatch.ResultReference result = execute(familyId, applying);
+      final AssistantProposalBatch.ResultReference result = execute(familyId, applying,
+          uploads);
       final AssistantProposalBatch.Action applied = copy(applying,
           AssistantProposalBatch.ActionStatus.APPLIED, applying.revision() + 1,
           List.of(), result, null, null, Instant.now());
@@ -171,7 +209,8 @@ public class AssistantActionExecutor {
   }
 
   private AssistantProposalBatch.ResultReference execute(
-      final ObjectId familyId, final AssistantProposalBatch.Action action) {
+      final ObjectId familyId, final AssistantProposalBatch.Action action,
+      final List<DocumentUploads.Upload> uploads) {
     final Map<String, Object> payload = action.payload();
     return switch (action.actionType()) {
       case CREATE_EVENT -> eventResult(events.findByAssistantActionId(action.id())
@@ -318,7 +357,54 @@ public class AssistantActionExecutor {
         yield expenseResult(expenseService.claim(familyId, expenseId, current.version(),
             string(payload, "note", null)));
       }
+      // The document's id is the action's operation id, so a retried approval finds the
+      // document its first attempt created instead of adding a second.
+      case CREATE_DOCUMENT -> documentResult(documents
+          .findByIdAndFamilyId(action.operationId(), familyId)
+          .orElseGet(() -> documentService.createFromQuickAdd(familyId,
+              documentValues(payload), uploads, action.operationId())));
+      case ADD_DOCUMENT_VERSION -> {
+        final ObjectId documentId = id(payload, "documentId");
+        final FamilyDocument current = documents.findByIdAndFamilyId(documentId, familyId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                "Document not found"));
+        if (current.versions().stream()
+            .anyMatch(version -> action.operationId().equals(version.versionId()))) {
+          yield documentResult(current);
+        }
+        // Not guarded on the snapshot: a new version changes no detail anyone was looking at,
+        // and the daily reminder job touching the document must not block the card. An archived
+        // document still refuses it (409), which blocks the card with that reason.
+        yield documentResult(documentService.addVersion(familyId, documentId, current.version(),
+            new DocumentService.VersionDates(date(payload, "datedOn"), date(payload, "dueOn"),
+                dueKind(payload)), uploads, action.operationId()));
+      }
     };
+  }
+
+  private static DocumentService.DocumentValues documentValues(
+      final Map<String, Object> payload) {
+    final String section = string(payload, "section", null);
+    return new DocumentService.DocumentValues(ids(payload, "childIds", List.of()),
+        section == null ? null : DocumentSection.valueOf(section),
+        string(payload, "title", null), date(payload, "datedOn"), date(payload, "dueOn"),
+        dueKind(payload), string(payload, "note", null));
+  }
+
+  private static LocalDate date(final Map<String, Object> payload, final String field) {
+    final String value = string(payload, field, null);
+    return value == null ? null : LocalDate.parse(value);
+  }
+
+  private static DueKind dueKind(final Map<String, Object> payload) {
+    final String value = string(payload, "dueKind", null);
+    return value == null ? null : DueKind.valueOf(value);
+  }
+
+  private static AssistantProposalBatch.ResultReference documentResult(
+      final FamilyDocument document) {
+    return new AssistantProposalBatch.ResultReference(
+        "document", document.id(), "/documents?doc=" + document.id().toHexString());
   }
 
   private ExpenseService.ExpenseValues expenseValues(

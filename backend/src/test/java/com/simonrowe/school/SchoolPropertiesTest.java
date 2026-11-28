@@ -35,6 +35,28 @@ class SchoolPropertiesTest {
   }
 
   @Test
+  @DisplayName("a domain entry admits that domain and its subdomains, never a look-alike")
+  void domainEntriesMatchOnTheParsedDomain() {
+    final SchoolProperties properties = withSenders(
+        List.of("kilmorie.lewisham.sch.uk", "insighttracking.com"), List.of());
+    assertThat(properties.allowsSender("system@insighttracking.com")).isTrue();
+    assertThat(properties.allowsSender("noreply@mail.insighttracking.com")).isTrue();
+    assertThat(properties.allowsSender("system@evilinsighttracking.com")).isFalse();
+    assertThat(properties.allowsSender("info@notkilmorie.lewisham.sch.uk")).isFalse();
+    assertThat(properties.allowsSender("insighttracking.com")).isFalse();
+  }
+
+  @Test
+  @DisplayName("an address entry admits that one address only")
+  void addressEntriesMatchExactly() {
+    final SchoolProperties properties =
+        withSenders(List.of("system@insighttracking.com"), List.of());
+    assertThat(properties.allowsSender("system@insighttracking.com")).isTrue();
+    assertThat(properties.allowsSender("notsystem@insighttracking.com")).isFalse();
+    assertThat(properties.allowsSender("other@insighttracking.com")).isFalse();
+  }
+
+  @Test
   @DisplayName("the denylist beats the allowlist")
   void denyBeatsAllow() {
     final SchoolProperties properties = withSenders(

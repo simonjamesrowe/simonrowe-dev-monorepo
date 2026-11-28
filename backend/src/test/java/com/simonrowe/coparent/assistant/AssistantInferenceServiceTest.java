@@ -18,6 +18,7 @@ import org.bson.types.ObjectId;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
@@ -36,7 +37,7 @@ class AssistantInferenceServiceTest {
   @Test
   @SuppressWarnings("unchecked")
   void definesCompleteStrictInertToolCatalog() throws Exception {
-    assertThat(service.toolCallbacks()).hasSize(15);
+    assertThat(service.toolCallbacks()).hasSize(18);
     for (var callback : service.toolCallbacks()) {
       final String schemaJson = callback.getToolDefinition().inputSchema();
       assertThat(schemaJson).doesNotContain("%s");
@@ -158,6 +159,67 @@ class AssistantInferenceServiceTest {
     assertThatThrownBy(() -> service.propose(context(),
         new AssistantInputValidator.ValidatedInput("Bad", null, null)))
         .isInstanceOf(ResponseStatusException.class);
+  }
+
+  @Test
+  void answersDocumentLookupsAndReturnsOnlyTheProposalsMadeAfterThem() {
+    when(chatModel.call(any(Prompt.class))).thenReturn(
+        response(new AssistantMessage.ToolCall("look", "function", "find_documents",
+                "{\"query\":\"passport\",\"childId\":null,\"section\":null}"),
+            new AssistantMessage.ToolCall("early", "function", "propose_create_document",
+                "{\"title\":\"Passport\"}")),
+        response(new AssistantMessage.ToolCall("version", "function",
+            "propose_add_document_version", "{\"documentId\":\"abc\"}")));
+    final List<Map<String, Object>> asked = new java.util.ArrayList<>();
+
+    final List<AssistantInferenceService.ProposedCall> calls = service.propose(context(),
+        new AssistantInputValidator.ValidatedInput(null, "image/png", new byte[] {1}),
+        arguments -> {
+          asked.add(arguments);
+          return List.of(Map.of("id", "abc", "title", "Passport"));
+        });
+
+    assertThat(calls).extracting(AssistantInferenceService.ProposedCall::name)
+        .containsExactly("propose_add_document_version");
+    assertThat(asked).singleElement().satisfies(arguments ->
+        assertThat(arguments).containsEntry("query", "passport"));
+    final ArgumentCaptor<Prompt> prompt = ArgumentCaptor.forClass(Prompt.class);
+    verify(chatModel, org.mockito.Mockito.times(2)).call(prompt.capture());
+    final var followUp = prompt.getAllValues().get(1).getInstructions();
+    assertThat(followUp).hasSize(4);
+    final ToolResponseMessage results = (ToolResponseMessage) followUp.get(3);
+    assertThat(results.getResponses()).extracting(ToolResponseMessage.ToolResponse::id)
+        .containsExactly("look", "early");
+    assertThat(results.getResponses().getFirst().responseData()).contains("\"Passport\"");
+    assertThat(followUp).allSatisfy(message -> assertThat(message.getMetadata())
+        .containsKey("coparent.assistant.suppress-content"));
+  }
+
+  @Test
+  void stopsAnsweringLookupsAfterTwoRounds() {
+    when(chatModel.call(any(Prompt.class))).thenReturn(response(
+        new AssistantMessage.ToolCall("look", "function", "find_documents", "{}"),
+        new AssistantMessage.ToolCall("doc", "function", "propose_create_document",
+            "{\"title\":\"Passport\"}")));
+
+    final List<AssistantInferenceService.ProposedCall> calls = service.propose(context(),
+        new AssistantInputValidator.ValidatedInput("A passport", null, null),
+        arguments -> List.of());
+
+    assertThat(calls).extracting(AssistantInferenceService.ProposedCall::name)
+        .containsExactly("propose_create_document");
+    verify(chatModel, org.mockito.Mockito.times(3)).call(any(Prompt.class));
+  }
+
+  @Test
+  void theOldEntryPointAnswersLookupsWithNothing() {
+    when(chatModel.call(any(Prompt.class))).thenReturn(
+        response(new AssistantMessage.ToolCall("look", "function", "find_documents", "{}")),
+        response(new AssistantMessage.ToolCall("none", "function", "no_action",
+            "{\"reason\":\"nothing\"}")));
+    assertThat(service.propose(context(),
+        new AssistantInputValidator.ValidatedInput("Hello", null, null)))
+        .extracting(AssistantInferenceService.ProposedCall::name).containsExactly("no_action");
   }
 
   @Test

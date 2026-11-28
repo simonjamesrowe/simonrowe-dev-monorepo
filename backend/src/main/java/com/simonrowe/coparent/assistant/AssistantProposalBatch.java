@@ -58,7 +58,16 @@ public record AssistantProposalBatch(
     CREATE_PERMISSION_REQUEST,
     CREATE_EXPENSE,
     MARK_EXPENSE_PAID,
-    CLAIM_EXPENSE_REIMBURSEMENT
+    CLAIM_EXPENSE_REIMBURSEMENT,
+    /** Needs the document's files to apply, so it is approved by a multipart request. */
+    CREATE_DOCUMENT,
+    /** Needs the new version's files to apply, so it is approved by a multipart request. */
+    ADD_DOCUMENT_VERSION;
+
+    /** Whether approving this type needs files, which only the multipart approval carries. */
+    public boolean needsFiles() {
+      return this == CREATE_DOCUMENT || this == ADD_DOCUMENT_VERSION;
+    }
   }
 
   public enum ActionStatus {

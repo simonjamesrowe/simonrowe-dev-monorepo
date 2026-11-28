@@ -12,7 +12,9 @@ export type AssistantActionType =
   | 'CREATE_PERMISSION_REQUEST'
   | 'CREATE_EXPENSE'
   | 'MARK_EXPENSE_PAID'
-  | 'CLAIM_EXPENSE_REIMBURSEMENT';
+  | 'CLAIM_EXPENSE_REIMBURSEMENT'
+  | 'CREATE_DOCUMENT'
+  | 'ADD_DOCUMENT_VERSION';
 
 export type AssistantActionStatus =
   | 'BLOCKED'

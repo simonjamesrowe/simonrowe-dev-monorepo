@@ -1,9 +1,11 @@
 package com.simonrowe.coparent.assistant;
 
+import com.simonrowe.coparent.document.DocumentUploads;
 import com.simonrowe.coparent.shared.CoparentIds;
 import java.util.List;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -11,6 +13,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
@@ -75,6 +78,23 @@ public class AssistantController {
       @RequestBody final AssistantDtos.VersionRequest request) {
     return executor.approve(CoparentIds.parse(familyId), CoparentIds.parse(batchId),
         CoparentIds.parse(actionId), request.version());
+  }
+
+  /**
+   * Approves a document action with the files it needs (the analysed photo by default). The
+   * files are checked here, before the action is claimed, exactly as the documents API checks
+   * them, and again by the document service.
+   */
+  @PostMapping(path = "/families/{familyId}/assistant/batches/{batchId}/actions/{actionId}/approve",
+      consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  AssistantDtos.Action approveWithFiles(
+      @PathVariable final String familyId,
+      @PathVariable final String batchId,
+      @PathVariable final String actionId,
+      @RequestParam final long version,
+      @RequestPart(name = "files", required = false) final List<MultipartFile> files) {
+    return executor.approve(CoparentIds.parse(familyId), CoparentIds.parse(batchId),
+        CoparentIds.parse(actionId), version, DocumentUploads.fromMultipart(files));
   }
 
   @PostMapping("/families/{familyId}/assistant/batches/{batchId}/actions/{actionId}/reject")
